@@ -44,6 +44,12 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
                   Dashboard
                 </Link>
                 <Link 
+                  href="/admin/tables" 
+                  className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  Tables
+                </Link>
+                <Link 
                   href="/admin/users" 
                   className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium"
                 >

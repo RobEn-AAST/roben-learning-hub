@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { coursesService, Course, CourseStats } from '@/services/coursesService';
+import { activityLogService } from '@/services/activityLogService';
 import { createClient } from '@/lib/supabase/client';
 
 // Icons
@@ -531,7 +532,11 @@ export function CoursesAdminDashboard() {
     }
 
     try {
+      const course = courses.find(c => c.id === courseId);
+      const courseTitle = course?.title || 'Unknown Course';
+      
       await coursesService.deleteCourse(courseId);
+      await activityLogService.logCourseDeleted(courseId, courseTitle);
       await loadData(); // Reload data
       alert('Course deleted successfully!');
     } catch (err) {
@@ -561,12 +566,16 @@ export function CoursesAdminDashboard() {
         console.log('Updating course with ID:', selectedCourse.id);
         const result = await coursesService.updateCourse(selectedCourse.id, courseData);
         console.log('Update result:', result);
+        await activityLogService.logCourseUpdated(selectedCourse.id, courseData.title || selectedCourse.title, courseData);
         alert('Course updated successfully!');
       } else {
         // Create new course
         console.log('Creating new course');
         const result = await coursesService.createCourse(courseData);
         console.log('Create result:', result);
+        if (result?.id) {
+          await activityLogService.logCourseCreated(result.id, courseData.title);
+        }
         alert('Course created successfully!');
       }
       

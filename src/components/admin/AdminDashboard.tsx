@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { coursesService, CourseStats } from '@/services/coursesService';
+import { activityLogService, ActivityLog } from '@/services/activityLogService';
 import { CoursesAdminDashboard } from './CoursesAdminDashboard';
 
 // Icons (using simple SVG for now - you can replace with your preferred icon library)
@@ -94,10 +95,12 @@ interface QuickAction {
 
 interface RecentActivity {
   id: string;
-  type: 'course' | 'system' | 'user';
+  type: 'course' | 'system' | 'user' | 'table';
   message: string;
   timestamp: string;
   status: 'success' | 'warning' | 'info';
+  action?: string;
+  resource_type?: string;
 }
 
 export function AdminDashboard() {
@@ -117,6 +120,8 @@ export function AdminDashboard() {
 
   useEffect(() => {
     loadDashboardData();
+    // Log that admin dashboard was accessed
+    activityLogService.logSystemAction('DASHBOARD_VIEW', 'Admin dashboard accessed');
   }, []);
 
   const loadDashboardData = async () => {
@@ -124,27 +129,51 @@ export function AdminDashboard() {
       setLoading(true);
       
       // Load stats and recent activities
-      const [statsData, activitiesData] = await Promise.all([
+      const [statsData, activityLogs] = await Promise.all([
         coursesService.getCourseStats(),
-        coursesService.getRecentActivities(5)
+        activityLogService.getRecentActivities(10)
       ]);
 
       setStats(statsData);
       
-      // Transform course activities into dashboard activities
-      const activities: RecentActivity[] = activitiesData.map((course, index) => ({
-        id: course.id,
-        type: 'course' as const,
-        message: `Course "${course.title}" was ${course.created_at === course.updated_at ? 'created' : 'updated'}`,
-        timestamp: formatTimeAgo(course.updated_at),
-        status: course.status === 'published' ? 'success' : 'info' as const
-      }));
+      // Transform activity logs into dashboard activities
+      const activities: RecentActivity[] = activityLogs.map((log) => {
+        const activity: RecentActivity = {
+          id: log.id,
+          type: getActivityType(log.resource_type),
+          message: log.details,
+          timestamp: formatTimeAgo(log.created_at),
+          status: getActivityStatus(log.action),
+          action: log.action,
+          resource_type: log.resource_type
+        };
+        return activity;
+      });
 
       setRecentActivity(activities);
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const getActivityType = (resourceType: string): RecentActivity['type'] => {
+    switch (resourceType) {
+      case 'course': return 'course';
+      case 'table': return 'table';
+      case 'auth': return 'user';
+      default: return 'system';
+    }
+  };
+
+  const getActivityStatus = (action: string): RecentActivity['status'] => {
+    switch (action) {
+      case 'CREATE':
+      case 'PUBLISH':
+      case 'LOGIN': return 'success';
+      case 'DELETE': return 'warning';
+      default: return 'info';
     }
   };
 
@@ -160,6 +189,12 @@ export function AdminDashboard() {
   };
 
   const quickActions: QuickAction[] = [
+    {
+      title: 'Table Management',
+      description: 'Access all database tables and CRUD operations',
+      icon: <Icons.Database />,
+      href: '/admin/tables'
+    },
     {
       title: 'Manage Courses',
       description: 'View, edit, and manage all courses',
@@ -195,12 +230,12 @@ export function AdminDashboard() {
 
   const getStatusBadge = (status: RecentActivity['status']) => {
     const variants = {
-      success: 'default',
-      warning: 'secondary',
-      info: 'outline'
+      success: 'bg-green-100 text-green-800 border-green-300',
+      warning: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+      info: 'bg-blue-100 text-blue-800 border-blue-300'
     } as const;
     
-    return <Badge variant={variants[status]}>{status}</Badge>;
+    return <Badge variant="outline" className={variants[status]}>{status}</Badge>;
   };
 
   if (currentView === 'courses') {
