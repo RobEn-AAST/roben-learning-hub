@@ -1,0 +1,221 @@
+import { createClient } from '@/lib/supabase/client';
+
+export interface Course {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  cover_image: string | null;
+  status: 'draft' | 'published' | 'archived';
+  metadata: any;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CourseStats {
+  totalCourses: number;
+  publishedCourses: number;
+  draftCourses: number;
+  totalEnrollments: number;
+  totalModules: number;
+  totalLessons: number;
+}
+
+const supabase = createClient();
+
+export const coursesService = {
+  // Get all courses with pagination
+  async getCourses(page = 1, limit = 10) {
+    const offset = (page - 1) * limit;
+    
+    const { data, error, count } = await supabase
+      .from('courses')
+      .select(`
+        *,
+        profiles!courses_created_by_fkey (full_name),
+        course_enrollments (count),
+        modules (count)
+      `, { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (error) throw error;
+    return { courses: data || [], total: count || 0 };
+  },
+
+  // Get course statistics
+  async getCourseStats(): Promise<CourseStats> {
+    // Total courses
+    const { count: totalCourses } = await supabase
+      .from('courses')
+      .select('*', { count: 'exact', head: true });
+
+    // Published courses
+    const { count: publishedCourses } = await supabase
+      .from('courses')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'published');
+
+    // Draft courses
+    const { count: draftCourses } = await supabase
+      .from('courses')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'draft');
+
+    // Total enrollments
+    const { count: totalEnrollments } = await supabase
+      .from('course_enrollments')
+      .select('*', { count: 'exact', head: true });
+
+    // Total modules
+    const { count: totalModules } = await supabase
+      .from('modules')
+      .select('*', { count: 'exact', head: true });
+
+    // Total lessons
+    const { count: totalLessons } = await supabase
+      .from('lessons')
+      .select('*', { count: 'exact', head: true });
+
+    return {
+      totalCourses: totalCourses || 0,
+      publishedCourses: publishedCourses || 0,
+      draftCourses: draftCourses || 0,
+      totalEnrollments: totalEnrollments || 0,
+      totalModules: totalModules || 0,
+      totalLessons: totalLessons || 0,
+    };
+  },
+
+  // Create a new course
+  async createCourse(courseData: Omit<Course, 'id' | 'created_at' | 'updated_at'>) {
+    console.log('Creating course with data:', courseData); // Debug log
+    
+    // Require proper authentication
+    if (!courseData.created_by) {
+      throw new Error('Authentication required: No user ID provided');
+    }
+    
+    const insertData = {
+      title: courseData.title,
+      slug: courseData.slug,
+      description: courseData.description,
+      cover_image: courseData.cover_image,
+      status: courseData.status,
+      metadata: courseData.metadata,
+      created_by: courseData.created_by,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+    
+    console.log('Insert data:', insertData); // Debug log
+    
+    const { data, error } = await supabase
+      .from('courses')
+      .insert([insertData])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Supabase create error:', error); // Debug log
+      throw new Error(`Database error: ${error.message} (Code: ${error.code || 'unknown'})`);
+    }
+    
+    console.log('Create success:', data); // Debug log
+    return data;
+  },
+
+  // Update a course
+  async updateCourse(id: string, courseData: Partial<Course>) {
+    console.log('Updating course with ID:', id, 'Data:', courseData); // Debug log
+    
+    // Only update the fields that are provided, excluding id and created_at
+    const updateData: any = {
+      updated_at: new Date().toISOString()
+    };
+    
+    // Only add fields that are actually provided
+    if (courseData.title !== undefined) updateData.title = courseData.title;
+    if (courseData.slug !== undefined) updateData.slug = courseData.slug;
+    if (courseData.description !== undefined) updateData.description = courseData.description;
+    if (courseData.cover_image !== undefined) updateData.cover_image = courseData.cover_image;
+    if (courseData.status !== undefined) updateData.status = courseData.status;
+    if (courseData.metadata !== undefined) updateData.metadata = courseData.metadata;
+    // Don't update created_by for existing courses
+    
+    console.log('Update data:', updateData); // Debug log
+    
+    const { data, error } = await supabase
+      .from('courses')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Supabase update error:', error); // Debug log
+      throw new Error(`Database error: ${error.message} (Code: ${error.code || 'unknown'})`);
+    }
+    
+    console.log('Update success:', data); // Debug log
+    return data;
+  },
+
+  // Delete a course
+  async deleteCourse(id: string) {
+    const { error } = await supabase
+      .from('courses')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+  },
+
+  // Get course by ID
+  async getCourseById(id: string) {
+    const { data, error } = await supabase
+      .from('courses')
+      .select(`
+        *,
+        profiles!courses_created_by_fkey (full_name, email),
+        modules (
+          id,
+          title,
+          description,
+          position,
+          lessons (count)
+        ),
+        course_enrollments (
+          id,
+          role,
+          enrolled_at,
+          profiles!course_enrollments_user_id_fkey (full_name, email)
+        )
+      `)
+      .eq('id', id)
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Get recent activities (course creation/updates)
+  async getRecentActivities(limit = 10) {
+    const { data, error } = await supabase
+      .from('courses')
+      .select(`
+        id,
+        title,
+        status,
+        created_at,
+        updated_at,
+        profiles!courses_created_by_fkey (full_name)
+      `)
+      .order('updated_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    return data || [];
+  }
+};

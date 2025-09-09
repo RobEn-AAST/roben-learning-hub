@@ -50,13 +50,38 @@ export async function updateSession(request: NextRequest) {
   if (
     request.nextUrl.pathname !== "/" &&
     !user &&
-    !request.nextUrl.pathname.startsWith("/login") &&
     !request.nextUrl.pathname.startsWith("/auth")
   ) {
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
     return NextResponse.redirect(url);
+  }
+
+  // Check if logged-in user needs to complete their profile
+  if (
+    user && 
+    user.sub && // user.sub is the user ID
+    !request.nextUrl.pathname.startsWith("/complete-profile") &&
+    !request.nextUrl.pathname.startsWith("/auth") &&
+    !request.nextUrl.pathname.startsWith("/api") &&
+    !request.nextUrl.pathname.startsWith("/_next") &&
+    request.nextUrl.pathname !== "/" &&
+    request.nextUrl.pathname !== "/favicon.ico"
+  ) {
+    // Check if user has completed their profile
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', user.sub)
+      .single();
+    
+    if (profile && (!profile.full_name || !profile.full_name.trim())) {
+      // User has incomplete profile, redirect to complete profile
+      const url = request.nextUrl.clone();
+      url.pathname = "/complete-profile";
+      return NextResponse.redirect(url);
+    }
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is.

@@ -38,8 +38,28 @@ export function LoginForm({
         password,
       });
       if (error) throw error;
-      // Update this route to redirect to an authenticated route. The user already has an active session.
-      router.push("/protected");
+      
+      // After successful login, check if user needs to complete profile
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (user) {
+        // Check if user has completed their profile
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', user.id)
+          .single();
+        
+        // If profile doesn't exist or full_name is empty, redirect to complete profile
+        if (!profile || !profile.full_name || profile.full_name.trim() === '') {
+          router.push('/complete-profile');
+        } else {
+          // Profile is complete, redirect to protected area
+          router.push("/protected");
+        }
+      } else {
+        router.push("/protected");
+      }
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred");
     } finally {

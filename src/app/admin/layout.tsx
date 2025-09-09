@@ -1,12 +1,31 @@
 import React from 'react';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
 import { Button } from '@/components/ui/button';
+import { isUserAdmin } from '@/utils/auth';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
 }
 
-export default function AdminLayout({ children }: AdminLayoutProps) {
+export default async function AdminLayout({ children }: AdminLayoutProps) {
+  const supabase = await createClient();
+  
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect('/auth/login');
+  }
+
+  // Check if user has admin role using our utility function
+  const hasAdminRole = await isUserAdmin(user.id);
+  
+  if (!hasAdminRole) {
+    redirect('/auth/error?message=Access denied. Admin privileges required.');
+  }
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Admin Header */}
