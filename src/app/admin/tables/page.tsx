@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CoursesAdminDashboard } from '@/components/admin/CoursesAdminDashboard';
+import { UserAdminDashboard } from '@/components/admin/UserAdminDashboard';
 import { activityLogService } from '@/services/activityLogService';
 
 // Icons
@@ -157,7 +158,7 @@ const databaseTables: DatabaseTable[] = [
     displayName: 'User Profiles',
     description: 'User account information and preferences',
     icon: <Icons.Users />,
-    status: 'development',
+    status: 'available',
     category: 'user'
   },
   {
@@ -245,6 +246,29 @@ export default function TablesPage() {
           </Button>
         </div>
         <CoursesAdminDashboard />
+      </div>
+    );
+  }
+
+  // If a table is selected and it's profiles, show the UserAdminDashboard
+  if (selectedTable === 'profiles') {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">User Management</h1>
+            <p className="text-gray-600">Full CRUD operations for user accounts and profiles</p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={handleBackToTables}
+            className="flex items-center space-x-2"
+          >
+            <span>←</span>
+            <span>Back to Tables</span>
+          </Button>
+        </div>
+        <UserAdminDashboard />
       </div>
     );
   }
