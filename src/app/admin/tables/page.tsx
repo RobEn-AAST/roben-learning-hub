@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { CoursesAdminDashboard } from '@/components/admin/CoursesAdminDashboard';
 import { UserAdminDashboard } from '@/components/admin/UserAdminDashboard';
 import VideoAdminDashboard from '@/components/admin/VideoAdminDashboard';
+import ArticleAdminDashboard from '@/components/admin/ArticleAdminDashboard';
 import { activityLogService } from '@/services/activityLogService';
 
 // Icons
@@ -109,7 +110,7 @@ const databaseTables: DatabaseTable[] = [
     displayName: 'Articles',
     description: 'Written content and articles for lessons',
     icon: <Icons.Article />,
-    status: 'development',
+    status: 'available',
     category: 'content'
   },
   {
@@ -293,6 +294,29 @@ export default function TablesPage() {
           </Button>
         </div>
         <VideoAdminDashboard />
+      </div>
+    );
+  }
+
+  // If a table is selected and it's articles, show the ArticleAdminDashboard
+  if (selectedTable === 'articles') {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Article Management</h1>
+            <p className="text-gray-600">Full CRUD operations for written content and articles</p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={handleBackToTables}
+            className="flex items-center space-x-2"
+          >
+            <span>←</span>
+            <span>Back to Tables</span>
+          </Button>
+        </div>
+        <ArticleAdminDashboard />
       </div>
     );
   }
