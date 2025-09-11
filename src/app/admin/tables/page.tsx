@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CoursesAdminDashboard } from '@/components/admin/CoursesAdminDashboard';
 import { UserAdminDashboard } from '@/components/admin/UserAdminDashboard';
+import VideoAdminDashboard from '@/components/admin/VideoAdminDashboard';
 import { activityLogService } from '@/services/activityLogService';
 
 // Icons
@@ -100,7 +101,7 @@ const databaseTables: DatabaseTable[] = [
     displayName: 'Videos',
     description: 'Video content and metadata for lessons',
     icon: <Icons.Video />,
-    status: 'development',
+    status: 'available',
     category: 'content'
   },
   {
@@ -269,6 +270,29 @@ export default function TablesPage() {
           </Button>
         </div>
         <UserAdminDashboard />
+      </div>
+    );
+  }
+
+  // If a table is selected and it's videos, show the VideoAdminDashboard
+  if (selectedTable === 'videos') {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Video Management</h1>
+            <p className="text-gray-600">Full CRUD operations for video content and metadata</p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={handleBackToTables}
+            className="flex items-center space-x-2"
+          >
+            <span>←</span>
+            <span>Back to Tables</span>
+          </Button>
+        </div>
+        <VideoAdminDashboard />
       </div>
     );
   }
