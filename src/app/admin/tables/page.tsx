@@ -8,6 +8,7 @@ import { CoursesAdminDashboard } from '@/components/admin/CoursesAdminDashboard'
 import { UserAdminDashboard } from '@/components/admin/UserAdminDashboard';
 import VideoAdminDashboard from '@/components/admin/VideoAdminDashboard';
 import ArticleAdminDashboard from '@/components/admin/ArticleAdminDashboard';
+import ProjectAdminDashboard from '@/components/admin/ProjectAdminDashboard';
 import { activityLogService } from '@/services/activityLogService';
 
 // Icons
@@ -118,7 +119,7 @@ const databaseTables: DatabaseTable[] = [
     displayName: 'Projects',
     description: 'Project assignments and submissions',
     icon: <Icons.Code />,
-    status: 'development',
+    status: 'available',
     category: 'content'
   },
   {
@@ -317,6 +318,29 @@ export default function TablesPage() {
           </Button>
         </div>
         <ArticleAdminDashboard />
+      </div>
+    );
+  }
+
+  // If a table is selected and it's projects, show the ProjectAdminDashboard
+  if (selectedTable === 'projects') {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Project Management</h1>
+            <p className="text-gray-600">Full CRUD operations for student projects and assignments</p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={handleBackToTables}
+            className="flex items-center space-x-2"
+          >
+            <span>←</span>
+            <span>Back to Tables</span>
+          </Button>
+        </div>
+        <ProjectAdminDashboard />
       </div>
     );
   }
