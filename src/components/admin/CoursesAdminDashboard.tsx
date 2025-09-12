@@ -56,9 +56,13 @@ interface CourseTableProps {
   onEdit: (course: Course) => void;
   onDelete: (courseId: string) => void;
   onView: (course: Course) => void;
+  searchTerm: string;
+  setSearchTerm: (value: string) => void;
+  selectedStatus: string;
+  setSelectedStatus: (value: string) => void;
 }
 
-function CourseTable({ courses, onEdit, onDelete, onView }: CourseTableProps) {
+function CourseTable({ courses, onEdit, onDelete, onView, searchTerm, setSearchTerm, selectedStatus, setSelectedStatus }: CourseTableProps) {
   const getStatusBadge = (status: string) => {
     const variants = {
       published: 'default',
@@ -84,6 +88,28 @@ function CourseTable({ courses, onEdit, onDelete, onView }: CourseTableProps) {
         <CardDescription className="text-gray-600">Manage all your courses</CardDescription>
       </CardHeader>
       <CardContent>
+        {/* Search and Filters */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="flex-1">
+            <Input
+              placeholder="Search courses by title, description, or slug..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="bg-white text-black"
+            />
+          </div>
+          <select
+            value={selectedStatus}
+            onChange={(e) => setSelectedStatus(e.target.value)}
+            className="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
+          >
+            <option value="">All Statuses</option>
+            <option value="draft">Draft</option>
+            <option value="published">Published</option>
+            <option value="archived">Archived</option>
+          </select>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -96,7 +122,16 @@ function CourseTable({ courses, onEdit, onDelete, onView }: CourseTableProps) {
               </tr>
             </thead>
             <tbody>
-              {courses.map((course) => (
+              {courses
+                .filter(course => {
+                  const matchesSearch = searchTerm === '' || 
+                    course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    course.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    course.slug.toLowerCase().includes(searchTerm.toLowerCase());
+                  const matchesStatus = selectedStatus === '' || course.status === selectedStatus;
+                  return matchesSearch && matchesStatus;
+                })
+                .map((course) => (
                 <tr key={course.id} className="border-b hover:bg-gray-50">
                   <td className="p-4">
                     <div>
@@ -153,6 +188,19 @@ function CourseTable({ courses, onEdit, onDelete, onView }: CourseTableProps) {
               ))}
             </tbody>
           </table>
+          {courses
+            .filter(course => {
+              const matchesSearch = searchTerm === '' || 
+                course.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                course.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                course.slug.toLowerCase().includes(searchTerm.toLowerCase());
+              const matchesStatus = selectedStatus === '' || course.status === selectedStatus;
+              return matchesSearch && matchesStatus;
+            }).length === 0 && courses.length > 0 && (
+            <div className="text-center py-8 text-gray-500">
+              No courses match your current filters. Try adjusting your search or filters.
+            </div>
+          )}
           {courses.length === 0 && (
             <div className="text-center py-8 text-gray-500">
               No courses found. Create your first course to get started!
@@ -488,6 +536,8 @@ export function CoursesAdminDashboard() {
   const [totalCourses, setTotalCourses] = useState(0);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'view' | 'edit' | 'create'>('list');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('');
 
   const coursesPerPage = 10;
 
@@ -761,6 +811,10 @@ export function CoursesAdminDashboard() {
         onEdit={handleEdit}
         onDelete={handleDelete}
         onView={handleView}
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        selectedStatus={selectedStatus}
+        setSelectedStatus={setSelectedStatus}
       />
 
       {/* Pagination */}

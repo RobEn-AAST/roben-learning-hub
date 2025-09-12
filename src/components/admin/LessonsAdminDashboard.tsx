@@ -581,83 +581,108 @@ export function LessonsAdminDashboard() {
             <div className="text-center py-8">
               <p className="text-gray-600">Loading lessons...</p>
             </div>
-          ) : lessons.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-600">No lessons found.</p>
-            </div>
           ) : (
-            <div className="space-y-4">
-              {lessons.map((lesson) => (
-                <div key={lesson.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-3 mb-2">
-                        {getLessonTypeIcon(lesson.lesson_type)}
-                        <h3 className="text-lg font-semibold text-black truncate">{lesson.title}</h3>
-                        {getTypeBadge(lesson.lesson_type)}
-                        {getStatusBadge(lesson.status)}
-                      </div>
-                      
-                      <div className="text-sm text-gray-600 space-y-1">
-                        <p>
-                          <strong>Course:</strong> {lesson.module?.courses?.title} / {lesson.module?.title}
-                        </p>
-                        <p>
-                          <strong>Instructor:</strong> {lesson.instructor?.full_name}
-                        </p>
-                        <p>
-                          <strong>Position:</strong> {lesson.position}
-                        </p>
-                        <div className="flex space-x-4 mt-2">
-                          {(lesson.videos_count || 0) > 0 && (
-                            <span className="flex items-center space-x-1">
-                              <Icons.Video />
-                              <span>{lesson.videos_count} video(s)</span>
-                            </span>
-                          )}
-                          {(lesson.articles_count || 0) > 0 && (
-                            <span className="flex items-center space-x-1">
-                              <Icons.Article />
-                              <span>{lesson.articles_count} article(s)</span>
-                            </span>
-                          )}
-                          {(lesson.projects_count || 0) > 0 && (
-                            <span className="flex items-center space-x-1">
-                              <Icons.Project />
-                              <span>{lesson.projects_count} project(s)</span>
-                            </span>
-                          )}
-                          {(lesson.quizzes_count || 0) > 0 && (
-                            <span className="flex items-center space-x-1">
-                              <Icons.Quiz />
-                              <span>{lesson.quizzes_count} quiz(zes)</span>
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex space-x-2 flex-shrink-0">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEdit(lesson)}
-                      >
-                        <Icons.Edit />
-                        Edit
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDelete(lesson)}
-                      >
-                        <Icons.Delete />
-                        Delete
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left p-4 font-medium text-black">Lesson Details</th>
+                    <th className="text-left p-4 font-medium text-black">Course & Module</th>
+                    <th className="text-left p-4 font-medium text-black">Type & Status</th>
+                    <th className="text-left p-4 font-medium text-black">Instructor</th>
+                    <th className="text-left p-4 font-medium text-black">Content</th>
+                    <th className="text-left p-4 font-medium text-black">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lessons.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="text-center py-8 text-gray-600">
+                        No lessons found.
+                      </td>
+                    </tr>
+                  ) : (
+                    lessons.map((lesson) => (
+                      <tr key={lesson.id} className="border-b hover:bg-gray-50">
+                        <td className="p-4">
+                          <div className="flex items-center space-x-3">
+                            {getLessonTypeIcon(lesson.lesson_type)}
+                            <div>
+                              <div className="font-medium text-black">{lesson.title}</div>
+                              <div className="text-sm text-gray-600">Position: {lesson.position}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <div>
+                            <div className="font-medium text-black">{lesson.module?.courses?.title}</div>
+                            <div className="text-sm text-gray-600">{lesson.module?.title}</div>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <div className="space-y-2">
+                            {getTypeBadge(lesson.lesson_type)}
+                            {getStatusBadge(lesson.status)}
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <div className="text-sm text-black">{lesson.instructor?.full_name}</div>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex flex-wrap gap-2 text-xs">
+                            {(lesson.videos_count || 0) > 0 && (
+                              <span className="flex items-center space-x-1 bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                <Icons.Video />
+                                <span>{lesson.videos_count} video(s)</span>
+                              </span>
+                            )}
+                            {(lesson.articles_count || 0) > 0 && (
+                              <span className="flex items-center space-x-1 bg-purple-100 text-purple-800 px-2 py-1 rounded">
+                                <Icons.Article />
+                                <span>{lesson.articles_count} article(s)</span>
+                              </span>
+                            )}
+                            {(lesson.projects_count || 0) > 0 && (
+                              <span className="flex items-center space-x-1 bg-orange-100 text-orange-800 px-2 py-1 rounded">
+                                <Icons.Project />
+                                <span>{lesson.projects_count} project(s)</span>
+                              </span>
+                            )}
+                            {(lesson.quizzes_count || 0) > 0 && (
+                              <span className="flex items-center space-x-1 bg-red-100 text-red-800 px-2 py-1 rounded">
+                                <Icons.Quiz />
+                                <span>{lesson.quizzes_count} quiz(zes)</span>
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex space-x-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEdit(lesson)}
+                              className="flex items-center space-x-1"
+                            >
+                              <Icons.Edit />
+                              <span>Edit</span>
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDelete(lesson)}
+                              className="text-red-600 hover:bg-red-50 flex items-center space-x-1"
+                            >
+                              <Icons.Delete />
+                              <span>Delete</span>
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           )}
 

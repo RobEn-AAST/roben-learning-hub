@@ -455,28 +455,6 @@ export default function TablesPage() {
               <CardDescription className="text-sm text-gray-600 leading-relaxed">
                 {table.description}
               </CardDescription>
-              
-              {table.status === 'available' && (
-                <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <p className="text-sm font-medium text-green-800 mb-1">
-                    ✅ Full CRUD Operations Available
-                  </p>
-                  <p className="text-xs text-green-600">
-                    Click to manage records, create, edit, delete, and view detailed information.
-                  </p>
-                </div>
-              )}
-              
-              {table.status === 'development' && (
-                <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                  <p className="text-sm font-medium text-amber-800 mb-1">
-                    🚧 Under Development
-                  </p>
-                  <p className="text-xs text-amber-600">
-                    CRUD operations are being developed for this table. Check back soon!
-                  </p>
-                </div>
-              )}
             </CardContent>
           </Card>
         ))}

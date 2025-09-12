@@ -780,6 +780,8 @@ export default function VideoAdminDashboard() {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedLesson, setSelectedLesson] = useState<string>('');
+  const [selectedProvider, setSelectedProvider] = useState<string>('');
 
   useEffect(() => {
     loadVideos();
@@ -788,20 +790,32 @@ export default function VideoAdminDashboard() {
   }, []);
 
   useEffect(() => {
-    // Filter videos based on search term
-    if (searchTerm.trim() === '') {
-      setFilteredVideos(videos);
-    } else {
-      const filtered = videos.filter(video =>
+    // Filter videos based on search term, lesson, and provider
+    let filtered = videos;
+
+    // Filter by search term
+    if (searchTerm.trim() !== '') {
+      filtered = filtered.filter(video =>
         video.url.toLowerCase().includes(searchTerm.toLowerCase()) ||
         video.provider_video_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
         video.lesson_title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         video.course_title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         video.transcript?.toLowerCase().includes(searchTerm.toLowerCase())
       );
-      setFilteredVideos(filtered);
     }
-  }, [searchTerm, videos]);
+
+    // Filter by lesson
+    if (selectedLesson) {
+      filtered = filtered.filter(video => video.lesson_id === selectedLesson);
+    }
+
+    // Filter by provider
+    if (selectedProvider) {
+      filtered = filtered.filter(video => video.provider === selectedProvider);
+    }
+
+    setFilteredVideos(filtered);
+  }, [searchTerm, selectedLesson, selectedProvider, videos]);
 
   const loadVideos = async () => {
     try {
@@ -924,152 +938,184 @@ export default function VideoAdminDashboard() {
     setViewMode('questions');
   };
 
-  const handleEditFromView = () => {
-    setViewMode('edit');
-  };
-
   const handleCancel = () => {
     setViewMode('list');
     setSelectedVideo(null);
   };
 
-  const renderHeader = () => (
-    <div className="mb-8">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-black">Video Management</h1>
-          <p className="text-gray-600 mt-2">
-            Manage your video content and interactive questions
-          </p>
+  const handleCreateNew = () => {
+    setSelectedVideo(null);
+    setViewMode('create');
+  };
+
+  const handleEditFromView = () => {
+    setViewMode('edit');
+  };
+
+  // Create/Edit Form View
+  if (viewMode === 'create' || viewMode === 'edit') {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold text-black">
+            {viewMode === 'create' ? 'Create New Video' : 'Edit Video'}
+          </h1>
+          <Button onClick={handleCancel} variant="outline">
+            ← Back to List
+          </Button>
         </div>
         
-        {viewMode === 'list' && (
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative">
-              <Icons.Search />
-              <Input
-                type="text"
-                placeholder="Search videos..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 bg-white text-black w-64"
-              />
-              <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
-                <Icons.Search />
-              </div>
-            </div>
-            <Button 
-              onClick={() => setViewMode('create')}
-              className="flex items-center space-x-2"
-            >
-              <Icons.Plus />
-              <span>Add Video</span>
-            </Button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-
-  const renderStats = () => {
-    if (!stats || viewMode !== 'list') return null;
-
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <StatsCard
-          title="Total Videos"
-          value={stats.total_videos}
-          icon={<Icons.Video />}
-          color="bg-blue-100"
-        />
-        <StatsCard
-          title="Total Duration"
-          value={`${stats.total_duration_hours}h`}
-          icon={<Icons.Clock />}
-          color="bg-green-100"
-        />
-        <StatsCard
-          title="With Questions"
-          value={stats.videos_with_questions}
-          icon={<Icons.QuestionMark />}
-          color="bg-purple-100"
-        />
-        <StatsCard
-          title="With Transcript"
-          value={stats.videos_with_transcript}
-          icon={<Icons.Video />}
-          color="bg-orange-100"
+        <VideoForm
+          video={viewMode === 'edit' ? selectedVideo : undefined}
+          onSave={viewMode === 'create' ? handleCreateVideo : handleUpdateVideo}
+          onCancel={handleCancel}
+          loading={loading}
+          lessons={lessons}
         />
       </div>
     );
-  };
+  }
 
-  const renderContent = () => {
-    switch (viewMode) {
-      case 'create':
-        return (
-          <VideoForm
-            onSave={handleCreateVideo}
-            onCancel={handleCancel}
-            loading={loading}
-            lessons={lessons}
-          />
-        );
-
-      case 'edit':
-        return (
-          <VideoForm
-            video={selectedVideo}
-            onSave={handleUpdateVideo}
-            onCancel={handleCancel}
-            loading={loading}
-            lessons={lessons}
-          />
-        );
-
-      case 'view':
-        return selectedVideo ? (
-          <VideoView
-            video={selectedVideo}
-            onEdit={handleEditFromView}
-            onClose={handleCancel}
-          />
-        ) : null;
-
-      case 'questions':
-        return selectedVideo ? (
-          <VideoQuestionsManager
-            video={selectedVideo}
-            onClose={handleCancel}
-          />
-        ) : null;
-
-      default:
-        return (
-          <VideoTable
-            videos={filteredVideos}
-            onEdit={handleEditVideo}
-            onDelete={handleDeleteVideo}
-            onView={handleViewVideo}
-            onManageQuestions={handleManageQuestions}
-          />
-        );
-    }
-  };
-
-  if (loading && viewMode === 'list') {
+  // View Details
+  if (viewMode === 'view' && selectedVideo) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-black">Loading videos...</div>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold text-black">Video Details</h1>
+          <Button onClick={handleCancel} variant="outline">
+            ← Back to List
+          </Button>
+        </div>
+        
+        <VideoView
+          video={selectedVideo}
+          onEdit={handleEditFromView}
+          onClose={handleCancel}
+        />
+      </div>
+    );
+  }
+
+  // Questions Management
+  if (viewMode === 'questions' && selectedVideo) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold text-black">Manage Video Questions</h1>
+          <Button onClick={handleCancel} variant="outline">
+            ← Back to List
+          </Button>
+        </div>
+        
+        <VideoQuestionsManager
+          video={selectedVideo}
+          onClose={handleCancel}
+        />
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-96">
+        <div className="text-lg text-black">Loading videos...</div>
       </div>
     );
   }
 
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      {renderHeader()}
-      {renderStats()}
-      {renderContent()}
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold text-black">Videos Dashboard</h1>
+          <p className="text-gray-600">Manage your learning platform videos</p>
+        </div>
+        <Button onClick={handleCreateNew} className="flex items-center space-x-2">
+          <Icons.Plus />
+          <span>Create Video</span>
+        </Button>
+      </div>
+
+      {/* Stats */}
+      {stats && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <StatsCard
+            title="Total Videos"
+            value={stats.total_videos}
+            icon={<Icons.Video />}
+            color="bg-blue-100"
+          />
+          <StatsCard
+            title="Total Duration"
+            value={`${stats.total_duration_hours}h`}
+            icon={<Icons.Clock />}
+            color="bg-green-100"
+          />
+          <StatsCard
+            title="With Questions"
+            value={stats.videos_with_questions}
+            icon={<Icons.QuestionMark />}
+            color="bg-purple-100"
+          />
+          <StatsCard
+            title="With Transcript"
+            value={stats.videos_with_transcript}
+            icon={<Icons.Video />}
+            color="bg-orange-100"
+          />
+        </div>
+      )}
+
+      {/* Search and Filters */}
+      <Card className="bg-white">
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <Input
+                placeholder="Search videos by URL, ID, lesson, course, or transcript..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="bg-white text-black"
+              />
+            </div>
+            <div className="flex gap-4">
+              <select
+                value={selectedLesson}
+                onChange={(e) => setSelectedLesson(e.target.value)}
+                className="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
+              >
+                <option value="">All Lessons</option>
+                {lessons.map((lesson) => (
+                  <option key={lesson.id} value={lesson.id}>
+                    {lesson.course_title} → {lesson.module_title} → {lesson.title}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={selectedProvider}
+                onChange={(e) => setSelectedProvider(e.target.value)}
+                className="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
+              >
+                <option value="">All Providers</option>
+                <option value="youtube">YouTube</option>
+                <option value="vimeo">Vimeo</option>
+                <option value="wistia">Wistia</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Videos Table */}
+      <VideoTable
+        videos={filteredVideos}
+        onEdit={handleEditVideo}
+        onDelete={handleDeleteVideo}
+        onView={handleViewVideo}
+        onManageQuestions={handleManageQuestions}
+      />
     </div>
   );
 }

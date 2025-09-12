@@ -420,7 +420,6 @@ export function ModulesAdminDashboard() {
             <div className="space-y-2">
               <Label htmlFor="filter-search" className="text-black">Search</Label>
               <div className="relative">
-                <Icons.Search />
                 <Input
                   id="filter-search"
                   type="text"
@@ -431,8 +430,7 @@ export function ModulesAdminDashboard() {
                     setCurrentPage(1);
                   }}
                   placeholder="Search modules by title or description..."
-                  className="pl-10"
-                  style={{ backgroundColor: 'white', color: 'black' }}
+                  className="pl-10 bg-white text-black"
                 />
                 <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
                   <Icons.Search />
@@ -456,63 +454,86 @@ export function ModulesAdminDashboard() {
             <div className="text-center py-8">
               <p className="text-gray-600">Loading modules...</p>
             </div>
-          ) : modules.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-600">No modules found.</p>
-            </div>
           ) : (
-            <div className="space-y-4">
-              {modules.map((module) => (
-                <div key={module.id} className="border rounded-lg p-4 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-3 mb-2">
-                        <Icons.Module />
-                        <h3 className="text-lg font-semibold text-black truncate">{module.title}</h3>
-                        {module.course?.status && getStatusBadge(module.course.status)}
-                        <Badge variant="outline">Position {module.position}</Badge>
-                      </div>
-                      
-                      <div className="text-sm text-gray-600 space-y-1">
-                        <p>
-                          <strong>Course:</strong> {module.course?.title}
-                        </p>
-                        <p>
-                          <strong>Description:</strong> {module.description}
-                        </p>
-                        <div className="flex items-center space-x-4 mt-2">
-                          <span className="flex items-center space-x-1">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left p-4 font-medium text-black">Module Details</th>
+                    <th className="text-left p-4 font-medium text-black">Course</th>
+                    <th className="text-left p-4 font-medium text-black">Position</th>
+                    <th className="text-left p-4 font-medium text-black">Lessons</th>
+                    <th className="text-left p-4 font-medium text-black">Created</th>
+                    <th className="text-left p-4 font-medium text-black">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {modules.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="text-center py-8 text-gray-600">
+                        No modules found.
+                      </td>
+                    </tr>
+                  ) : (
+                    modules.map((module) => (
+                      <tr key={module.id} className="border-b hover:bg-gray-50">
+                        <td className="p-4">
+                          <div>
+                            <div className="font-medium text-black flex items-center space-x-2">
+                              <Icons.Module />
+                              <span>{module.title}</span>
+                            </div>
+                            <div className="text-sm text-gray-600 truncate max-w-xs">
+                              {module.description}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <div>
+                            <div className="font-medium text-black">{module.course?.title}</div>
+                            {module.course?.status && getStatusBadge(module.course.status)}
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <Badge className="bg-blue-100 text-blue-800 border-blue-300">Position {module.position}</Badge>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center space-x-1">
                             <Icons.Lessons />
-                            <span>{module.lessons_count || 0} lesson(s)</span>
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            Created: {new Date(module.created_at).toLocaleDateString()}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex space-x-2 flex-shrink-0">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEdit(module)}
-                      >
-                        <Icons.Edit />
-                        Edit
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDelete(module)}
-                      >
-                        <Icons.Delete />
-                        Delete
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                            <span className="text-sm">{module.lessons_count || 0} lesson(s)</span>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <div className="text-sm text-gray-600">
+                            {new Date(module.created_at).toLocaleDateString()}
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex space-x-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleEdit(module)}
+                            >
+                              <Icons.Edit />
+                              <span className="ml-1">Edit</span>
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDelete(module)}
+                              className="text-red-600 hover:bg-red-50"
+                            >
+                              <Icons.Delete />
+                              <span className="ml-1">Delete</span>
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
           )}
 

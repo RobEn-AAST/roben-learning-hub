@@ -9,6 +9,8 @@ import { Label } from '@/components/ui/label';
 import { projectService, Project, ProjectStats, Lesson, CreateProjectData, UpdateProjectData } from '@/services/projectService';
 import { activityLogService } from '@/services/activityLogService';
 
+type ViewMode = 'list' | 'create' | 'edit';
+
 // Icons
 const Icons = {
   Edit: () => (
@@ -87,7 +89,7 @@ export default function ProjectAdminDashboard() {
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [stats, setStats] = useState<ProjectStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isCreating, setIsCreating] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLesson, setSelectedLesson] = useState<string>('');
@@ -191,7 +193,7 @@ export default function ProjectAdminDashboard() {
         submission_instructions: '',
         external_link: ''
       });
-      setIsCreating(false);
+      setViewMode('list');
       setEditingProject(null);
       setFormErrors({});
       await loadData();
@@ -210,7 +212,7 @@ export default function ProjectAdminDashboard() {
       submission_instructions: project.submission_instructions || '',
       external_link: project.external_link || ''
     });
-    setIsCreating(true);
+    setViewMode('edit');
   };
 
   const handleDelete = async (project: Project) => {
@@ -231,7 +233,7 @@ export default function ProjectAdminDashboard() {
   };
 
   const handleCancelEdit = () => {
-    setIsCreating(false);
+    setViewMode('list');
     setEditingProject(null);
     setFormData({
       lesson_id: '',
@@ -251,118 +253,58 @@ export default function ProjectAdminDashboard() {
     return matchesSearch && matchesLesson;
   });
 
+  const StatsCard = ({ icon: IconComponent, title, value, bgColor }: {
+    icon: React.ComponentType;
+    title: string;
+    value: number;
+    bgColor: string;
+  }) => (
+    <Card className="bg-white">
+      <CardContent className="p-6">
+        <div className="flex items-center">
+          <div className={`p-3 rounded-full ${bgColor} mr-4`}>
+            <IconComponent />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-gray-600">{title}</p>
+            <h3 className="text-2xl font-bold">{value}</h3>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   if (loading) {
     return (
-      <div className="p-6 bg-gray-50 min-h-screen">
+      <div className="p-6">
         <div className="flex items-center justify-center h-64">
-          <div className="text-black">Loading project management...</div>
+          <div>Loading project management...</div>
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      {/* Header */}
-      <div className="mb-8">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-black">Project Management</h1>
-            <p className="text-gray-600 mt-2">Manage student projects and assignments for lessons</p>
-          </div>
-          <Button 
-            onClick={() => setIsCreating(!isCreating)}
-            className="flex items-center space-x-2"
-          >
-            <Icons.Plus />
-            <span>{isCreating ? 'Cancel' : 'Add Project'}</span>
-          </Button>
+  if (viewMode === 'create' || viewMode === 'edit') {
+    return (
+      <div className="p-6">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold mb-2">{viewMode === 'edit' ? 'Edit Project' : 'Create New Project'}</h1>
+          <p className="text-gray-600">
+            {viewMode === 'edit' ? 'Update the project information below' : 'Fill in the details to create a new project'}
+          </p>
         </div>
-      </div>
 
-      {/* Stats Cards */}
-      {stats && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
-          <Card className="border-2 border-black shadow-sm bg-white">
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <div className="p-3 rounded-full bg-purple-100 mr-4">
-                  <Icons.Project />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Total Projects</p>
-                  <h3 className="text-2xl font-bold text-black">{stats.total_projects}</h3>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="border-2 border-black shadow-sm bg-white">
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <div className="p-3 rounded-full bg-blue-100 mr-4">
-                  <Icons.Link />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-600">With External Links</p>
-                  <h3 className="text-2xl font-bold text-black">{stats.projects_with_external_links}</h3>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="border-2 border-black shadow-sm bg-white">
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <div className="p-3 rounded-full bg-green-100 mr-4">
-                  <Icons.Instructions />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-600">With Instructions</p>
-                  <h3 className="text-2xl font-bold text-black">{stats.projects_with_instructions}</h3>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card className="border-2 border-black shadow-sm bg-white">
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <div className="p-3 rounded-full bg-orange-100 mr-4">
-                  <Icons.ChartBar />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Avg per Lesson</p>
-                  <h3 className="text-2xl font-bold text-black">{stats.average_projects_per_lesson}</h3>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Create/Edit Form */}
-      {isCreating && (
-        <Card className="border-2 border-black shadow-lg bg-white mb-8">
-          <CardHeader className="border-b-2 border-black">
-            <CardTitle className="flex items-center space-x-2 text-black">
-              <Icons.Project />
-              <span>{editingProject ? 'Edit Project' : 'Create New Project'}</span>
-            </CardTitle>
-            <CardDescription className="text-gray-600">
-              {editingProject ? 'Update the project information below' : 'Fill in the details to create a new project'}
-            </CardDescription>
-          </CardHeader>
+        <Card className="bg-white">
           <CardContent className="p-6">
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid gap-6 md:grid-cols-2">
-                <div className="border-2 border-black rounded-lg p-4">
-                  <Label htmlFor="lesson_id" className="text-black font-medium">Lesson *</Label>
+                <div>
+                  <Label htmlFor="lesson_id">Lesson *</Label>
                   <select
                     id="lesson_id"
                     value={formData.lesson_id}
                     onChange={(e) => setFormData({ ...formData, lesson_id: e.target.value })}
-                    className="w-full mt-2 p-3 border-2 border-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
+                    className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
                     required
                   >
                     <option value="">Select a lesson</option>
@@ -377,27 +319,27 @@ export default function ProjectAdminDashboard() {
                   )}
                 </div>
 
-                <div className="border-2 border-black rounded-lg p-4">
-                  <Label htmlFor="external_link" className="text-black font-medium">External Link</Label>
+                <div>
+                  <Label htmlFor="external_link">External Link</Label>
                   <Input
                     id="external_link"
                     type="url"
                     value={formData.external_link}
                     onChange={(e) => setFormData({ ...formData, external_link: e.target.value })}
                     placeholder="https://example.com (optional)"
-                    className="mt-2 p-3 border-2 border-black bg-white text-black"
+                    className="mt-2"
                   />
                 </div>
               </div>
 
-              <div className="border-2 border-black rounded-lg p-4">
-                <Label htmlFor="title" className="text-black font-medium">Title *</Label>
+              <div>
+                <Label htmlFor="title">Title *</Label>
                 <Input
                   id="title"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   placeholder="Project title"
-                  className="mt-2 p-3 border-2 border-black bg-white text-black"
+                  className="mt-2"
                   required
                 />
                 {formErrors.title && (
@@ -405,14 +347,14 @@ export default function ProjectAdminDashboard() {
                 )}
               </div>
 
-              <div className="border-2 border-black rounded-lg p-4">
-                <Label htmlFor="description" className="text-black font-medium">Description *</Label>
+              <div>
+                <Label htmlFor="description">Description *</Label>
                 <textarea
                   id="description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Project description and requirements"
-                  className="w-full mt-2 p-3 border-2 border-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
+                  className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
                   rows={4}
                   required
                 />
@@ -421,51 +363,98 @@ export default function ProjectAdminDashboard() {
                 )}
               </div>
 
-              <div className="border-2 border-black rounded-lg p-4">
-                <Label htmlFor="submission_instructions" className="text-black font-medium">Submission Instructions</Label>
+              <div>
+                <Label htmlFor="submission_instructions">Submission Instructions</Label>
                 <textarea
                   id="submission_instructions"
                   value={formData.submission_instructions}
                   onChange={(e) => setFormData({ ...formData, submission_instructions: e.target.value })}
                   placeholder="Instructions for how students should submit their work (optional)"
-                  className="w-full mt-2 p-3 border-2 border-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
+                  className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
                   rows={3}
                 />
               </div>
 
-              <div className="flex justify-end space-x-3 pt-6 border-t-2 border-black">
+              <div className="flex justify-end space-x-3 pt-6">
                 <Button 
                   type="button" 
                   variant="outline" 
-                  onClick={handleCancelEdit} 
-                  className="px-6 py-3 text-black border-2 border-black hover:bg-black hover:text-white transition-colors duration-200"
+                  onClick={handleCancelEdit}
                 >
                   <Icons.Cancel />
                   <span className="ml-2">Cancel</span>
                 </Button>
-                <Button 
-                  type="submit" 
-                  className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white border-2 border-purple-600 hover:border-purple-700"
-                >
+                <Button type="submit">
                   <Icons.Save />
-                  <span className="ml-2">{editingProject ? 'Update' : 'Create'} Project</span>
+                  <span className="ml-2">{viewMode === 'edit' ? 'Update' : 'Create'} Project</span>
                 </Button>
               </div>
             </form>
           </CardContent>
         </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-bold">Project Management</h1>
+            <p className="text-gray-600 mt-2">Manage student projects and assignments for lessons</p>
+          </div>
+          <Button 
+            onClick={() => setViewMode('create')}
+            className="flex items-center space-x-2"
+          >
+            <Icons.Plus />
+            <span>Add Project</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* Stats Cards */}
+      {stats && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+          <StatsCard
+            icon={Icons.Project}
+            title="Total Projects"
+            value={stats.total_projects}
+            bgColor="bg-purple-100"
+          />
+          <StatsCard
+            icon={Icons.Link}
+            title="With External Links"
+            value={stats.projects_with_external_links}
+            bgColor="bg-blue-100"
+          />
+          <StatsCard
+            icon={Icons.Instructions}
+            title="With Instructions"
+            value={stats.projects_with_instructions}
+            bgColor="bg-green-100"
+          />
+          <StatsCard
+            icon={Icons.ChartBar}
+            title="Avg per Lesson"
+            value={stats.average_projects_per_lesson}
+            bgColor="bg-orange-100"
+          />
+        </div>
       )}
 
       {/* Projects Management Section */}
-      <Card className="border-2 border-black shadow-lg bg-white">
-        <CardHeader className="border-b-2 border-black">
+      <Card className="bg-white">
+        <CardHeader>
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
-              <CardTitle className="text-black">Projects Management</CardTitle>
-              <CardDescription className="text-gray-600">Manage all your projects and assignments</CardDescription>
+              <CardTitle>Projects Management</CardTitle>
+              <CardDescription>Manage all your projects and assignments</CardDescription>
             </div>
             <div className="flex flex-col sm:flex-row gap-4">
-              <div className="relative border-2 border-black rounded-lg">
+              <div className="relative">
                 <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
                   <Icons.Search />
                 </div>
@@ -473,13 +462,13 @@ export default function ProjectAdminDashboard() {
                   placeholder="Search projects..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 w-full sm:w-64 bg-white text-black border-none"
+                  className="pl-10 w-full sm:w-64"
                 />
               </div>
               <select
                 value={selectedLesson}
                 onChange={(e) => setSelectedLesson(e.target.value)}
-                className="p-3 border-2 border-black rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
+                className="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
               >
                 <option value="">All Lessons</option>
                 {lessons.map((lesson) => (
@@ -493,92 +482,98 @@ export default function ProjectAdminDashboard() {
         </CardHeader>
 
         <CardContent className="p-0">
-          {/* Table Header */}
-          <div className="grid grid-cols-12 gap-4 p-6 border-b-2 border-black bg-gray-50 text-sm font-medium text-gray-600">
-            <div className="col-span-4">Project Details</div>
-            <div className="col-span-3">Lesson</div>
-            <div className="col-span-2">Features</div>
-            <div className="col-span-2">Created</div>
-            <div className="col-span-1">Actions</div>
-          </div>
-
-          {/* Projects List */}
-          <div className="divide-y-2 divide-black">
-            {filteredProjects.length === 0 ? (
-              <div className="p-12 text-center border-2 border-black m-4 rounded-lg">
-                <div className="flex justify-center mb-4">
-                  <div className="p-3 rounded-full bg-gray-100">
-                    <Icons.Project />
-                  </div>
-                </div>
-                <h3 className="text-lg font-medium text-black mb-2">No projects found</h3>
-                <p className="text-gray-600 mb-4">
-                  {searchTerm || selectedLesson ? 'Try adjusting your filters' : 'Create your first project to get started!'}
-                </p>
-              </div>
-            ) : (
-              filteredProjects.map((project) => (
-                <div key={project.id} className="grid grid-cols-12 gap-4 p-6 hover:bg-gray-50 transition-colors border-l-4 border-r-4 border-black">
-                  <div className="col-span-4">
-                    <h3 className="font-medium text-black mb-1">{project.title}</h3>
-                    <p className="text-sm text-gray-600 line-clamp-2">{project.description}</p>
-                  </div>
-                  
-                  <div className="col-span-3">
-                    <div className="text-sm text-gray-600">
-                      <div className="font-medium text-black">{project.lesson_title}</div>
-                      <div>{project.course_title}</div>
-                    </div>
-                  </div>
-
-                  <div className="col-span-2">
-                    <div className="flex flex-col space-y-1">
-                      {project.external_link && (
-                        <Badge variant="outline" className="w-fit">
-                          <Icons.Link />
-                          <span className="ml-1">External Link</span>
-                        </Badge>
-                      )}
-                      {project.submission_instructions && (
-                        <Badge variant="outline" className="w-fit">
-                          <Icons.Instructions />
-                          <span className="ml-1">Instructions</span>
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="col-span-2 text-sm text-gray-600">
-                    {new Date(project.created_at).toLocaleDateString()}
-                  </div>
-
-                  <div className="col-span-1">
-                    <div className="flex space-x-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleEdit(project)}
-                        className="p-2 border-2 border-black hover:bg-black hover:text-white"
-                      >
-                        <Icons.Edit />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDelete(project)}
-                        className="p-2 border-2 border-red-600 hover:bg-red-600 hover:text-white text-red-600"
-                      >
-                        <Icons.Delete />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left p-4 font-medium text-black">Project Details</th>
+                  <th className="text-left p-4 font-medium text-black">Lesson</th>
+                  <th className="text-left p-4 font-medium text-black">Features</th>
+                  <th className="text-left p-4 font-medium text-black">Created</th>
+                  <th className="text-left p-4 font-medium text-black">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredProjects.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="text-center py-12">
+                      <div className="flex justify-center mb-4">
+                        <div className="p-3 rounded-full bg-gray-100">
+                          <Icons.Project />
+                        </div>
+                      </div>
+                      <h3 className="text-lg font-medium text-black mb-2">No projects found</h3>
+                      <p className="text-gray-600 mb-4">
+                        {searchTerm || selectedLesson ? 'Try adjusting your filters' : 'Create your first project to get started!'}
+                      </p>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredProjects.map((project) => (
+                    <tr key={project.id} className="border-b hover:bg-gray-50">
+                      <td className="p-4">
+                        <div>
+                          <div className="font-medium text-black mb-1">{project.title}</div>
+                          <div className="text-sm text-gray-600 truncate max-w-xs">
+                            {project.description}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="text-sm text-gray-600">
+                          <div className="font-medium text-black">{project.lesson_title}</div>
+                          <div>{project.course_title}</div>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex flex-col space-y-1">
+                          {project.external_link && (
+                            <Badge variant="outline" className="w-fit">
+                              <Icons.Link />
+                              <span className="ml-1">External Link</span>
+                            </Badge>
+                          )}
+                          {project.submission_instructions && (
+                            <Badge variant="outline" className="w-fit">
+                              <Icons.Instructions />
+                              <span className="ml-1">Instructions</span>
+                            </Badge>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="text-sm text-gray-600">
+                          {new Date(project.created_at).toLocaleDateString()}
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex space-x-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEdit(project)}
+                          >
+                            <Icons.Edit />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDelete(project)}
+                            className="text-red-600 hover:bg-red-50"
+                          >
+                            <Icons.Delete />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
 
           {filteredProjects.length > 0 && (
-            <div className="p-6 border-t-2 border-black bg-gray-50 text-center text-gray-600">
+            <div className="p-6 border-t bg-gray-50 text-center text-gray-600">
               Showing {filteredProjects.length} of {projects.length} projects
             </div>
           )}
