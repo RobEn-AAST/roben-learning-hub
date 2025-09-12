@@ -9,6 +9,8 @@ import { UserAdminDashboard } from '@/components/admin/UserAdminDashboard';
 import VideoAdminDashboard from '@/components/admin/VideoAdminDashboard';
 import ArticleAdminDashboard from '@/components/admin/ArticleAdminDashboard';
 import ProjectAdminDashboard from '@/components/admin/ProjectAdminDashboard';
+import { LessonsAdminDashboard } from '@/components/admin/LessonsAdminDashboard';
+import { ModulesAdminDashboard } from '@/components/admin/ModulesAdminDashboard';
 import { activityLogService } from '@/services/activityLogService';
 
 // Icons
@@ -85,7 +87,7 @@ const databaseTables: DatabaseTable[] = [
     displayName: 'Course Modules',
     description: 'Course sections and module organization',
     icon: <Icons.Database />,
-    status: 'development',
+    status: 'available',
     category: 'core'
   },
   {
@@ -93,7 +95,7 @@ const databaseTables: DatabaseTable[] = [
     displayName: 'Lessons',
     description: 'Individual lessons within course modules',
     icon: <Icons.Table />,
-    status: 'development',
+    status: 'available',
     category: 'core'
   },
   
@@ -341,6 +343,52 @@ export default function TablesPage() {
           </Button>
         </div>
         <ProjectAdminDashboard />
+      </div>
+    );
+  }
+
+  // If a table is selected and it's lessons, show the LessonsAdminDashboard
+  if (selectedTable === 'lessons') {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Lessons Management</h1>
+            <p className="text-gray-600">Full CRUD operations for lessons - videos, articles, projects, and quizzes</p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={handleBackToTables}
+            className="flex items-center space-x-2"
+          >
+            <span>←</span>
+            <span>Back to Tables</span>
+          </Button>
+        </div>
+        <LessonsAdminDashboard />
+      </div>
+    );
+  }
+
+  // If a table is selected and it's modules, show the ModulesAdminDashboard
+  if (selectedTable === 'modules') {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Course Modules Management</h1>
+            <p className="text-gray-600">Full CRUD operations for course modules and organization</p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={handleBackToTables}
+            className="flex items-center space-x-2"
+          >
+            <span>←</span>
+            <span>Back to Tables</span>
+          </Button>
+        </div>
+        <ModulesAdminDashboard />
       </div>
     );
   }
