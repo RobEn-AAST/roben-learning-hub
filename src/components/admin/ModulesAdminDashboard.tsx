@@ -248,7 +248,6 @@ export function ModulesAdminDashboard() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                   style={{ backgroundColor: 'white', color: 'black' }}
                   required
-                  disabled={!!editingModule} // Don't allow changing course for existing modules
                 >
                   <option value="" style={{ backgroundColor: 'white', color: 'black' }}>Select a course</option>
                   {courses.map((course) => (
@@ -500,7 +499,7 @@ export function ModulesAdminDashboard() {
                         <td className="p-4">
                           <div className="flex items-center space-x-1">
                             <Icons.Lessons />
-                            <span className="text-sm">{module.lessons_count || 0} lesson(s)</span>
+                            <span className="text-sm text-gray-800">{module.lessons_count || 0} lesson(s)</span>
                           </div>
                         </td>
                         <td className="p-4">

@@ -77,9 +77,9 @@ export async function PUT(
     }
 
     // Validate status if provided
-    if (status && !['draft', 'published', 'archived'].includes(status)) {
+    if (status && !['visible', 'hidden'].includes(status)) {
       return NextResponse.json(
-        { error: 'Invalid status. Must be one of: draft, published, archived' },
+        { error: 'Invalid status. Must be one of: visible, hidden' },
         { status: 400 }
       );
     }

@@ -1,7 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { lessonService } from '@/services/lessonService';
+import { lessonService, serverLessonService } from '@/services/lessonService';
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { activityLogService } from '@/services/activityLogService';
+
+// Create admin client with service role key to bypass RLS
+const createAdminClient = () => {
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (!serviceRoleKey) {
+    throw new Error('SUPABASE_SERVICE_ROLE_KEY environment variable is not set');
+  }
+
+  return createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    serviceRoleKey,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    }
+  );
+};
 
 export async function GET(request: NextRequest) {
   try {
@@ -38,7 +59,21 @@ export async function GET(request: NextRequest) {
       ...(status && { status: status })
     };
 
-    const result = await lessonService.getLessons(page, limit, filters);
+    // Use admin client to bypass RLS for instructor data fetching
+    const adminClient = createAdminClient();
+    const result = await serverLessonService.getLessons(adminClient, page, limit, filters);
+    
+    // Debug: Log the first lesson to see the data structure
+    if (result.lessons && result.lessons.length > 0) {
+      console.log('First lesson data:', {
+        id: result.lessons[0].id,
+        title: result.lessons[0].title,
+        instructor_id: result.lessons[0].instructor_id,
+        instructor: result.lessons[0].instructor,
+        rawData: JSON.stringify(result.lessons[0], null, 2)
+      });
+    }
+    
     return NextResponse.json(result);
   } catch (error) {
     console.error('Error fetching lessons:', error);
@@ -89,9 +124,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate status if provided
-    if (status && !['draft', 'published', 'archived'].includes(status)) {
+    if (status && !['visible', 'hidden'].includes(status)) {
       return NextResponse.json(
-        { error: 'Invalid status. Must be one of: draft, published, archived' },
+        { error: 'Invalid status. Must be one of: visible, hidden' },
         { status: 400 }
       );
     }
@@ -101,12 +136,14 @@ export async function POST(request: NextRequest) {
       title,
       lesson_type,
       position,
-      status,
+      status: status || 'hidden', // Default to 'hidden' if no status provided
       instructor_id,
       metadata: metadata || {}
     };
 
-    const newLesson = await lessonService.createLesson(lessonData);
+    // Use admin client to bypass RLS for lesson creation
+    const adminClient = createAdminClient();
+    const newLesson = await serverLessonService.createLesson(adminClient, lessonData);
     
     // Log the action
     await activityLogService.logActivity({

@@ -62,7 +62,7 @@ interface LessonFormData {
   title: string;
   lesson_type: 'video' | 'article' | 'project' | 'quiz';
   position?: number;
-  status: 'draft' | 'published' | 'archived';
+  status: 'visible' | 'hidden';
   instructor_id: string;
   metadata?: any;
 }
@@ -89,7 +89,7 @@ export function LessonsAdminDashboard() {
     module_id: '',
     title: '',
     lesson_type: 'video',
-    status: 'draft',
+    status: 'hidden',
     instructor_id: ''
   });
 
@@ -140,6 +140,18 @@ export function LessonsAdminDashboard() {
       const response = await fetch(`/api/admin/lessons?${params}`);
       if (response.ok) {
         const data = await response.json();
+        
+        // Debug: Log the first lesson to see frontend data structure
+        if (data.lessons && data.lessons.length > 0) {
+          console.log('Frontend received lesson data:', {
+            id: data.lessons[0].id,
+            title: data.lessons[0].title,
+            instructor_id: data.lessons[0].instructor_id,
+            instructor: data.lessons[0].instructor,
+            fullLesson: data.lessons[0]
+          });
+        }
+        
         setLessons(data.lessons);
         setTotalPages(Math.ceil(data.total / 10));
       }
@@ -222,7 +234,7 @@ export function LessonsAdminDashboard() {
       module_id: '',
       title: '',
       lesson_type: 'video',
-      status: 'draft',
+      status: 'hidden',
       instructor_id: ''
     });
     setEditingLesson(null);
@@ -241,9 +253,8 @@ export function LessonsAdminDashboard() {
 
   const getStatusBadge = (status: string) => {
     const variants = {
-      draft: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-      published: 'bg-green-100 text-green-800 border-green-300',
-      archived: 'bg-gray-100 text-gray-800 border-gray-300'
+      visible: 'bg-green-100 text-green-800 border-green-300',
+      hidden: 'bg-yellow-100 text-yellow-800 border-yellow-300'
     } as const;
     
     return <Badge variant="outline" className={variants[status as keyof typeof variants]}>{status}</Badge>;
@@ -361,9 +372,8 @@ export function LessonsAdminDashboard() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     style={{ backgroundColor: 'white', color: 'black' }}
                   >
-                    <option value="draft" style={{ backgroundColor: 'white', color: 'black' }}>Draft</option>
-                    <option value="published" style={{ backgroundColor: 'white', color: 'black' }}>Published</option>
-                    <option value="archived" style={{ backgroundColor: 'white', color: 'black' }}>Archived</option>
+                    <option value="hidden" style={{ backgroundColor: 'white', color: 'black' }}>Hidden</option>
+                    <option value="visible" style={{ backgroundColor: 'white', color: 'black' }}>Visible</option>
                   </select>
                 </div>
 
@@ -559,9 +569,8 @@ export function LessonsAdminDashboard() {
                 style={{ backgroundColor: 'white', color: 'black' }}
               >
                 <option value="" style={{ backgroundColor: 'white', color: 'black' }}>All Statuses</option>
-                <option value="draft" style={{ backgroundColor: 'white', color: 'black' }}>Draft</option>
-                <option value="published" style={{ backgroundColor: 'white', color: 'black' }}>Published</option>
-                <option value="archived" style={{ backgroundColor: 'white', color: 'black' }}>Archived</option>
+                <option value="hidden" style={{ backgroundColor: 'white', color: 'black' }}>Hidden</option>
+                <option value="visible" style={{ backgroundColor: 'white', color: 'black' }}>Visible</option>
               </select>
             </div>
           </div>
@@ -590,14 +599,13 @@ export function LessonsAdminDashboard() {
                     <th className="text-left p-4 font-medium text-black">Course & Module</th>
                     <th className="text-left p-4 font-medium text-black">Type & Status</th>
                     <th className="text-left p-4 font-medium text-black">Instructor</th>
-                    <th className="text-left p-4 font-medium text-black">Content</th>
                     <th className="text-left p-4 font-medium text-black">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {lessons.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-center py-8 text-gray-600">
+                      <td colSpan={5} className="text-center py-8 text-gray-600">
                         No lessons found.
                       </td>
                     </tr>
@@ -626,34 +634,9 @@ export function LessonsAdminDashboard() {
                           </div>
                         </td>
                         <td className="p-4">
-                          <div className="text-sm text-black">{lesson.instructor?.full_name}</div>
-                        </td>
-                        <td className="p-4">
-                          <div className="flex flex-wrap gap-2 text-xs">
-                            {(lesson.videos_count || 0) > 0 && (
-                              <span className="flex items-center space-x-1 bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                                <Icons.Video />
-                                <span>{lesson.videos_count} video(s)</span>
-                              </span>
-                            )}
-                            {(lesson.articles_count || 0) > 0 && (
-                              <span className="flex items-center space-x-1 bg-purple-100 text-purple-800 px-2 py-1 rounded">
-                                <Icons.Article />
-                                <span>{lesson.articles_count} article(s)</span>
-                              </span>
-                            )}
-                            {(lesson.projects_count || 0) > 0 && (
-                              <span className="flex items-center space-x-1 bg-orange-100 text-orange-800 px-2 py-1 rounded">
-                                <Icons.Project />
-                                <span>{lesson.projects_count} project(s)</span>
-                              </span>
-                            )}
-                            {(lesson.quizzes_count || 0) > 0 && (
-                              <span className="flex items-center space-x-1 bg-red-100 text-red-800 px-2 py-1 rounded">
-                                <Icons.Quiz />
-                                <span>{lesson.quizzes_count} quiz(zes)</span>
-                              </span>
-                            )}
+                          <div className="text-sm text-black">
+                            {lesson.instructor?.full_name || 
+                             `No instructor (ID: ${lesson.instructor_id || 'none'})`}
                           </div>
                         </td>
                         <td className="p-4">

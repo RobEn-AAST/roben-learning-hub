@@ -69,18 +69,18 @@ interface DatabaseTable {
   icon: React.ReactNode;
   status: 'available' | 'development';
   recordCount?: number;
-  category: 'core' | 'content' | 'user' | 'analytics';
+  category: 'content' | 'user' | 'analytics';
 }
 
 const databaseTables: DatabaseTable[] = [
-  // Core Tables
+  // Content Tables
   {
     name: 'courses',
     displayName: 'Courses',
     description: 'Manage courses, their metadata, and publishing status',
     icon: <Icons.Book />,
     status: 'available',
-    category: 'core'
+    category: 'content'
   },
   {
     name: 'modules',
@@ -88,7 +88,7 @@ const databaseTables: DatabaseTable[] = [
     description: 'Course sections and module organization',
     icon: <Icons.Database />,
     status: 'available',
-    category: 'core'
+    category: 'content'
   },
   {
     name: 'lessons',
@@ -96,10 +96,8 @@ const databaseTables: DatabaseTable[] = [
     description: 'Individual lessons within course modules',
     icon: <Icons.Table />,
     status: 'available',
-    category: 'core'
+    category: 'content'
   },
-  
-  // Content Tables
   {
     name: 'videos',
     displayName: 'Videos',
@@ -185,21 +183,18 @@ const databaseTables: DatabaseTable[] = [
 ];
 
 const categoryColors = {
-  core: 'bg-blue-50 border-blue-200',
   content: 'bg-green-50 border-green-200',
   user: 'bg-purple-50 border-purple-200',
   analytics: 'bg-orange-50 border-orange-200'
 };
 
 const categoryLabels = {
-  core: 'Core System',
   content: 'Content Management',
   user: 'User Management',
   analytics: 'Analytics & Progress'
 };
 
 const categoryBadgeColors = {
-  core: 'bg-blue-600 text-white border-blue-600',
   content: 'bg-green-600 text-white border-green-600',
   user: 'bg-purple-600 text-white border-purple-600',
   analytics: 'bg-orange-600 text-white border-orange-600'
@@ -218,7 +213,7 @@ export default function TablesPage() {
     ? databaseTables 
     : databaseTables.filter(table => table.category === selectedCategory);
 
-  const categories = ['all', 'core', 'content', 'user', 'analytics'];
+  const categories = ['all', 'content', 'user', 'analytics'];
 
   const handleTableClick = (tableName: string, status: string) => {
     if (status === 'available') {
@@ -516,7 +511,7 @@ export default function TablesPage() {
               </div>
               <div>
                 <p className="text-sm font-medium text-gray-600">Categories</p>
-                <p className="text-2xl font-bold text-gray-900">4</p>
+                <p className="text-2xl font-bold text-gray-900">3</p>
               </div>
             </div>
           </CardContent>

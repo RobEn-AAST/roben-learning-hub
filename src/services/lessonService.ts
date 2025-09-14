@@ -6,7 +6,7 @@ export interface Lesson {
   title: string;
   lesson_type: 'video' | 'article' | 'project' | 'quiz';
   position: number;
-  status: 'draft' | 'published' | 'archived';
+  status: 'visible' | 'hidden';
   instructor_id: string;
   metadata: any;
   created_at: string;
@@ -37,7 +37,7 @@ export interface LessonCreateData {
   title: string;
   lesson_type: 'video' | 'article' | 'project' | 'quiz';
   position?: number;
-  status?: 'draft' | 'published' | 'archived';
+  status?: 'visible' | 'hidden';
   instructor_id: string;
   metadata?: any;
 }
@@ -46,7 +46,7 @@ export interface LessonUpdateData {
   title?: string;
   lesson_type?: 'video' | 'article' | 'project' | 'quiz';
   position?: number;
-  status?: 'draft' | 'published' | 'archived';
+  status?: 'visible' | 'hidden';
   instructor_id?: string;
   metadata?: any;
 }
@@ -75,6 +75,180 @@ export interface Module {
 
 const supabase = createClient();
 
+// Server-side helper functions for API routes
+export const serverLessonService = {
+  // Get instructors for select dropdowns (server-side)
+  async getInstructorsForSelect(supabaseClient: any): Promise<{ id: string; full_name: string }[]> {
+    const { data, error } = await supabaseClient
+      .from('profiles')
+      .select('id, full_name')
+      .eq('role', 'instructor')
+      .order('full_name');
+
+    if (error) throw error;
+
+    return data || [];
+  },
+
+  // Get lessons with server-side client (for API routes)
+  async getLessons(supabaseClient: any, page = 1, limit = 10, filters?: {
+    module_id?: string;
+    course_id?: string;
+    lesson_type?: string;
+    status?: string;
+  }) {
+    const offset = (page - 1) * limit;
+    
+    let query = supabaseClient
+      .from('lessons')
+      .select(`
+        *,
+        modules!inner(
+          id,
+          title,
+          course_id,
+          courses!inner(
+            id,
+            title
+          )
+        )
+      `, { count: 'exact' })
+      .order('created_at', { ascending: false });
+
+    // Apply filters
+    if (filters?.module_id) {
+      query = query.eq('module_id', filters.module_id);
+    }
+    if (filters?.course_id) {
+      query = query.eq('modules.course_id', filters.course_id);
+    }
+    if (filters?.lesson_type) {
+      query = query.eq('lesson_type', filters.lesson_type);
+    }
+    if (filters?.status) {
+      query = query.eq('status', filters.status);
+    }
+
+    const { data, error, count } = await query.range(offset, offset + limit - 1);
+
+    if (error) throw error;
+
+    // Transform data to include proper nesting
+    const transformedData = await Promise.all((data || []).map(async (lesson: any) => {
+      // Debug: Log raw lesson data from Supabase
+      console.log('Raw lesson data from Supabase:', {
+        id: lesson.id,
+        title: lesson.title,
+        instructor_id: lesson.instructor_id,
+        instructor: lesson.instructor,
+        modules: lesson.modules,
+        allKeys: Object.keys(lesson)
+      });
+
+      // Manually fetch instructor data if instructor_id exists
+      let instructorData = null;
+      if (lesson.instructor_id) {
+        console.log(`Attempting to fetch instructor with ID: ${lesson.instructor_id}`);
+        
+        const { data: instructor, error: instructorError } = await supabaseClient
+          .from('profiles')
+          .select('id, full_name')
+          .eq('id', lesson.instructor_id)
+          .single();
+        
+        console.log('Instructor fetch result:', {
+          instructor_id: lesson.instructor_id,
+          instructor: instructor,
+          error: instructorError,
+          errorMessage: instructorError?.message,
+          errorDetails: instructorError?.details
+        });
+        
+        if (!instructorError && instructor) {
+          instructorData = instructor;
+        }
+      }
+
+      // Get content counts
+      const [videosCount, articlesCount, projectsCount, quizzesCount] = await Promise.all([
+        supabaseClient.from('videos').select('id', { count: 'exact' }).eq('lesson_id', lesson.id),
+        supabaseClient.from('articles').select('id', { count: 'exact' }).eq('lesson_id', lesson.id),
+        supabaseClient.from('projects').select('id', { count: 'exact' }).eq('lesson_id', lesson.id),
+        supabaseClient.from('quizzes').select('id', { count: 'exact' }).eq('lesson_id', lesson.id)
+      ]);
+
+      const transformedLesson = {
+        ...lesson,
+        module: lesson.modules,
+        instructor: instructorData, // Use manually fetched instructor data
+        videos_count: videosCount.count || 0,
+        articles_count: articlesCount.count || 0,
+        projects_count: projectsCount.count || 0,
+        quizzes_count: quizzesCount.count || 0
+      };
+
+      console.log('Transformed lesson data:', {
+        id: transformedLesson.id,
+        title: transformedLesson.title,
+        instructor_id: transformedLesson.instructor_id,
+        instructor: transformedLesson.instructor
+      });
+
+      return transformedLesson;
+    }));
+
+    return { lessons: transformedData, total: count || 0 };
+  },
+
+  // Create lesson with server-side client (for API routes)
+  async createLesson(supabaseClient: any, lessonData: LessonCreateData): Promise<Lesson> {
+    // If position not provided, set it to the next available position in the module
+    if (!lessonData.position) {
+      const { count } = await supabaseClient
+        .from('lessons')
+        .select('id', { count: 'exact' })
+        .eq('module_id', lessonData.module_id);
+      
+      lessonData.position = (count || 0) + 1;
+    }
+
+    const { data, error } = await supabaseClient
+      .from('lessons')
+      .insert({
+        ...lessonData,
+        metadata: lessonData.metadata || {}
+      })
+      .select(`
+        *,
+        modules!inner(
+          id,
+          title,
+          course_id,
+          courses!inner(
+            id,
+            title
+          )
+        ),
+        instructor:profiles!lessons_instructor_id_fkey(
+          id,
+          full_name
+        )
+      `)
+      .single();
+
+    if (error) throw error;
+
+    return {
+      ...data,
+      module: data.modules,
+      videos_count: 0,
+      articles_count: 0,
+      projects_count: 0,
+      quizzes_count: 0
+    };
+  },
+};
+
 export const lessonService = {
   // Get all lessons with pagination and filtering
   async getLessons(page = 1, limit = 10, filters?: {
@@ -98,7 +272,7 @@ export const lessonService = {
             title
           )
         ),
-        profiles!lessons_instructor_id_fkey(
+        profiles(
           id,
           full_name
         )
@@ -193,7 +367,7 @@ export const lessonService = {
             title
           )
         ),
-        profiles!lessons_instructor_id_fkey(
+        profiles(
           id,
           full_name
         )
@@ -254,7 +428,7 @@ export const lessonService = {
             title
           )
         ),
-        profiles!lessons_instructor_id_fkey(
+        profiles(
           id,
           full_name
         )
@@ -290,11 +464,11 @@ export const lessonService = {
           title,
           course_id,
           courses!inner(
-            id,
+          id,
             title
           )
         ),
-        profiles!lessons_instructor_id_fkey(
+        profiles(
           id,
           full_name
         )
@@ -366,7 +540,7 @@ export const lessonService = {
     const { data, error } = await supabase
       .from('profiles')
       .select('id, full_name')
-      .in('role', ['admin', 'instructor'])
+      .eq('role', 'instructor')
       .order('full_name');
 
     if (error) throw error;

@@ -66,9 +66,10 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { title, description, position, metadata } = body;
+    const { course_id, title, description, position, metadata } = body;
 
     const updateData = {
+      ...(course_id && { course_id }),
       ...(title && { title }),
       ...(description && { description }),
       ...(position !== undefined && { position }),
