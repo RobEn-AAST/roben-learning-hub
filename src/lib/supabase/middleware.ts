@@ -69,18 +69,24 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname !== "/" &&
     request.nextUrl.pathname !== "/favicon.ico"
   ) {
-    // Check if user has completed their profile
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('full_name')
-      .eq('id', user.sub)
-      .single();
-    
-    if (profile && (!profile.full_name || !profile.full_name.trim())) {
-      // User has incomplete profile, redirect to complete profile
-      const url = request.nextUrl.clone();
-      url.pathname = "/complete-profile";
-      return NextResponse.redirect(url);
+    try {
+      // Check if user has completed their profile
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.sub)
+        .single();
+      
+      if (profile && (!profile.full_name || !profile.full_name.trim())) {
+        // User has incomplete profile, redirect to complete profile
+        const url = request.nextUrl.clone();
+        url.pathname = "/complete-profile";
+        return NextResponse.redirect(url);
+      }
+    } catch (error) {
+      // If profile check fails due to RLS, skip the check
+      // This prevents middleware from breaking due to RLS policies
+      console.warn('Profile check failed in middleware:', error);
     }
   }
 

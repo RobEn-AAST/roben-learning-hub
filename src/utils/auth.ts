@@ -16,32 +16,58 @@ export interface UserProfile {
  * Check if the current user has admin privileges (client-side)
  */
 export async function isCurrentUserAdmin(): Promise<boolean> {
-  const supabase = createClient();
-  
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
-  
-  if (userError || !user) {
+  try {
+    const supabase = createClient();
+    
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
+      return false;
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    return !profileError && profile?.role === 'admin';
+  } catch (error) {
+    console.warn('Admin check failed:', error);
     return false;
   }
-
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-
-  return !profileError && profile?.role === 'admin';
 }
 
 /**
  * Check if a specific user has admin privileges (server-side)
+ * Uses service role to bypass RLS for authentication checks
  */
 export async function isUserAdmin(userId: string): Promise<boolean> {
-  const supabase = await createServerClient();
+  // Import here to avoid circular dependencies
+  const { createClient: createSupabaseClient } = await import('@supabase/supabase-js');
   
   console.log('Checking admin role for user:', userId); // Debug log
   
-  const { data: profile, error } = await supabase
+  // Use service role to bypass RLS for admin checks
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (!serviceRoleKey) {
+    console.error('SUPABASE_SERVICE_ROLE_KEY not found');
+    return false;
+  }
+
+  const adminClient = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    serviceRoleKey,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    }
+  );
+  
+  const { data: profile, error } = await adminClient
     .from('profiles')
     .select('role')
     .eq('id', userId)
@@ -106,7 +132,7 @@ export async function ensureUserProfile(userId: string, userData?: { full_name?:
   const supabase = createClient();
   
   // Check if profile exists
-  const { data: existingProfile, error: checkError } = await supabase
+  const { error: checkError } = await supabase
     .from('profiles')
     .select('id')
     .eq('id', userId)
