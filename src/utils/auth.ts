@@ -82,6 +82,49 @@ export async function isUserAdmin(userId: string): Promise<boolean> {
 }
 
 /**
+ * Check if a specific user has instructor privileges (server-side)
+ * Uses service role to bypass RLS for authentication checks
+ */
+export async function isUserInstructor(userId: string): Promise<boolean> {
+  // Import here to avoid circular dependencies
+  const { createClient: createSupabaseClient } = await import('@supabase/supabase-js');
+  
+  console.log('Checking instructor role for user:', userId); // Debug log
+  
+  // Use service role to bypass RLS for instructor checks
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (!serviceRoleKey) {
+    console.error('SUPABASE_SERVICE_ROLE_KEY not found');
+    return false;
+  }
+
+  const adminClient = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    serviceRoleKey,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    }
+  );
+  
+  const { data: profile, error } = await adminClient
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .single();
+
+  console.log('Profile check result:', { profile, error: error?.message }); // Debug log
+
+  const isInstructor = !error && (profile?.role === 'instructor' || profile?.role === 'admin');
+  console.log('Is instructor or admin:', isInstructor); // Debug log
+
+  return isInstructor;
+}
+
+/**
  * Get the current user's profile (client-side)
  */
 export async function getCurrentUserProfile(): Promise<UserProfile | null> {
