@@ -12,6 +12,9 @@ import ProjectAdminDashboard from '@/components/admin/ProjectAdminDashboard';
 import { LessonsAdminDashboard } from '@/components/admin/LessonsAdminDashboard';
 import { ModulesAdminDashboard } from '@/components/admin/ModulesAdminDashboard';
 import { activityLogService } from '@/services/activityLogService';
+import  QuizAdminDashboard  from '@/components/admin/QuizAdminDashboard';
+import QuizQuestionAdminDashboard from '@/components/admin/QuizQuestionAdminDashboard';
+import QuestionOptionAdminDashboard from '@/components/admin/QuestionOptionAdminDashboard';
 
 // Icons
 const Icons = {
@@ -127,7 +130,7 @@ const databaseTables: DatabaseTable[] = [
     displayName: 'Quizzes',
     description: 'Quiz content and assessment tools',
     icon: <Icons.Question />,
-    status: 'development',
+    status: 'available',
     category: 'content'
   },
   {
@@ -135,7 +138,7 @@ const databaseTables: DatabaseTable[] = [
     displayName: 'Quiz Questions',
     description: 'Individual questions for quizzes and assessments',
     icon: <Icons.Question />,
-    status: 'development',
+    status: 'available',
     category: 'content'
   },
   {
@@ -143,7 +146,7 @@ const databaseTables: DatabaseTable[] = [
     displayName: 'Question Options',
     description: 'Answer options for multiple choice questions',
     icon: <Icons.Question />,
-    status: 'development',
+    status: 'available',
     category: 'content'
   },
   {
@@ -384,6 +387,75 @@ export default function TablesPage() {
           </Button>
         </div>
         <ModulesAdminDashboard />
+      </div>
+    );
+  }
+
+  // If a table is selected and it's quizzes, show the QuizAdminDashboard
+  if (selectedTable === 'quizzes') {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Quizzes Management</h1>
+            <p className="text-gray-600">Full CRUD operations for quizzes and assessments</p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={handleBackToTables}
+            className="flex items-center space-x-2"
+          >
+            <span>←</span>
+            <span>Back to Tables</span>
+          </Button>
+        </div>
+        <QuizAdminDashboard />
+      </div>
+    );
+  }
+
+  // If a table is selected and it's questions, show the QuizQuestionAdminDashboard
+  if (selectedTable === 'questions') {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Quiz Questions Management</h1>
+            <p className="text-gray-600">Full CRUD operations for quiz questions</p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={handleBackToTables}
+            className="flex items-center space-x-2"
+          >
+            <span>←</span>
+            <span>Back to Tables</span>
+          </Button>
+        </div>
+        <QuizQuestionAdminDashboard />
+      </div>
+    );
+  }
+
+  // If a table is selected and it's question_options, show the QuestionOptionAdminDashboard
+  if (selectedTable === 'question_options') {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Question Options Management</h1>
+            <p className="text-gray-600">Full CRUD operations for question options</p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={handleBackToTables}
+            className="flex items-center space-x-2"
+          >
+            <span>←</span>
+            <span>Back to Tables</span>
+          </Button>
+        </div>
+        <QuestionOptionAdminDashboard />
       </div>
     );
   }
