@@ -8,7 +8,7 @@ export interface Lesson {
   position: number;
   status: 'visible' | 'hidden';
   instructor_id: string;
-  metadata: any;
+  metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
   // Related data
@@ -39,7 +39,7 @@ export interface LessonCreateData {
   position?: number;
   status?: 'visible' | 'hidden';
   instructor_id: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface LessonUpdateData {
@@ -48,7 +48,7 @@ export interface LessonUpdateData {
   position?: number;
   status?: 'visible' | 'hidden';
   instructor_id?: string;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface LessonStats {
@@ -78,7 +78,7 @@ const supabase = createClient();
 // Server-side helper functions for API routes
 export const serverLessonService = {
   // Get instructors for select dropdowns (server-side)
-  async getInstructorsForSelect(supabaseClient: any): Promise<{ id: string; full_name: string }[]> {
+  async getInstructorsForSelect(supabaseClient: ReturnType<typeof createClient>): Promise<{ id: string; full_name: string }[]> {
     const { data, error } = await supabaseClient
       .from('profiles')
       .select('id, full_name')
@@ -91,7 +91,7 @@ export const serverLessonService = {
   },
 
   // Get lessons with server-side client (for API routes)
-  async getLessons(supabaseClient: any, page = 1, limit = 10, filters?: {
+  async getLessons(supabaseClient: ReturnType<typeof createClient>, page = 1, limit = 10, filters?: {
     module_id?: string;
     course_id?: string;
     lesson_type?: string;
@@ -134,6 +134,7 @@ export const serverLessonService = {
     if (error) throw error;
 
     // Transform data to include proper nesting
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const transformedData = await Promise.all((data || []).map(async (lesson: any) => {
       // Debug: Log raw lesson data from Supabase
       console.log('Raw lesson data from Supabase:', {
@@ -201,7 +202,7 @@ export const serverLessonService = {
   },
 
   // Create lesson with server-side client (for API routes)
-  async createLesson(supabaseClient: any, lessonData: LessonCreateData): Promise<Lesson> {
+  async createLesson(supabaseClient: ReturnType<typeof createClient>, lessonData: LessonCreateData): Promise<Lesson> {
     // If position not provided, set it to the next available position in the module
     if (!lessonData.position) {
       const { count } = await supabaseClient
@@ -257,68 +258,107 @@ export const lessonService = {
     lesson_type?: string;
     status?: string;
   }) {
-    const offset = (page - 1) * limit;
-    
-    let query = supabase
-      .from('lessons')
-      .select(`
-        *,
-        modules!inner(
-          id,
-          title,
-          course_id,
-          courses!inner(
-            id,
-            title
-          )
-        ),
-        profiles(
-          id,
-          full_name
-        )
-      `, { count: 'exact' })
-      .order('created_at', { ascending: false });
+    try {
+      const offset = (page - 1) * limit;
+      
+      // Build query with simple select to avoid RLS issues
+      let query = supabase
+        .from('lessons')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false });
 
-    // Apply filters
-    if (filters?.module_id) {
-      query = query.eq('module_id', filters.module_id);
+      // Apply filters
+      if (filters?.module_id) {
+        query = query.eq('module_id', filters.module_id);
+      }
+      if (filters?.lesson_type) {
+        query = query.eq('lesson_type', filters.lesson_type);
+      }
+      if (filters?.status) {
+        query = query.eq('status', filters.status);
+      }
+
+      // Handle course_id filter by getting modules first
+      if (filters?.course_id) {
+        const { data: moduleIds } = await supabase
+          .from('modules')
+          .select('id')
+          .eq('course_id', filters.course_id);
+        
+        if (moduleIds && moduleIds.length > 0) {
+          query = query.in('module_id', moduleIds.map(m => m.id));
+        } else {
+          // No modules found for course, return empty result
+          return { lessons: [], total: 0 };
+        }
+      }
+
+      const { data: lessons, error, count } = await query.range(offset, offset + limit - 1);
+
+      if (error) {
+        console.error('Lessons query error:', error);
+        throw new Error(`Failed to fetch lessons: ${error.message}`);
+      }
+
+      if (!lessons || lessons.length === 0) {
+        return { lessons: [], total: count || 0 };
+      }
+
+      // Get related data separately
+      const moduleIds = [...new Set(lessons.map(l => l.module_id))];
+      const instructorIds = [...new Set(lessons.map(l => l.instructor_id).filter(Boolean))];
+
+      // Get modules and their courses
+      const { data: modules } = await supabase
+        .from('modules')
+        .select('id, title, course_id')
+        .in('id', moduleIds);
+
+      const courseIds = [...new Set(modules?.map(m => m.course_id) || [])];
+      const { data: courses } = await supabase
+        .from('courses')
+        .select('id, title')
+        .in('id', courseIds);
+
+      // Get instructors
+      const { data: instructors } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', instructorIds);
+
+      // Transform lessons with related data
+      const transformedLessons = await Promise.all(lessons.map(async lesson => {
+        const moduleData = modules?.find(m => m.id === lesson.module_id);
+        const course = courses?.find(c => c.id === moduleData?.course_id);
+        const instructor = instructors?.find(i => i.id === lesson.instructor_id);
+
+        // Get content counts
+        const [videosCount, articlesCount, projectsCount, quizzesCount] = await Promise.all([
+          supabase.from('videos').select('id', { count: 'exact' }).eq('lesson_id', lesson.id).then(r => r.count || 0),
+          supabase.from('articles').select('id', { count: 'exact' }).eq('lesson_id', lesson.id).then(r => r.count || 0),
+          supabase.from('projects').select('id', { count: 'exact' }).eq('lesson_id', lesson.id).then(r => r.count || 0),
+          supabase.from('quizzes').select('id', { count: 'exact' }).eq('lesson_id', lesson.id).then(r => r.count || 0),
+        ]);
+
+        return {
+          ...lesson,
+          module: moduleData ? {
+            ...moduleData,
+            courses: course || null
+          } : null,
+          instructor: instructor || null,
+          videos_count: videosCount,
+          articles_count: articlesCount,
+          projects_count: projectsCount,
+          quizzes_count: quizzesCount
+        };
+      }));
+
+      return { lessons: transformedLessons, total: count || 0 };
+    } catch (error) {
+      console.error('getLessons error:', error);
+      throw error;
     }
-    if (filters?.course_id) {
-      query = query.eq('modules.course_id', filters.course_id);
-    }
-    if (filters?.lesson_type) {
-      query = query.eq('lesson_type', filters.lesson_type);
-    }
-    if (filters?.status) {
-      query = query.eq('status', filters.status);
-    }
-
-    const { data, error, count } = await query.range(offset, offset + limit - 1);
-
-    if (error) throw error;
-
-    // Transform data to include proper nesting
-    const transformedData = await Promise.all((data || []).map(async (lesson: any) => {
-      // Get content counts
-      const [videosCount, articlesCount, projectsCount, quizzesCount] = await Promise.all([
-        supabase.from('videos').select('id', { count: 'exact' }).eq('lesson_id', lesson.id),
-        supabase.from('articles').select('id', { count: 'exact' }).eq('lesson_id', lesson.id),
-        supabase.from('projects').select('id', { count: 'exact' }).eq('lesson_id', lesson.id),
-        supabase.from('quizzes').select('id', { count: 'exact' }).eq('lesson_id', lesson.id)
-      ]);
-
-      return {
-        ...lesson,
-        module: lesson.modules,
-        instructor: lesson.profiles,
-        videos_count: videosCount.count || 0,
-        articles_count: articlesCount.count || 0,
-        projects_count: projectsCount.count || 0,
-        quizzes_count: quizzesCount.count || 0
-      };
-    }));
-
-    return { lessons: transformedData, total: count || 0 };
   },
 
   // Get lesson statistics
@@ -525,13 +565,14 @@ export const lessonService = {
 
     if (error) throw error;
 
-    return data?.map((module: any) => ({
-      id: module.id,
-      course_id: module.course_id,
-      title: module.title,
-      description: module.description,
-      position: module.position,
-      courses: module.courses
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return data?.map((moduleItem: any) => ({
+      id: moduleItem.id,
+      course_id: moduleItem.course_id,
+      title: moduleItem.title,
+      description: moduleItem.description,
+      position: moduleItem.position,
+      courses: moduleItem.courses
     })) || [];
   },
 

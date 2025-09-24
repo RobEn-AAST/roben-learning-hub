@@ -8,8 +8,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { coursesService, Course, CourseStats } from '@/services/coursesService';
+import { courseInstructorService, CourseInstructor } from '../../services/courseInstructorService';
 import { activityLogService } from '@/services/activityLogService';
 import { createClient } from '@/lib/supabase/client';
+
+interface CourseFormData {
+  title: string;
+  slug?: string;
+  description: string;
+  cover_image: string | null;
+  status: 'draft' | 'published' | 'archived';
+  created_by: string;
+  metadata?: Record<string, unknown>;
+  instructor_ids?: string[]; // Changed to array for multiple instructors
+}
 
 // Icons
 const Icons = {
@@ -51,8 +63,210 @@ const Icons = {
   )
 };
 
+// Instructors List Component for table display
+interface InstructorsListProps {
+  courseId: string;
+  instructors: CourseInstructor[];
+  currentUserId: string;
+  onUpdate: () => void;
+}
+
+function InstructorsList({ courseId, instructors, currentUserId, onUpdate }: InstructorsListProps) {
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [availableInstructors, setAvailableInstructors] = useState<{ id: string; full_name: string; email: string }[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Load available instructors when dropdown opens
+  useEffect(() => {
+    if (showDropdown) {
+      loadAvailableInstructors();
+    }
+  }, [showDropdown]);
+
+  const loadAvailableInstructors = async () => {
+    try {
+      const available = await courseInstructorService.getAvailableInstructors();
+      setAvailableInstructors(available);
+    } catch (error) {
+      console.error('Failed to load available instructors:', error);
+    }
+  };
+
+  const handleAssignInstructor = async (instructorId: string) => {
+    setLoading(true);
+    try {
+      await courseInstructorService.assignInstructor({
+        course_id: courseId,
+        instructor_id: instructorId,
+        role: 'instructor',
+        assigned_by: currentUserId
+      });
+      onUpdate();
+      setShowDropdown(false);
+      loadAvailableInstructors();
+    } catch (error) {
+      alert(`Failed to assign instructor: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveInstructor = async (instructorId: string, instructorName: string) => {
+    if (!confirm(`Remove ${instructorName} as instructor?`)) return;
+    
+    setLoading(true);
+    console.log('🎯 UI: Starting instructor removal...');
+    console.log('🎯 UI: Parameters:', { courseId, instructorId, currentUserId, instructorName });
+    
+    try {
+      const result = await courseInstructorService.removeInstructor(courseId, instructorId, currentUserId);
+      console.log('🎯 UI: Service call result:', result);
+      
+      if (result) {
+        console.log('🎯 UI: Removal successful, refreshing data...');
+        
+        // Force refresh the instructor data
+        await onUpdate(); // This should refresh the parent component's instructor list
+        await loadAvailableInstructors(); // Refresh dropdown options
+        
+        // Close the dropdown to show the change immediately
+        setShowDropdown(false);
+        
+        alert(`✅ ${instructorName} has been removed as instructor.`);
+        console.log('🎯 UI: UI update completed');
+      } else {
+        console.log('🎯 UI: Service returned false');
+        alert(`❌ Failed to remove ${instructorName}. No active assignment found.`);
+      }
+    } catch (error) {
+      console.error('🎯 UI: Error during removal:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`❌ Failed to remove instructor: ${errorMessage}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getAvailableForAssignment = () => {
+    const assignedIds = instructors.map(i => i.instructor_id);
+    return availableInstructors.filter(instructor => !assignedIds.includes(instructor.id));
+  };
+
+  return (
+    <div className="min-w-[200px] relative">
+      {/* Instructor Count and Dropdown Toggle */}
+      <div className="flex items-center space-x-2">
+        <span className="text-sm font-medium text-gray-700">
+          {instructors.length} instructor{instructors.length !== 1 ? 's' : ''}
+        </span>
+        <button
+          onClick={() => setShowDropdown(!showDropdown)}
+          className="flex items-center justify-center w-6 h-6 rounded-md bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-800 transition-colors"
+          disabled={loading}
+          title="Manage instructors"
+        >
+          {showDropdown ? (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+            </svg>
+          ) : (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          )}
+        </button>
+      </div>
+
+      {/* Dropdown Menu */}
+      {showDropdown && (
+        <div className="absolute top-full left-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-xl z-50 min-w-[280px] max-w-[400px]">
+          {/* Current Instructors */}
+          {instructors.length > 0 && (
+            <div className="p-3 border-b border-gray-100">
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                Current Instructors ({instructors.length})
+              </div>
+              <div className="space-y-2">
+                {instructors.map((instructor) => (
+                  <div key={instructor.id} className="flex items-center justify-between p-2 rounded-md bg-gray-50 hover:bg-gray-100 transition-colors">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                        <span className="text-sm font-medium text-blue-600">
+                          {instructor.instructor?.full_name?.charAt(0)?.toUpperCase() || '?'}
+                        </span>
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-gray-900">
+                          {instructor.instructor?.full_name || 'Unknown Instructor'}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {instructor.instructor?.email}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveInstructor(instructor.instructor_id, instructor.instructor?.full_name || '')}
+                      disabled={loading}
+                      className="ml-2 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
+                      title="Remove instructor"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Available Instructors */}
+          <div className="p-3">
+            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              Add Instructor
+            </div>
+            {getAvailableForAssignment().length === 0 ? (
+              <div className="text-sm text-gray-400 py-3 text-center italic">
+                {availableInstructors.length === 0 ? 'No instructors available' : 'All available instructors already assigned'}
+              </div>
+            ) : (
+              <div className="max-h-48 overflow-y-auto space-y-1">
+                {getAvailableForAssignment().map((instructor) => (
+                  <button
+                    key={instructor.id}
+                    onClick={() => handleAssignInstructor(instructor.id)}
+                    disabled={loading}
+                    className="w-full text-left p-2 hover:bg-blue-50 rounded-md disabled:opacity-50 transition-colors flex items-center space-x-3"
+                  >
+                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                      <span className="text-sm font-medium text-green-600">
+                        {instructor.full_name?.charAt(0)?.toUpperCase() || '?'}
+                      </span>
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-gray-900">{instructor.full_name}</div>
+                      <div className="text-xs text-gray-500">{instructor.email}</div>
+                    </div>
+                    <div className="text-blue-500">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                      </svg>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface CourseTableProps {
   courses: Course[];
+  courseInstructors: { [courseId: string]: CourseInstructor[] };
+  currentUserId: string;
   onEdit: (course: Course) => void;
   onDelete: (courseId: string) => void;
   onView: (course: Course) => void;
@@ -60,9 +274,22 @@ interface CourseTableProps {
   setSearchTerm: (value: string) => void;
   selectedStatus: string;
   setSelectedStatus: (value: string) => void;
+  onInstructorUpdate: () => void;
 }
 
-function CourseTable({ courses, onEdit, onDelete, onView, searchTerm, setSearchTerm, selectedStatus, setSelectedStatus }: CourseTableProps) {
+function CourseTable({ 
+  courses, 
+  courseInstructors, 
+  currentUserId,
+  onEdit, 
+  onDelete, 
+  onView, 
+  searchTerm, 
+  setSearchTerm, 
+  selectedStatus, 
+  setSelectedStatus,
+  onInstructorUpdate 
+}: CourseTableProps) {
   const getStatusBadge = (status: string) => {
     const variants = {
       published: 'default',
@@ -115,6 +342,7 @@ function CourseTable({ courses, onEdit, onDelete, onView, searchTerm, setSearchT
             <thead>
               <tr className="border-b">
                 <th className="text-left p-4 font-medium text-black">Title</th>
+                <th className="text-left p-4 font-medium text-black">Instructors</th>
                 <th className="text-left p-4 font-medium text-black">Status</th>
                 <th className="text-left p-4 font-medium text-black">Created</th>
                 <th className="text-left p-4 font-medium text-black">Updated</th>
@@ -143,6 +371,14 @@ function CourseTable({ courses, onEdit, onDelete, onView, searchTerm, setSearchT
                         Slug: /{course.slug}
                       </div>
                     </div>
+                  </td>
+                  <td className="p-4">
+                    <InstructorsList 
+                      courseId={course.id} 
+                      instructors={courseInstructors[course.id] || []} 
+                      currentUserId={currentUserId}
+                      onUpdate={onInstructorUpdate}
+                    />
                   </td>
                   <td className="p-4">
                     {getStatusBadge(course.status)}
@@ -239,7 +475,7 @@ function StatsCard({ title, value, icon, color }: StatsCardProps) {
 
 interface CourseFormProps {
   course?: Course | null;
-  onSave: (courseData: any) => void;
+  onSave: (courseData: CourseFormData) => void;
   onCancel: () => void;
   loading: boolean;
 }
@@ -247,6 +483,8 @@ interface CourseFormProps {
 function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [userLoading, setUserLoading] = useState(true);
+  const [availableInstructors, setAvailableInstructors] = useState<{ id: string; full_name: string; email: string }[]>([]);
+  const [selectedInstructorIds, setSelectedInstructorIds] = useState<string[]>([]);
   const supabase = createClient();
 
   useEffect(() => {
@@ -275,6 +513,20 @@ function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
       }
     };
     getCurrentUser();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Load available instructors
+  useEffect(() => {
+    const loadInstructors = async () => {
+      try {
+        const instructors = await courseInstructorService.getAvailableInstructors();
+        setAvailableInstructors(instructors);
+      } catch (error) {
+        console.error('Failed to load available instructors:', error);
+      }
+    };
+    loadInstructors();
   }, []);
 
   const [formData, setFormData] = useState({
@@ -335,7 +587,8 @@ function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
       cover_image: formData.cover_image.trim() || null,
       status: formData.status,
       created_by: formData.created_by,
-      metadata: {} // Default empty metadata object
+      metadata: {}, // Default empty metadata object
+      instructor_ids: selectedInstructorIds // Include multiple instructors if selected
       // Note: slug is intentionally omitted - let database auto-generate it
     };
 
@@ -361,6 +614,20 @@ function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
+  };
+
+  const handleInstructorToggle = (instructorId: string) => {
+    setSelectedInstructorIds(prev => {
+      if (prev.includes(instructorId)) {
+        return prev.filter(id => id !== instructorId);
+      } else {
+        return [...prev, instructorId];
+      }
+    });
+  };
+
+  const getSelectedInstructors = () => {
+    return availableInstructors.filter(instructor => selectedInstructorIds.includes(instructor.id));
   };
 
   return (
@@ -471,7 +738,73 @@ function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
             </select>
           </div>
 
-
+          {/* Instructors - Multi-select */}
+          <div>
+            <Label className="text-black">Course Instructors</Label>
+            
+            {/* Selected Instructors Display */}
+            {selectedInstructorIds.length > 0 && (
+              <div className="mt-2 mb-3">
+                <div className="text-sm font-medium text-gray-700 mb-2">Selected Instructors:</div>
+                <div className="flex flex-wrap gap-2">
+                  {getSelectedInstructors().map((instructor) => (
+                    <div
+                      key={instructor.id}
+                      className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 border border-blue-200"
+                    >
+                      <span className="font-medium">{instructor.full_name}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleInstructorToggle(instructor.id)}
+                        className="ml-2 text-blue-600 hover:text-blue-800"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Instructor Selection */}
+            <div className="border border-gray-300 rounded-md max-h-48 overflow-y-auto">
+              {availableInstructors.length === 0 ? (
+                <div className="p-4 text-gray-500 text-center">No instructors available</div>
+              ) : (
+                <div className="p-2">
+                  {availableInstructors.map((instructor) => (
+                    <label
+                      key={instructor.id}
+                      className="flex items-center p-2 rounded-md hover:bg-gray-50 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedInstructorIds.includes(instructor.id)}
+                        onChange={() => handleInstructorToggle(instructor.id)}
+                        className="mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                          <span className="text-sm font-medium text-blue-600">
+                            {instructor.full_name?.charAt(0)?.toUpperCase() || '?'}
+                          </span>
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">{instructor.full_name}</div>
+                          <div className="text-xs text-gray-500">{instructor.email}</div>
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+            <p className="text-sm text-gray-500 mt-1">
+              Select instructors for this course. You can add or remove instructors later.
+            </p>
+          </div>
 
           {/* Action Buttons */}
           <div className="flex space-x-4 pt-4">
@@ -510,8 +843,54 @@ export function CoursesAdminDashboard() {
   const [viewMode, setViewMode] = useState<'list' | 'view' | 'edit' | 'create'>('list');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
+  const [courseInstructors, setCourseInstructors] = useState<{ [courseId: string]: CourseInstructor[] }>({});
+  const [currentUserId, setCurrentUserId] = useState<string>('');
 
   const coursesPerPage = 10;
+
+  // Load course instructors for all courses
+  const loadCourseInstructors = async (courseIds: string[]) => {
+    try {
+      const instructorPromises = courseIds.map(courseId => 
+        courseInstructorService.getCourseInstructors(courseId)
+      );
+      const instructorResults = await Promise.all(instructorPromises);
+      
+      const instructorMap: { [courseId: string]: CourseInstructor[] } = {};
+      courseIds.forEach((courseId, index) => {
+        instructorMap[courseId] = instructorResults[index];
+      });
+      
+      setCourseInstructors(instructorMap);
+    } catch (error) {
+      console.error('Failed to load course instructors:', error);
+    }
+  };
+
+  // Get current user ID
+  const getCurrentUserId = async () => {
+    try {
+      const supabase = createClient();
+      const { data: { user }, error } = await supabase.auth.getUser();
+      
+      if (error) {
+        console.error('Auth error:', error);
+        return;
+      }
+      
+      if (user && user.id) {
+        setCurrentUserId(user.id);
+      }
+    } catch (err) {
+      console.error('Error getting user:', err);
+    }
+  };
+
+  // Handle instructor updates
+  const handleInstructorUpdate = async () => {
+    const courseIds = courses.map(course => course.id);
+    await loadCourseInstructors(courseIds);
+  };
 
   const loadData = async () => {
     try {
@@ -527,6 +906,10 @@ export function CoursesAdminDashboard() {
       setCourses(coursesResponse.courses);
       setTotalCourses(coursesResponse.total);
       setStats(statsResponse);
+      
+      // Load instructors for all courses
+      const courseIds = coursesResponse.courses.map(course => course.id);
+      await loadCourseInstructors(courseIds);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data');
     } finally {
@@ -535,7 +918,9 @@ export function CoursesAdminDashboard() {
   };
 
   useEffect(() => {
+    getCurrentUserId();
     loadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage]);
 
   const handleEdit = (course: Course) => {
@@ -577,7 +962,7 @@ export function CoursesAdminDashboard() {
     loadData(); // Refresh data
   };
 
-  const handleSaveCourse = async (courseData: any) => {
+  const handleSaveCourse = async (courseData: CourseFormData) => {
     try {
       setLoading(true);
       
@@ -593,10 +978,32 @@ export function CoursesAdminDashboard() {
       } else {
         // Create new course
         console.log('Creating new course');
-        const result = await coursesService.createCourse(courseData);
+        const result = await coursesService.createCourse({
+          ...courseData,
+          metadata: courseData.metadata || {}
+        });
         console.log('Create result:', result);
         if (result?.id) {
           await activityLogService.logCourseCreated(result.id, courseData.title);
+          
+          // Assign multiple instructors if selected
+          if (courseData.instructor_ids && courseData.instructor_ids.length > 0 && currentUserId) {
+            try {
+              const assignmentPromises = courseData.instructor_ids.map(instructorId =>
+                courseInstructorService.assignInstructor({
+                  course_id: result.id,
+                  instructor_id: instructorId,
+                  role: 'instructor',
+                  assigned_by: currentUserId
+                })
+              );
+              await Promise.all(assignmentPromises);
+              console.log('All instructors assigned successfully');
+            } catch (instructorError) {
+              console.error('Failed to assign instructors:', instructorError);
+              alert('Course created but failed to assign some instructors. You can assign instructors later.');
+            }
+          }
         }
         alert('Course created successfully!');
       }
@@ -612,9 +1019,9 @@ export function CoursesAdminDashboard() {
       } else if (typeof err === 'object' && err !== null) {
         // Handle Supabase error object
         if ('message' in err) {
-          errorMessage = (err as any).message;
+          errorMessage = String((err as Record<string, unknown>).message);
         } else if ('error' in err) {
-          errorMessage = (err as any).error;
+          errorMessage = String((err as Record<string, unknown>).error);
         } else {
           errorMessage = JSON.stringify(err);
         }
@@ -686,46 +1093,109 @@ export function CoursesAdminDashboard() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div>
-                <h3 className="font-medium text-black">Description</h3>
-                <p className="text-gray-600 mt-1">{selectedCourse.description}</p>
+                <h3 className="font-medium text-black mb-2">Description</h3>
+                <p className="text-gray-600">{selectedCourse.description}</p>
+              </div>
+              
+              {/* Course Instructors Section */}
+              <div>
+                <h3 className="font-medium text-black mb-3">Course Instructors</h3>
+                {courseInstructors[selectedCourse.id] && courseInstructors[selectedCourse.id].length > 0 ? (
+                  <div className="space-y-3">
+                    {courseInstructors[selectedCourse.id].map((instructor) => (
+                      <div key={instructor.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
+                        <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                          <span className="text-sm font-medium text-blue-600">
+                            {instructor.instructor?.full_name?.charAt(0)?.toUpperCase() || '?'}
+                          </span>
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900">
+                            {instructor.instructor?.full_name || 'Unknown Instructor'}
+                          </div>
+                          <div className="text-sm text-gray-500">
+                            {instructor.instructor?.email}
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            Assigned: {new Date(instructor.assigned_at).toLocaleDateString()}
+                          </div>
+                        </div>
+                        <Badge variant="outline" className="text-xs">
+                          {instructor.role}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-gray-500 italic p-3 bg-gray-50 rounded-lg">
+                    No instructors assigned to this course yet.
+                  </div>
+                )}
               </div>
               
               {selectedCourse.cover_image && (
                 <div>
-                  <h3 className="font-medium text-black">Cover Image</h3>
+                  <h3 className="font-medium text-black mb-2">Cover Image</h3>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img 
                     src={selectedCourse.cover_image} 
                     alt={selectedCourse.title}
-                    className="mt-1 rounded-lg max-w-md h-48 object-cover"
+                    className="rounded-lg max-w-md h-48 object-cover border border-gray-200"
                   />
                 </div>
               )}
               
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-6">
                 <div>
-                  <h3 className="font-medium text-black">Created</h3>
-                  <p className="text-gray-600 mt-1">
-                    {new Date(selectedCourse.created_at).toLocaleDateString()}
+                  <h3 className="font-medium text-black mb-1">Created</h3>
+                  <p className="text-gray-600">
+                    {new Date(selectedCourse.created_at).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
                   </p>
                 </div>
                 <div>
-                  <h3 className="font-medium text-black">Last Updated</h3>
-                  <p className="text-gray-600 mt-1">
-                    {new Date(selectedCourse.updated_at).toLocaleDateString()}
+                  <h3 className="font-medium text-black mb-1">Last Updated</h3>
+                  <p className="text-gray-600">
+                    {new Date(selectedCourse.updated_at).toLocaleDateString('en-US', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
                   </p>
                 </div>
               </div>
 
-              {selectedCourse.metadata && (
-                <div>
-                  <h3 className="font-medium text-black">Metadata</h3>
-                  <pre className="text-sm bg-white border border-gray-200 p-2 rounded mt-1 text-gray-800">
-                    {JSON.stringify(selectedCourse.metadata, null, 2)}
-                  </pre>
+              {/* Course Statistics */}
+              <div>
+                <h3 className="font-medium text-black mb-3">Course Statistics</h3>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="p-3 bg-blue-50 rounded-lg">
+                    <div className="text-sm font-medium text-blue-600">Status</div>
+                    <div className="text-lg font-semibold text-blue-900 capitalize">{selectedCourse.status}</div>
+                  </div>
+                  <div className="p-3 bg-green-50 rounded-lg">
+                    <div className="text-sm font-medium text-green-600">Instructors</div>
+                    <div className="text-lg font-semibold text-green-900">
+                      {courseInstructors[selectedCourse.id]?.length || 0}
+                    </div>
+                  </div>
+                  <div className="p-3 bg-purple-50 rounded-lg">
+                    <div className="text-sm font-medium text-purple-600">Created By</div>
+                    <div className="text-lg font-semibold text-purple-900">
+                      {selectedCourse.creator?.full_name || 'Unknown'}
+                    </div>
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -780,6 +1250,8 @@ export function CoursesAdminDashboard() {
       {/* Courses Table */}
       <CourseTable
         courses={courses}
+        courseInstructors={courseInstructors}
+        currentUserId={currentUserId}
         onEdit={handleEdit}
         onDelete={handleDelete}
         onView={handleView}
@@ -787,6 +1259,7 @@ export function CoursesAdminDashboard() {
         setSearchTerm={setSearchTerm}
         selectedStatus={selectedStatus}
         setSelectedStatus={setSelectedStatus}
+        onInstructorUpdate={handleInstructorUpdate}
       />
 
       {/* Pagination */}
