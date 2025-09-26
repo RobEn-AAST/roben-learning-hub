@@ -89,28 +89,61 @@ class ArticleService {
 
   async getAllArticles(): Promise<Article[]> {
     try {
-      const { data, error } = await this.supabase
+      // Get articles with simple query to avoid RLS issues
+      const { data: articles, error } = await this.supabase
         .from('articles')
-        .select(`
-          *,
-          lessons!inner(
-            title,
-            modules!inner(
-              title,
-              courses!inner(title)
-            )
-          )
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Articles query error:', error);
+        throw new Error(`Failed to fetch articles: ${error.message}`);
+      }
 
-      return data?.map(article => ({
-        ...article,
-        lesson_title: article.lessons?.title,
-        module_title: article.lessons?.modules?.title,
-        course_title: article.lessons?.modules?.courses?.title
-      })) || [];
+      if (!articles || articles.length === 0) {
+        return [];
+      }
+
+      // Get related data separately
+      const lessonIds = [...new Set(articles.map(a => a.lesson_id))];
+      
+      // Get lessons
+      const { data: lessons } = await this.supabase
+        .from('lessons')
+        .select('id, title, module_id')
+        .in('id', lessonIds);
+
+      const moduleIds = [...new Set(lessons?.map(l => l.module_id) || [])];
+      
+      // Get modules
+      const { data: modules } = await this.supabase
+        .from('modules')
+        .select('id, title, course_id')
+        .in('id', moduleIds);
+
+      const courseIds = [...new Set(modules?.map(m => m.course_id) || [])];
+      
+      // Get courses
+      const { data: courses } = await this.supabase
+        .from('courses')
+        .select('id, title')
+        .in('id', courseIds);
+
+      // Transform articles with related data
+      const transformedArticles = articles.map(article => {
+        const lesson = lessons?.find(l => l.id === article.lesson_id);
+        const moduleData = modules?.find(m => m.id === lesson?.module_id);
+        const course = courses?.find(c => c.id === moduleData?.course_id);
+
+        return {
+          ...article,
+          lesson_title: lesson?.title || '',
+          module_title: moduleData?.title || '',
+          course_title: course?.title || ''
+        };
+      });
+
+      return transformedArticles;
     } catch (error) {
       console.error('Error fetching articles:', error);
       throw error;
@@ -216,8 +249,8 @@ class ArticleService {
       return data?.map(lesson => ({
         id: lesson.id,
         title: lesson.title,
-        module_title: (lesson as any).modules?.title,
-        course_title: (lesson as any).modules?.courses?.title
+        module_title: (lesson as { modules?: { title?: string } }).modules?.title,
+        course_title: (lesson as { modules?: { courses?: { title?: string } } }).modules?.courses?.title
       })) || [];
     } catch (error) {
       console.error('Error fetching lessons:', error);

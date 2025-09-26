@@ -6,7 +6,7 @@ export interface Module {
   title: string;
   description: string;
   position: number;
-  metadata: any;
+  metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
   // Related data
@@ -14,7 +14,7 @@ export interface Module {
     id: string;
     title: string;
     status: string;
-  };
+  } | null;
   // Content counts
   lessons_count?: number;
 }
@@ -24,14 +24,14 @@ export interface ModuleCreateData {
   title: string;
   description: string;
   position?: number;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ModuleUpdateData {
   title?: string;
   description?: string;
   position?: number;
-  metadata?: any;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ModuleStats {
@@ -56,48 +56,64 @@ export const moduleService = {
     course_id?: string;
     search?: string;
   }) {
-    const offset = (page - 1) * limit;
-    
-    let query = supabase
-      .from('modules')
-      .select(`
-        *,
-        courses!inner(
-          id,
-          title,
-          status
-        )
-      `, { count: 'exact' })
-      .order('position', { ascending: true });
+    try {
+      const offset = (page - 1) * limit;
+      
+      // Get modules with RLS-compatible query
+      let query = supabase
+        .from('modules')
+        .select('*', { count: 'exact' })
+        .order('position', { ascending: true });
 
-    // Apply filters
-    if (filters?.course_id) {
-      query = query.eq('course_id', filters.course_id);
+      // Apply filters
+      if (filters?.course_id) {
+        query = query.eq('course_id', filters.course_id);
+      }
+      if (filters?.search) {
+        query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
+      }
+
+      const { data: modules, error, count } = await query.range(offset, offset + limit - 1);
+
+      if (error) {
+        console.error('Modules query error:', error);
+        throw new Error(`Failed to fetch modules: ${error.message}`);
+      }
+
+      if (!modules || modules.length === 0) {
+        return { modules: [], total: count || 0 };
+      }
+
+      // Get course information separately
+      const courseIds = [...new Set(modules.map(m => m.course_id))];
+      const { data: courses } = await supabase
+        .from('courses')
+        .select('id, title, status')
+        .in('id', courseIds);
+
+      // Transform data to include proper nesting and lesson counts
+      const transformedData = await Promise.all(modules.map(async (module: Module) => {
+        // Find course info
+        const course = courses?.find(c => c.id === module.course_id);
+        
+        // Get lesson count for this module
+        const { count: lessonsCount } = await supabase
+          .from('lessons')
+          .select('id', { count: 'exact' })
+          .eq('module_id', module.id);
+
+        return {
+          ...module,
+          course: course || null,
+          lessons_count: lessonsCount || 0
+        };
+      }));
+
+      return { modules: transformedData, total: count || 0 };
+    } catch (error) {
+      console.error('getModules error:', error);
+      throw error;
     }
-    if (filters?.search) {
-      query = query.or(`title.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
-    }
-
-    const { data, error, count } = await query.range(offset, offset + limit - 1);
-
-    if (error) throw error;
-
-    // Transform data to include proper nesting and lesson counts
-    const transformedData = await Promise.all((data || []).map(async (module: any) => {
-      // Get lesson count for this module
-      const { count: lessonsCount } = await supabase
-        .from('lessons')
-        .select('id', { count: 'exact' })
-        .eq('module_id', module.id);
-
-      return {
-        ...module,
-        course: module.courses,
-        lessons_count: lessonsCount || 0
-      };
-    }));
-
-    return { modules: transformedData, total: count || 0 };
   },
 
   // Get module statistics
@@ -252,14 +268,22 @@ export const moduleService = {
 
   // Get all courses for select dropdowns
   async getCoursesForSelect(): Promise<Course[]> {
-    const { data, error } = await supabase
-      .from('courses')
-      .select('id, title, description, status')
-      .order('title');
+    try {
+      const { data, error } = await supabase
+        .from('courses')
+        .select('id, title, description, status')
+        .order('title');
 
-    if (error) throw error;
+      if (error) {
+        console.error('Courses for select error:', error);
+        throw new Error(`Failed to fetch courses: ${error.message}`);
+      }
 
-    return data || [];
+      return data || [];
+    } catch (error) {
+      console.error('getCoursesForSelect error:', error);
+      throw error;
+    }
   },
 
   // Reorder modules within a course
