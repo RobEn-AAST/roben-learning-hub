@@ -44,13 +44,30 @@ class QuizService {
   private supabase = createClient();
 
   async createQuiz(lessonId: string, title: string, description?: string) {
+    // First check if a quiz already exists for this lesson
+    const { data: existingQuiz } = await this.supabase
+      .from('quizzes')
+      .select('id')
+      .eq('lesson_id', lessonId)
+      .single();
+    
+    if (existingQuiz) {
+      throw new Error('A quiz already exists for this lesson. Each lesson can only have one quiz.');
+    }
+
     // Use lesson_id (snake_case) to match DB column
     const { data, error } = await this.supabase
       .from('quizzes')
       .insert([{ lesson_id: lessonId, title, description }])
       .select('id, lesson_id, title, description, created_at')
       .single();
-    if (error) return null;
+    if (error) {
+      console.error('Failed to create quiz:', error.message, error.details || '', error.hint || '');
+      if (error.message.includes('duplicate key')) {
+        throw new Error('A quiz already exists for this lesson. Each lesson can only have one quiz.');
+      }
+      throw new Error(error.message);
+    }
     // Map lesson_id -> lessonId, created_at -> createdAt for frontend consistency
     return data ? {
       ...data,

@@ -54,6 +54,22 @@ export default function QuizAdminDashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
+  // Nested container states
+  const [showQuestionForm, setShowQuestionForm] = useState(false);
+  const [showOptionForm, setShowOptionForm] = useState(false);
+  const [currentQuizId, setCurrentQuizId] = useState<string>('');
+  const [currentQuestionId, setCurrentQuestionId] = useState<string>('');
+  const [questionFormData, setQuestionFormData] = useState({
+    text: '',
+    type: 'multiple_choice'
+  });
+  const [optionFormData, setOptionFormData] = useState({
+    text: '',
+    isCorrect: false
+  });
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [options, setOptions] = useState<any[]>([]);
+
 
   useEffect(() => {
     loadInitialData();
@@ -75,6 +91,11 @@ export default function QuizAdminDashboard() {
     }
   };
 
+  // Get lessons that don't have quizzes yet
+  const availableLessons = lessons.filter(lesson => 
+    !quizzes.some(quiz => quiz.lessonId === lesson.id)
+  );
+
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -89,18 +110,21 @@ export default function QuizAdminDashboard() {
         // Update logic here if needed
         quiz = null;
       } else {
+        console.log('Creating quiz with data:', formData);
         quiz = await quizService.createQuiz(formData.lessonId, formData.title, formData.description);
+        console.log('Quiz creation result:', quiz);
       }
       if (quiz) {
-        setShowForm(false);
-        setFormData({ lessonId: '', title: '', description: '' });
-        setEditingQuiz(null);
+        setCurrentQuizId(quiz.id);
+        // Don't close the form, just show success and enable question creation
+        setError('');
         await loadInitialData();
       } else {
-        setError('Failed to create quiz');
+        setError('Failed to create quiz - check console for details');
       }
     } catch (e) {
-      setError('Failed to create quiz');
+      console.error('Quiz creation error:', e);
+      setError(`Failed to create quiz: ${e instanceof Error ? e.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
@@ -125,6 +149,69 @@ export default function QuizAdminDashboard() {
     setFormData({ lessonId: '', title: '', description: '' });
     setEditingQuiz(null);
     setShowForm(false);
+    setShowQuestionForm(false);
+    setShowOptionForm(false);
+    setCurrentQuizId('');
+    setCurrentQuestionId('');
+    setQuestionFormData({ text: '', type: 'multiple_choice' });
+    setOptionFormData({ text: '', isCorrect: false });
+  };
+
+  // Handlers for nested forms
+  const handleQuestionFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    setQuestionFormData({ ...questionFormData, [e.target.name]: e.target.value });
+  };
+
+  const handleOptionFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    if (type === 'checkbox') {
+      setOptionFormData({ ...optionFormData, [name]: (e.target as HTMLInputElement).checked });
+    } else {
+      setOptionFormData({ ...optionFormData, [name]: value });
+    }
+  };
+
+  const handleQuestionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentQuizId) return;
+    
+    try {
+      const question = await quizService.createQuizQuestion(
+        currentQuizId, 
+        questionFormData.text, 
+        questionFormData.type as 'multiple_choice' | 'short_answer' | 'true_false'
+      );
+      if (question) {
+        setCurrentQuestionId(question.id);
+        setQuestionFormData({ text: '', type: 'multiple_choice' });
+        // Load questions for display
+        const questionsData = await quizService.getQuestions();
+        setQuestions(questionsData.filter(q => q.quizId === currentQuizId));
+      }
+    } catch (e) {
+      setError('Failed to create question');
+    }
+  };
+
+  const handleOptionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentQuestionId) return;
+    
+    try {
+      const option = await quizService.createQuestionOption(
+        currentQuestionId, 
+        optionFormData.text, 
+        optionFormData.isCorrect
+      );
+      if (option) {
+        setOptionFormData({ text: '', isCorrect: false });
+        // Load options for display
+        const optionsData = await quizService.getQuestionOptions();
+        setOptions(optionsData.filter(o => o.questionId === currentQuestionId));
+      }
+    } catch (e) {
+      setError('Failed to create option');
+    }
   };
 
 
@@ -160,11 +247,26 @@ export default function QuizAdminDashboard() {
           </Button>
         </div>
 
+        {availableLessons.length === 0 && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="flex">
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-yellow-800">
+                  No Available Lessons
+                </h3>
+                <div className="mt-2 text-sm text-yellow-700">
+                  <p>All lessons already have quizzes. Each lesson can only have one quiz.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <Card className="bg-white">
           <CardHeader>
             <CardTitle className="text-black">Quiz Details</CardTitle>
             <CardDescription className="text-gray-600">
-              {editingQuiz ? 'Update quiz information' : 'Enter quiz information'}
+              {editingQuiz ? 'Update quiz information' : 'Enter quiz information. Note: Each lesson can only have one quiz.'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -182,11 +284,16 @@ export default function QuizAdminDashboard() {
                     required
                   >
                     <option value="" style={{ backgroundColor: 'white', color: 'black' }}>Select a lesson</option>
-                    {lessons.map((lesson: any) => (
+                    {availableLessons.map((lesson: any) => (
                       <option key={lesson.id} value={lesson.id} style={{ backgroundColor: 'white', color: 'black' }}>
                         {lesson.title}
                       </option>
                     ))}
+                    {availableLessons.length === 0 && (
+                      <option disabled style={{ backgroundColor: 'white', color: 'gray' }}>
+                        No lessons available (all lessons already have quizzes)
+                      </option>
+                    )}
                   </select>
                 </div>
                 <div className="space-y-2">
@@ -223,6 +330,158 @@ export default function QuizAdminDashboard() {
               </div>
               {error && <div className="text-red-600">{error}</div>}
             </form>
+
+            {/* Create Question Button - shown after quiz is created */}
+            {currentQuizId && (
+              <div className="mt-6 pt-6 border-t">
+                <Button 
+                  onClick={() => setShowQuestionForm(true)}
+                  variant="outline"
+                  className="w-full"
+                >
+                  <Icons.Plus />
+                  Create Question for this Quiz
+                </Button>
+              </div>
+            )}
+
+            {/* Nested Question Form */}
+            {showQuestionForm && currentQuizId && (
+              <Card className="mt-4 bg-gray-50 border-2 border-blue-200">
+                <CardHeader>
+                  <CardTitle className="text-lg text-blue-800">Create Question</CardTitle>
+                  <CardDescription>Add a question to your quiz</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleQuestionSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="questionText" className="text-black">Question Text *</Label>
+                      <textarea
+                        id="questionText"
+                        name="text"
+                        value={questionFormData.text}
+                        onChange={handleQuestionFormChange}
+                        className="w-full border rounded p-2"
+                        style={{ backgroundColor: 'white', color: 'black' }}
+                        rows={3}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="questionType" className="text-black">Question Type *</Label>
+                      <select
+                        id="questionType"
+                        name="type"
+                        value={questionFormData.type}
+                        onChange={handleQuestionFormChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md"
+                        style={{ backgroundColor: 'white', color: 'black' }}
+                        required
+                      >
+                        <option value="multiple_choice">Multiple Choice</option>
+                        <option value="short_answer">Short Answer</option>
+                        <option value="true_false">True/False</option>
+                      </select>
+                    </div>
+                    <div className="flex justify-end space-x-2">
+                      <Button type="button" variant="outline" onClick={() => setShowQuestionForm(false)}>
+                        Cancel
+                      </Button>
+                      <Button type="submit">Create Question</Button>
+                    </div>
+                  </form>
+
+                  {/* Create Options Button - shown after question is created */}
+                  {currentQuestionId && (
+                    <div className="mt-6 pt-6 border-t">
+                      <Button 
+                        onClick={() => setShowOptionForm(true)}
+                        variant="outline"
+                        className="w-full"
+                      >
+                        <Icons.Plus />
+                        Create Options for this Question
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* Nested Option Form */}
+                  {showOptionForm && currentQuestionId && (
+                    <Card className="mt-4 bg-gray-100 border-2 border-green-200">
+                      <CardHeader>
+                        <CardTitle className="text-lg text-green-800">Create Option</CardTitle>
+                        <CardDescription>Add an option to your question</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <form onSubmit={handleOptionSubmit} className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="optionText" className="text-black">Option Text *</Label>
+                            <Input
+                              id="optionText"
+                              name="text"
+                              value={optionFormData.text}
+                              onChange={handleOptionFormChange}
+                              placeholder="Enter option text"
+                              style={{ backgroundColor: 'white', color: 'black' }}
+                              required
+                            />
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <input
+                              id="isCorrect"
+                              name="isCorrect"
+                              type="checkbox"
+                              checked={optionFormData.isCorrect}
+                              onChange={handleOptionFormChange}
+                              className="h-4 w-4"
+                            />
+                            <Label htmlFor="isCorrect" className="text-black">This is the correct answer</Label>
+                          </div>
+                          <div className="flex justify-end space-x-2">
+                            <Button type="button" variant="outline" onClick={() => setShowOptionForm(false)}>
+                              Cancel
+                            </Button>
+                            <Button type="submit">Create Option</Button>
+                          </div>
+                        </form>
+
+                        {/* Display created options */}
+                        {options.length > 0 && (
+                          <div className="mt-4">
+                            <h4 className="font-semibold text-black mb-2">Created Options:</h4>
+                            <div className="space-y-2">
+                              {options.map((option, index) => (
+                                <div key={option.id} className="flex items-center justify-between p-2 bg-white rounded border">
+                                  <span className="text-black">{option.text}</span>
+                                  {option.isCorrect && <Badge variant="secondary" className="bg-green-100 text-green-800">Correct</Badge>}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Display created questions */}
+            {questions.length > 0 && (
+              <div className="mt-4">
+                <h3 className="font-semibold text-black mb-2">Created Questions:</h3>
+                <div className="space-y-2">
+                  {questions.map((question, index) => (
+                    <div key={question.id} className="p-3 bg-blue-50 rounded border">
+                      <div className="flex items-center justify-between">
+                        <span className="text-black font-medium">{question.text}</span>
+                        <Badge variant="outline">{question.type.replace('_', ' ')}</Badge>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

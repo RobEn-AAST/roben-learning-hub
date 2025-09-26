@@ -54,6 +54,15 @@ export default function QuizQuestionAdminDashboard() {
   const [formData, setFormData] = useState({ quizId: "", text: "", type: "multiple_choice" });
   const [error, setError] = useState("");
 
+  // Inline option creation states
+  const [showOptionForm, setShowOptionForm] = useState(false);
+  const [currentQuestionId, setCurrentQuestionId] = useState<string>('');
+  const [optionFormData, setOptionFormData] = useState({
+    text: '',
+    isCorrect: false
+  });
+  const [options, setOptions] = useState<any[]>([]);
+
   useEffect(() => {
     loadInitialData();
   }, []);
@@ -92,9 +101,11 @@ export default function QuizQuestionAdminDashboard() {
         question = await quizService.createQuizQuestion(formData.quizId, formData.text, formData.type as 'multiple_choice' | 'short_answer' | 'true_false');
       }
       if (question) {
+        setCurrentQuestionId(question.id);
         setFormData({ quizId: "", text: "", type: "multiple_choice" });
         setEditingQuestion(null);
-        setShowForm(false);
+        // Don't close the form, just show success and enable option creation
+        setError('');
         await loadInitialData();
       } else {
         setError("Failed to create question");
@@ -103,6 +114,37 @@ export default function QuizQuestionAdminDashboard() {
       setError("Failed to create question");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handlers for inline option creation
+  const handleOptionFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    if (type === 'checkbox') {
+      setOptionFormData({ ...optionFormData, [name]: (e.target as HTMLInputElement).checked });
+    } else {
+      setOptionFormData({ ...optionFormData, [name]: value });
+    }
+  };
+
+  const handleOptionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentQuestionId) return;
+    
+    try {
+      const option = await quizService.createQuestionOption(
+        currentQuestionId, 
+        optionFormData.text, 
+        optionFormData.isCorrect
+      );
+      if (option) {
+        setOptionFormData({ text: '', isCorrect: false });
+        // Load options for display
+        const optionsData = await quizService.getQuestionOptions();
+        setOptions(optionsData.filter(o => o.questionId === currentQuestionId));
+      }
+    } catch (e) {
+      setError('Failed to create option');
     }
   };
 
@@ -122,9 +164,13 @@ export default function QuizQuestionAdminDashboard() {
   };
 
   const resetForm = () => {
-  setFormData({ quizId: "", text: "", type: "multiple_choice" });
+    setFormData({ quizId: "", text: "", type: "multiple_choice" });
     setEditingQuestion(null);
     setShowForm(false);
+    setShowOptionForm(false);
+    setCurrentQuestionId('');
+    setOptionFormData({ text: '', isCorrect: false });
+    setOptions([]);
   };
 
   // Filtered and searched questions
@@ -221,6 +267,78 @@ export default function QuizQuestionAdminDashboard() {
                 </div>
                 {error && <div className="text-red-600">{error}</div>}
               </form>
+
+              {/* Create Option Button - shown after question is created */}
+              {currentQuestionId && (
+                <div className="mt-6 pt-6 border-t">
+                  <Button 
+                    onClick={() => setShowOptionForm(true)}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    <Icons.Plus />
+                    Create Options for this Question
+                  </Button>
+                </div>
+              )}
+
+              {/* Nested Option Form */}
+              {showOptionForm && currentQuestionId && (
+                <Card className="mt-4 bg-gray-50 border-2 border-green-200">
+                  <CardHeader>
+                    <CardTitle className="text-lg text-green-800">Create Option</CardTitle>
+                    <CardDescription>Add an option to your question</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <form onSubmit={handleOptionSubmit} className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="optionText" className="text-black">Option Text *</Label>
+                        <Input
+                          id="optionText"
+                          name="text"
+                          value={optionFormData.text}
+                          onChange={handleOptionFormChange}
+                          placeholder="Enter option text"
+                          style={{ backgroundColor: 'white', color: 'black' }}
+                          required
+                        />
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <input
+                          id="isCorrect"
+                          name="isCorrect"
+                          type="checkbox"
+                          checked={optionFormData.isCorrect}
+                          onChange={handleOptionFormChange}
+                          className="h-4 w-4"
+                        />
+                        <Label htmlFor="isCorrect" className="text-black">This is the correct answer</Label>
+                      </div>
+                      <div className="flex justify-end space-x-2">
+                        <Button type="button" variant="outline" onClick={() => setShowOptionForm(false)}>
+                          Cancel
+                        </Button>
+                        <Button type="submit">Create Option</Button>
+                      </div>
+                    </form>
+
+                    {/* Display created options */}
+                    {options.length > 0 && (
+                      <div className="mt-4">
+                        <h4 className="font-semibold text-black mb-2">Created Options:</h4>
+                        <div className="space-y-2">
+                          {options.map((option, index) => (
+                            <div key={option.id} className="flex items-center justify-between p-2 bg-white rounded border">
+                              <span className="text-black">{option.text}</span>
+                              {option.isCorrect && <Badge variant="secondary" className="bg-green-100 text-green-800">Correct</Badge>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
             </CardContent>
           </Card>
         </>
