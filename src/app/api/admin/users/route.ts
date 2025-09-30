@@ -23,30 +23,67 @@ const createAdminClient = () => {
 };
 
 async function checkAdminPermission(request: NextRequest) {
-  const supabase = await createServerClient();
-  
-  // Get current user
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
-  
-  if (userError || !user) {
-    console.error('Auth error or no user:', userError);
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  try {
+    // Debug: Log the cookies being received
+    const cookies = request.cookies.getAll();
+    console.log('Received cookies count:', cookies.length);
+    
+    const supabase = await createServerClient();
+    
+    // Get current user - try both getUser and getSession for debugging
+    const [userResult, sessionResult] = await Promise.all([
+      supabase.auth.getUser(),
+      supabase.auth.getSession()
+    ]);
+    
+    const { data: { user }, error: userError } = userResult;
+    const { data: { session }, error: sessionError } = sessionResult;
+    
+    console.log('Auth debug:', {
+      hasUser: !!user,
+      hasSession: !!session,
+      userError: userError?.message,
+      sessionError: sessionError?.message,
+      userId: user?.id,
+      userEmail: user?.email
+    });
+    
+    if (userError || !user) {
+      console.error('Auth error or no user:', { userError, hasUser: !!user, hasSession: !!session });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-  console.log('Current user ID:', user.id);
+    console.log('Current user ID:', user.id, 'Email:', user.email);
 
-  // Check if user is admin
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
+    // Use admin client to bypass RLS for role checking
+    // This is necessary because RLS policies might prevent reading profile roles
+    const supabaseAdmin = createAdminClient();
+    
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
 
-  console.log('Profile check result:', { profile, error: profileError });
+    console.log('Profile check result (using admin client):', { 
+      profile, 
+      error: profileError, 
+      userId: user.id,
+      hasProfile: !!profile,
+      role: profile?.role 
+    });
 
-  if (profileError || profile?.role !== 'admin') {
-    console.error('Not admin or profile error:', { profileError, role: profile?.role });
-    return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    if (profileError || profile?.role !== 'admin') {
+      console.error('Not admin or profile error:', { 
+        profileError: profileError?.message, 
+        role: profile?.role,
+        userId: user.id 
+      });
+      return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
+    }
+  } catch (error) {
+    console.error('Exception in checkAdminPermission:', error);
+    return NextResponse.json({ error: 'Authentication check failed' }, { status: 500 });
   }
 
   return null; // No error, user is admin

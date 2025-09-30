@@ -14,6 +14,10 @@ export interface Course {
   creator?: { id: string; full_name: string } | null;
 }
 
+export interface CourseCreateData extends Omit<Course, 'id' | 'slug' | 'created_at' | 'updated_at'> {
+  instructor_ids?: string[]; // Optional array of instructor IDs to assign
+}
+
 export interface CourseStats {
   totalCourses: number;
   publishedCourses: number;
@@ -26,94 +30,67 @@ export interface CourseStats {
 const supabase = createClient();
 
 export const coursesService = {
-  // Get all courses with pagination
+  // Get all courses with pagination (uses admin API to bypass RLS)
   async getCourses(page = 1, limit = 10) {
     try {
-      const offset = (page - 1) * limit;
-      
-      // Get courses with simple query (no RLS)
-      const { data, error, count } = await supabase
-        .from('courses')
-        .select('*', { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(offset, offset + limit - 1);
+      console.log('🔍 getCourses: Fetching courses from API...');
+      const apiUrl = `/api/admin/courses?page=${page}&limit=${limit}`;
+      console.log('🔍 getCourses: URL:', apiUrl);
 
-      if (error) {
-        console.error('Courses query error:', error);
-        throw new Error(`Failed to fetch courses: ${error.message}`);
-      }
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        credentials: 'same-origin',
+      });
 
-      const courses = data || [];
-      
-      // Enrich with creator information
-      if (courses.length > 0) {
+      console.log('🔍 getCourses: Response status:', response.status, response.statusText);
+
+      if (!response.ok) {
+        console.log('🔍 getCourses: Response not OK, trying to parse error...');
+        
+        let errorData;
         try {
-          const creatorIds = [...new Set(courses.map(course => course.created_by).filter(Boolean))];
-          const { data: creators } = await supabase
-            .from('profiles')
-            .select('id, full_name')
-            .in('id', creatorIds);
-          
-          // Map creator info to courses
-          courses.forEach(course => {
-            const creator = creators?.find(c => c.id === course.created_by);
-            course.creator = creator || null;
-          });
-        } catch (profileError) {
-          console.warn('Could not fetch creator profiles:', profileError);
-          // Continue without creator info
+          const responseText = await response.text();
+          console.log('🔍 getCourses: Raw error response:', responseText.substring(0, 500));
+          errorData = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error('🔍 getCourses: Failed to parse error response:', parseError);
+          throw new Error(`API request failed (${response.status}): ${response.statusText}. This usually means you're not logged in as an admin user.`);
         }
+        
+        throw new Error(errorData.error || 'Failed to fetch courses');
       }
 
-      return { courses, total: count || 0 };
+      const data = await response.json();
+      console.log('🔍 getCourses: Success, received data:', data);
+      return data;
     } catch (error) {
-      console.error('getCourses error:', error);
+      console.error('🔍 getCourses error details:', {
+        name: error instanceof Error ? error.name : 'Unknown',
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack trace'
+      });
       throw error;
     }
   },
 
-  // Get course statistics
+  // Get course statistics (uses admin API to bypass RLS)
   async getCourseStats(): Promise<CourseStats> {
-    // Total courses
-    const { count: totalCourses } = await supabase
-      .from('courses')
-      .select('*', { count: 'exact', head: true });
+    try {
+      const response = await fetch('/api/admin/courses/stats', {
+        method: 'GET',
+        credentials: 'same-origin',
+      });
 
-    // Published courses
-    const { count: publishedCourses } = await supabase
-      .from('courses')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'published');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch course statistics');
+      }
 
-    // Draft courses
-    const { count: draftCourses } = await supabase
-      .from('courses')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'draft');
-
-    // Total enrollments
-    const { count: totalEnrollments } = await supabase
-      .from('course_enrollments')
-      .select('*', { count: 'exact', head: true });
-
-    // Total modules
-    const { count: totalModules } = await supabase
-      .from('modules')
-      .select('*', { count: 'exact', head: true });
-
-    // Total lessons
-    const { count: totalLessons } = await supabase
-      .from('lessons')
-      .select('*', { count: 'exact', head: true });
-
-    return {
-      totalCourses: totalCourses || 0,
-      publishedCourses: publishedCourses || 0,
-      draftCourses: draftCourses || 0,
-      totalEnrollments: totalEnrollments || 0,
-      totalModules: totalModules || 0,
-      totalLessons: totalLessons || 0,
-    };
+      return await response.json();
+    } catch (error) {
+      console.error('getCourseStats error:', error);
+      throw error;
+    }
   },
 
   // Create a new course
@@ -128,144 +105,146 @@ export const coursesService = {
       .trim() || 'course'; // Fallback if title results in empty string
   },
 
-  async createCourse(courseData: Omit<Course, 'id' | 'slug' | 'created_at' | 'updated_at'>) {
-    console.log('Creating course with data:', courseData); // Debug log
-    
-    // Require proper authentication
-    if (!courseData.created_by) {
-      throw new Error('Authentication required: No user ID provided');
-    }
-    
-    // Generate slug from title
-    const baseSlug = this.generateSlug(courseData.title);
-    
-    // Check if slug already exists and make it unique
-    let slug = baseSlug;
-    let counter = 1;
-    
-    while (true) {
-      const { data: existingCourse, error: checkError } = await supabase
-        .from('courses')
-        .select('id')
-        .eq('slug', slug)
-        .maybeSingle();
-        
-      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is "not found" error
-        console.error('Error checking slug existence:', checkError);
-        throw new Error(`Error checking slug: ${checkError.message}`);
-      }
+  async createCourse(courseData: CourseCreateData) {
+    try {
+      console.log('Creating course with data:', courseData);
       
-      if (!existingCourse) {
-        // Slug is unique, we can use it
-        break;
+      // Require proper authentication
+      if (!courseData.created_by) {
+        throw new Error('Authentication required: No user ID provided');
       }
-      
-      // Slug exists, try with counter
-      counter++;
-      slug = `${baseSlug}-${counter}`;
-    }
-    
-    const insertData = {
-      title: courseData.title,
-      slug: slug, // Use our generated unique slug
-      description: courseData.description,
-      cover_image: courseData.cover_image,
-      status: courseData.status,
-      metadata: courseData.metadata,
-      created_by: courseData.created_by,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    };
-    
-    console.log('Insert data:', insertData); // Debug log
-    
-    const { data, error } = await supabase
-      .from('courses')
-      .insert([insertData])
-      .select()
-      .single();
 
-    if (error) {
-      console.error('Supabase create error:', error); // Debug log
-      throw new Error(`Database error: ${error.message} (Code: ${error.code || 'unknown'})`);
+      const response = await fetch('/api/admin/courses', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify(courseData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create course');
+      }
+
+      const result = await response.json();
+      console.log('Create success:', result);
+      return result;
+    } catch (error) {
+      console.error('createCourse error:', error);
+      throw error;
     }
-    
-    console.log('Create success:', data); // Debug log
-    return data;
   },
 
-  // Update a course
+  // Update a course (uses admin API to bypass RLS)
   async updateCourse(id: string, courseData: Partial<Course>) {
-    console.log('Updating course with ID:', id, 'Data:', courseData); // Debug log
-    
-    // Only update the fields that are provided, excluding id and created_at
-    const updateData: Partial<Course> & { updated_at: string } = {
-      updated_at: new Date().toISOString()
-    };
-    
-    // Only add fields that are actually provided
-    if (courseData.title !== undefined) updateData.title = courseData.title;
-    // slug: will be auto-updated by database trigger when title changes
-    if (courseData.description !== undefined) updateData.description = courseData.description;
-    if (courseData.cover_image !== undefined) updateData.cover_image = courseData.cover_image;
-    if (courseData.status !== undefined) updateData.status = courseData.status;
-    if (courseData.metadata !== undefined) updateData.metadata = courseData.metadata;
-    // Don't update created_by for existing courses
-    
-    console.log('Update data:', updateData); // Debug log
-    
-    const { data, error } = await supabase
-      .from('courses')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single();
+    try {
+      console.log('Updating course with ID:', id, 'Data:', courseData);
+      const apiUrl = `/api/admin/courses/${id}`;
+      console.log('Making PUT request to:', apiUrl);
 
-    if (error) {
-      console.error('Supabase update error:', error); // Debug log
-      throw new Error(`Database error: ${error.message} (Code: ${error.code || 'unknown'})`);
+      const response = await fetch(apiUrl, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify(courseData),
+      });
+      
+      console.log('Response received:', {
+        ok: response.ok,
+        status: response.status,
+        statusText: response.statusText
+      });
+
+      if (!response.ok) {
+        console.error('Response not OK:', {
+          status: response.status,
+          statusText: response.statusText,
+          url: response.url,
+          headers: Object.fromEntries(response.headers.entries())
+        });
+        
+        let errorData;
+        let rawResponseText;
+        
+        try {
+          // First, get the raw text to see what we're actually receiving
+          rawResponseText = await response.text();
+          console.error('Raw response text:', rawResponseText);
+          
+          // Try to parse as JSON if it's not empty
+          if (rawResponseText.trim()) {
+            errorData = JSON.parse(rawResponseText);
+          } else {
+            errorData = { error: `Empty response body (HTTP ${response.status})` };
+          }
+        } catch (parseError) {
+          console.error('Failed to parse error response:', parseError);
+          console.error('Raw response was:', rawResponseText);
+          errorData = { error: `Invalid JSON response (HTTP ${response.status}): ${rawResponseText}` };
+        }
+        
+        console.error('Course update API error:', {
+          status: response.status,
+          statusText: response.statusText,
+          url: response.url,
+          errorData,
+          rawResponseText
+        });
+        
+        throw new Error(errorData.error || `Failed to update course (HTTP ${response.status})`);
+      }
+
+      const result = await response.json();
+      console.log('Update success:', result);
+      return result;
+    } catch (error) {
+      console.error('updateCourse error:', error);
+      throw error;
     }
-    
-    console.log('Update success:', data); // Debug log
-    return data;
   },
 
-  // Delete a course
+  // Delete a course (uses admin API to bypass RLS)
   async deleteCourse(id: string) {
-    const { error } = await supabase
-      .from('courses')
-      .delete()
-      .eq('id', id);
+    try {
+      const response = await fetch(`/api/admin/courses/${id}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      });
 
-    if (error) throw error;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete course');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('deleteCourse error:', error);
+      throw error;
+    }
   },
 
-  // Get course by ID
+  // Get course by ID (uses admin API to bypass RLS)
   async getCourseById(id: string) {
-    const { data, error } = await supabase
-      .from('courses')
-      .select(`
-        *,
-        profiles!courses_created_by_fkey (full_name, email),
-        modules (
-          id,
-          title,
-          description,
-          position,
-          lessons (count)
-        ),
-        course_enrollments (
-          id,
-          role,
-          enrolled_at,
-          profiles!course_enrollments_user_id_fkey (full_name, email)
-        )
-      `)
-      .eq('id', id)
-      .single();
+    try {
+      const response = await fetch(`/api/admin/courses/${id}`, {
+        method: 'GET',
+        credentials: 'same-origin',
+      });
 
-    if (error) throw error;
-    return data;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch course');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('getCourseById error:', error);
+      throw error;
+    }
   },
 
   // Get recent activities (course creation/updates)

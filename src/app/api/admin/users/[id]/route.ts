@@ -1,84 +1,9 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
+import { createAdminClient, checkAdminPermission } from '@/lib/adminHelpers';
 
-async function checkAdminPermission() {
-  try {
-    const cookieStore = await cookies();
-    
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_OR_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll();
-          },
-          setAll(cookiesToSet) {
-            try {
-              cookiesToSet.forEach(({ name, value, options }) => {
-                cookieStore.set(name, value, options);
-              });
-            } catch {
-              // The `setAll` method was called from a Server Component.
-            }
-          },
-        },
-      }
-    );
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError) {
-      console.error('Auth error:', authError);
-      return { error: 'Authentication failed', user: null };
-    }
-
-    if (!user) {
-      console.error('No authenticated user found');
-      return { error: 'Not authenticated', user: null };
-    }
-
-    // Check if user has admin role in profiles table
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (profileError) {
-      console.error('Profile lookup error:', profileError);
-      return { error: 'Failed to check admin status', user: null };
-    }
-
-    if (profile?.role !== 'admin') {
-      console.error('User is not admin:', { userId: user.id, role: profile?.role });
-      return { error: 'Admin access required', user: null };
-    }
-
-    return { user, error: null };
-  } catch (error) {
-    console.error('Admin permission check failed:', error);
-    return { error: 'Internal server error', user: null };
-  }
-}
-
-function createAdminClient() {
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return [];
-        },
-        setAll() {
-          // No-op for service role client
-        },
-      },
-    }
-  );
-}
 
 // PUT - Update user
 export async function PUT(
@@ -89,12 +14,9 @@ export async function PUT(
     console.log('PUT /api/admin/users/[id] - Starting request');
 
     const adminCheck = await checkAdminPermission();
-    if (adminCheck.error) {
-      console.error('Admin check failed:', adminCheck.error);
-      return NextResponse.json(
-        { error: adminCheck.error },
-        { status: 401 }
-      );
+    if (adminCheck) {
+      console.error('Admin check failed');
+      return adminCheck; // Return the NextResponse directly
     }
 
     const { id } = await params;
@@ -200,12 +122,9 @@ export async function DELETE(
     console.log('DELETE /api/admin/users/[id] - Starting request');
 
     const adminCheck = await checkAdminPermission();
-    if (adminCheck.error) {
-      console.error('Admin check failed:', adminCheck.error);
-      return NextResponse.json(
-        { error: adminCheck.error },
-        { status: 401 }
-      );
+    if (adminCheck) {
+      console.error('Admin check failed');
+      return adminCheck; // Return the NextResponse directly
     }
 
     const { id } = await params;
@@ -256,12 +175,9 @@ export async function POST(
     console.log('POST /api/admin/users/[id]/reset-password - Starting request');
 
     const adminCheck = await checkAdminPermission();
-    if (adminCheck.error) {
-      console.error('Admin check failed:', adminCheck.error);
-      return NextResponse.json(
-        { error: adminCheck.error },
-        { status: 401 }
-      );
+    if (adminCheck) {
+      console.error('Admin check failed');
+      return adminCheck; // Return the NextResponse directly
     }
 
     const { id } = await params;

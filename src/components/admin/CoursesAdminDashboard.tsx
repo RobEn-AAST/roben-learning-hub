@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { coursesService, Course, CourseStats } from '@/services/coursesService';
+import { coursesService, Course, CourseStats, CourseCreateData } from '@/services/coursesService';
 import { courseInstructorService, CourseInstructor } from '../../services/courseInstructorService';
 import { activityLogService } from '@/services/activityLogService';
 import { createClient } from '@/lib/supabase/client';
@@ -908,7 +908,7 @@ export function CoursesAdminDashboard() {
       setStats(statsResponse);
       
       // Load instructors for all courses
-      const courseIds = coursesResponse.courses.map(course => course.id);
+      const courseIds = coursesResponse.courses.map((course: Course) => course.id);
       await loadCourseInstructors(courseIds);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load data');
@@ -985,25 +985,7 @@ export function CoursesAdminDashboard() {
         console.log('Create result:', result);
         if (result?.id) {
           await activityLogService.logCourseCreated(result.id, courseData.title);
-          
-          // Assign multiple instructors if selected
-          if (courseData.instructor_ids && courseData.instructor_ids.length > 0 && currentUserId) {
-            try {
-              const assignmentPromises = courseData.instructor_ids.map(instructorId =>
-                courseInstructorService.assignInstructor({
-                  course_id: result.id,
-                  instructor_id: instructorId,
-                  role: 'instructor',
-                  assigned_by: currentUserId
-                })
-              );
-              await Promise.all(assignmentPromises);
-              console.log('All instructors assigned successfully');
-            } catch (instructorError) {
-              console.error('Failed to assign instructors:', instructorError);
-              alert('Course created but failed to assign some instructors. You can assign instructors later.');
-            }
-          }
+          // Note: Instructor assignments are now handled by the API automatically
         }
         alert('Course created successfully!');
       }

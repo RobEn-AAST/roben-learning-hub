@@ -29,7 +29,7 @@ export interface CombinedUser {
   full_name: string | null;
   avatar_url: string | null;
   bio: string | null;
-  role: 'user' | 'admin' | null;
+  role: 'user' | 'student' | 'instructor' | 'admin' | null;
   email_confirmed_at: string | null;
   last_sign_in_at: string | null;
   created_at: string;
@@ -72,13 +72,31 @@ class UserService {
   // Get all users with their profiles
   async getAllUsers(): Promise<CombinedUser[]> {
     try {
-      // Call API route instead of direct admin access
+      // Try the server action API first (more reliable with RLS)
+      try {
+        const response = await fetch('/api/admin/users-server', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'same-origin',
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          return data.users as CombinedUser[];
+        }
+      } catch (serverError) {
+        console.warn('Server action API failed, trying regular API:', serverError);
+      }
+
+      // Fallback to regular API route
       const response = await fetch('/api/admin/users', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include', // This is crucial for including cookies
+        credentials: 'same-origin', // Ensure cookies are included for same-origin requests
       });
 
       if (!response.ok) {
@@ -94,14 +112,14 @@ class UserService {
         email: user.email || '',
         full_name: user.full_name || null,
         avatar_url: user.avatar_url || null,
-        bio: null, // Not included in API response yet
+        bio: user.bio || null,
         role: user.role || 'user', // Use role field from API
         email_confirmed_at: user.email_confirmed_at || null,
         last_sign_in_at: user.last_sign_in_at || null,
         created_at: user.created_at,
         updated_at: user.updated_at || user.created_at,
         is_anonymous: false,
-        phone: null // Not included in API response yet
+        phone: user.phone || null
       }));
 
       return combinedUsers;
@@ -325,12 +343,31 @@ class UserService {
   // Get user statistics
   async getUserStats(): Promise<UserStats> {
     try {
+      // Try the server action API first
+      try {
+        const response = await fetch('/api/admin/users-server?type=stats', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'same-origin',
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          return data.stats as UserStats;
+        }
+      } catch (serverError) {
+        console.warn('Server action stats API failed, calculating from users:', serverError);
+      }
+
+      // Fallback to calculating from users
       const users = await this.getAllUsers();
       
       const stats: UserStats = {
         totalUsers: users.length,
         adminUsers: users.filter(u => u.role === 'admin').length,
-        regularUsers: users.filter(u => u.role === 'user').length,
+        regularUsers: users.filter(u => u.role === 'user' || u.role === 'student').length,
         emailConfirmed: users.filter(u => u.email_confirmed_at !== null).length,
         unconfirmedUsers: users.filter(u => u.email_confirmed_at === null).length,
         recentlyActive: users.filter(u => {

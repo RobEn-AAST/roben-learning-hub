@@ -76,149 +76,69 @@ export const courseInstructorService = {
 
   // Assign an instructor to a course (ADMIN ONLY)
   async assignInstructor(data: AssignInstructorData): Promise<CourseInstructor> {
-    // Verify that the user performing this action is admin
-    const { data: userData, error: userError } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', data.assigned_by)
-      .single();
+    try {
+      // Use the API endpoint which handles authentication via server actions
+      const response = await fetch('/api/admin/course-instructors', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          courseId: data.course_id,
+          instructorId: data.instructor_id
+        })
+      });
 
-    if (userError || !userData) {
-      console.error('Error checking user role:', userError);
-      throw new Error('User not found or unauthorized');
-    }
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to assign instructor');
+      }
 
-    if (userData.role !== 'admin') {
-      throw new Error('Only admins can assign instructors to courses');
-    }
-    
-    // Check if assignment already exists
-    const { data: existingAssignment, error: checkError } = await supabase
-      .from('course_instructors')
-      .select('id')
-      .eq('course_id', data.course_id)
-      .eq('instructor_id', data.instructor_id)
-      .maybeSingle();
+      const result = await response.json();
+      console.log('✅ Instructor assigned successfully via API:', result);
       
-    if (checkError && checkError.code !== 'PGRST116') {
-      console.error('Error checking existing assignment:', checkError);
-      throw new Error(`Error checking existing assignment: ${checkError.message}`);
+      // Fetch the created assignment with joined data
+      const assignment = await this.getCourseInstructor(result.id);
+      if (!assignment) {
+        throw new Error('Failed to fetch created assignment');
+      }
+      return assignment;
+    } catch (error) {
+      console.error('❌ API assignment failed, error:', error);
+      throw error;
     }
-    
-    if (existingAssignment) {
-      throw new Error('Instructor is already assigned to this course');
-    }
-    
-    // Create new assignment
-    const { data: insertData, error: insertError } = await supabase
-      .from('course_instructors')
-      .insert([{
-        course_id: data.course_id,
-        instructor_id: data.instructor_id,
-        role: data.role || 'instructor',
-        assigned_by: data.assigned_by,
-        assigned_at: new Date().toISOString(),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }])
-      .select('id')
-      .single();
-        
-    if (insertError) {
-      console.error('Error creating assignment:', insertError);
-      throw new Error(`Failed to assign instructor: ${insertError.message}`);
-    }
-
-    // Fetch the created assignment with joined data
-    const result = await this.getCourseInstructor(insertData.id);
-    if (!result) {
-      throw new Error('Failed to fetch created assignment');
-    }
-    return result;
   },
 
-  // Remove an instructor from a course (ADMIN ONLY) - HARD DELETE
+  // Remove an instructor from a course (ADMIN ONLY) - Uses server action for proper RLS handling
   async removeInstructor(course_id: string, instructor_id: string, removed_by: string): Promise<boolean> {
     console.log('🔥 REMOVE INSTRUCTOR START:', { course_id, instructor_id, removed_by });
     
-    // Verify admin permissions
-    console.log('🔍 Checking admin permissions...');
-    const { data: userData, error: userError } = await supabase
-      .from('profiles')
-      .select('id, role, full_name, email')
-      .eq('id', removed_by)
-      .single();
+    try {
+      // Use the API endpoint which handles authentication via server actions
+      const url = new URL('/api/admin/course-instructors', window.location.origin);
+      url.searchParams.set('courseId', course_id);
+      url.searchParams.set('instructorId', instructor_id);
 
-    if (userError || !userData) {
-      console.error('❌ User check failed:', userError);
-      throw new Error('User not found or unauthorized');
-    }
+      const response = await fetch(url.toString(), {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'same-origin',
+      });
 
-    console.log('👤 User performing removal:', userData);
-    
-    if (userData.role !== 'admin') {
-      throw new Error('Only admins can remove instructors from courses');
-    }
-    
-    // Find the existing assignment
-    console.log('🔍 Looking for existing assignment...');
-    const { data: existingAssignment, error: checkError } = await supabase
-      .from('course_instructors')
-      .select('id, course_id, instructor_id, assigned_at')
-      .eq('course_id', course_id)
-      .eq('instructor_id', instructor_id)
-      .single();
-      
-    if (checkError) {
-      console.error('❌ Assignment search failed:', checkError);
-      throw new Error(`Error checking assignment: ${checkError.message}`);
-    }
-    
-    console.log('📋 Assignment search result:', existingAssignment);
-    
-    if (!existingAssignment) {
-      console.log('❌ No assignment found at all');
-      throw new Error('No instructor assignment found for this course');
-    }
-    
-    // Hard delete the assignment record completely
-    console.log('🗑️ Deleting assignment record permanently...');
-    const deleteResult = await supabase
-      .from('course_instructors')
-      .delete()
-      .eq('id', existingAssignment.id)
-      .select('*');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to remove instructor');
+      }
 
-    console.log('💾 Database delete result:', deleteResult);
-    
-    if (deleteResult.error) {
-      console.error('❌ Database delete failed:', deleteResult.error);
-      throw new Error(`Failed to delete instructor: ${deleteResult.error.message}`);
-    }
-
-    if (!deleteResult.data || deleteResult.data.length === 0) {
-      console.error('❌ No rows deleted');
-      throw new Error('Failed to delete instructor assignment');
-    }
-    
-    console.log('✅ Successfully deleted assignment:', deleteResult.data[0]);
-    
-    // Verify the deletion by checking if record still exists
-    console.log('🔍 Verifying the deletion...');
-    const { data: verifyData, error: verifyError } = await supabase
-      .from('course_instructors')
-      .select('id')
-      .eq('id', existingAssignment.id)
-      .single();
-      
-    if (verifyError && verifyError.code === 'PGRST116') {
-      // PGRST116 = no rows found, which means deletion was successful
-      console.log('✅ Deletion verified - record no longer exists');
-    } else if (verifyError) {
-      console.error('❌ Verification query failed:', verifyError);
-    } else if (verifyData) {
-      console.error('🚨 WARNING: Assignment still exists after deletion!');
-      throw new Error('Database deletion failed - assignment still exists');
+      const result = await response.json();
+      console.log('✅ Instructor removed successfully via API:', result);
+      return true;
+    } catch (error) {
+      console.error('❌ API removal failed, error:', error);
+      throw error;
     }
     
     console.log('✅ REMOVE INSTRUCTOR SUCCESS');
@@ -229,27 +149,49 @@ export const courseInstructorService = {
   async getCourseInstructors(course_id: string): Promise<CourseInstructor[]> {
     console.log('📚 GET COURSE INSTRUCTORS for course:', course_id);
     
-    const { data, error } = await supabase
-      .from('course_instructors')
-      .select(`
-        *,
-        instructor:profiles!instructor_id (
-          id,
-          full_name,
-          email,
-          avatar_url
-        )
-      `)
-      .eq('course_id', course_id)
-      .order('assigned_at', { ascending: true });
-
-    if (error) {
+    try {
+      const apiUrl = `/api/admin/course-instructors?type=course&courseId=${course_id}`;
+      console.log('📚 Fetching from:', apiUrl);
+      
+      const response = await fetch(apiUrl);
+      
+      console.log('📚 Response status:', response.status, response.statusText);
+      console.log('📚 Response headers:', Object.fromEntries(response.headers.entries()));
+      
+      if (!response.ok) {
+        // Try to get the response text to see what we're actually receiving
+        const responseText = await response.text();
+        console.error('📚 Error response text:', responseText.substring(0, 500)); // Log first 500 chars
+        
+        let errorData;
+        try {
+          errorData = JSON.parse(responseText);
+        } catch (parseError) {
+          console.error('📚 Failed to parse error response as JSON:', parseError);
+          throw new Error(`API returned HTML instead of JSON (Status: ${response.status}). This usually means the endpoint is not found or there's an authentication issue.`);
+        }
+        
+        throw new Error(errorData.error || 'Failed to fetch course instructors');
+      }
+      
+      const responseText = await response.text();
+      console.log('📚 Success response text:', responseText.substring(0, 500));
+      
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('📚 Failed to parse success response as JSON:', parseError);
+        throw new Error('API returned HTML instead of JSON. This usually indicates a server error or authentication issue.');
+      }
+      
+      const { instructors } = data;
+      console.log(`📚 Found ${instructors?.length || 0} instructors for course ${course_id}:`, instructors);
+      return instructors || [];
+    } catch (error) {
       console.error('❌ Get course instructors error:', error);
-      throw new Error(`Failed to get course instructors: ${error.message}`);
+      throw new Error(error instanceof Error ? error.message : 'Failed to get course instructors');
     }
-
-    console.log(`📚 Found ${data?.length || 0} instructors for course ${course_id}:`, data);
-    return data || [];
   },
 
   // Get all courses for an instructor
@@ -295,18 +237,20 @@ export const courseInstructorService = {
 
   // Get all available instructors (users with instructor role)
   async getAvailableInstructors(): Promise<InstructorProfile[]> {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, full_name, email, avatar_url')
-      .eq('role', 'instructor')
-      .order('full_name', { ascending: true });
-
-    if (error) {
+    try {
+      const response = await fetch('/api/admin/course-instructors?type=available');
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch available instructors');
+      }
+      
+      const { instructors } = await response.json();
+      return instructors || [];
+    } catch (error) {
       console.error('Error getting available instructors:', error);
-      throw new Error(`Failed to get available instructors: ${error.message}`);
+      throw new Error(error instanceof Error ? error.message : 'Failed to get available instructors');
     }
-
-    return data || [];
   },
 
   // Get instructors not assigned to a specific course

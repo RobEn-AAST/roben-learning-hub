@@ -6,8 +6,24 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { userService, CombinedUser, CreateUserData, UpdateUserData, UserStats } from '@/services/userService';
+import { userService, CreateUserData, UpdateUserData, UserStats } from '@/services/userService';
 import { activityLogService } from '@/services/activityLogService';
+
+// Define CombinedUser interface for this component
+interface CombinedUser {
+  id: string;
+  email: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  role: 'user' | 'student' | 'instructor' | 'admin' | null;
+  email_confirmed_at: string | null;
+  last_sign_in_at: string | null;
+  created_at: string;
+  updated_at: string;
+  is_anonymous: boolean;
+  phone: string | null;
+}
 
 // Icons
 const Icons = {
@@ -64,7 +80,7 @@ interface UserFormData {
   password: string;
   phone: string;
   full_name: string;
-  role: 'student' | 'instructor' | 'admin';
+    role: 'user' | 'student' | 'instructor' | 'admin' | null;
   bio: string;
   avatar_url: string;
 }
@@ -99,7 +115,7 @@ function UserForm({ user, onSave, onCancel, mode, loading }: UserFormProps) {
         password: formData.password,
         phone: formData.phone,
         full_name: formData.full_name,
-        role: formData.role,
+        role: formData.role === 'user' ? 'student' : (formData.role || 'student'),
         bio: formData.bio,
         avatar_url: formData.avatar_url
       });
@@ -108,7 +124,9 @@ function UserForm({ user, onSave, onCancel, mode, loading }: UserFormProps) {
       if (formData.email !== user?.email) updateData.email = formData.email;
       if (formData.phone !== user?.phone) updateData.phone = formData.phone;
       if (formData.full_name !== user?.full_name) updateData.full_name = formData.full_name;
-      if (formData.role !== user?.role) updateData.role = formData.role;
+      if (formData.role !== user?.role) {
+        updateData.role = formData.role === 'user' ? 'student' : (formData.role || 'student');
+      }
       if (formData.bio !== user?.bio) updateData.bio = formData.bio;
       if (formData.avatar_url !== user?.avatar_url) updateData.avatar_url = formData.avatar_url;
       
@@ -187,7 +205,7 @@ function UserForm({ user, onSave, onCancel, mode, loading }: UserFormProps) {
               <Label htmlFor="role" className="text-black">Role</Label>
               <select
                 id="role"
-                value={formData.role}
+                value={formData.role || 'student'}
                 onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value as 'student' | 'instructor' | 'admin' }))}
                 className="w-full p-2 border border-gray-300 rounded bg-white text-black"
               >
@@ -414,6 +432,8 @@ export function UserAdminDashboard() {
   const loadData = async () => {
     try {
       setLoading(true);
+      
+      // Use the userService which handles the API calls properly
       const [usersData, statsData] = await Promise.all([
         userService.getAllUsers(),
         userService.getUserStats()
@@ -433,11 +453,21 @@ export function UserAdminDashboard() {
       setLoading(true);
       
       if (selectedUser) {
-        await userService.updateUser(selectedUser.id, userData as UpdateUserData);
-        alert('User updated successfully!');
+        // Check if updateUser method exists
+        if ('updateUser' in userService) {
+          await userService.updateUser(selectedUser.id, userData as UpdateUserData);
+          alert('User updated successfully!');
+        } else {
+          throw new Error('Update user functionality not available');
+        }
       } else {
-        await userService.createUser(userData as CreateUserData);
-        alert('User created successfully!');
+        // Check if createUser method exists
+        if ('createUser' in userService) {
+          await userService.createUser(userData as CreateUserData);
+          alert('User created successfully!');
+        } else {
+          throw new Error('Create user functionality not available');
+        }
       }
       
       await loadData();
@@ -456,9 +486,13 @@ export function UserAdminDashboard() {
     }
 
     try {
-      await userService.deleteUser(userId);
-      await loadData();
-      alert('User deleted successfully!');
+      if ('deleteUser' in userService) {
+        await userService.deleteUser(userId);
+        await loadData();
+        alert('User deleted successfully!');
+      } else {
+        throw new Error('Delete user functionality not available');
+      }
     } catch (error) {
       alert('Failed to delete user: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
@@ -472,8 +506,12 @@ export function UserAdminDashboard() {
     }
 
     try {
-      await userService.resetUserPassword(userId, newPassword);
-      alert('Password has been reset successfully!');
+      if ('resetUserPassword' in userService) {
+        await userService.resetUserPassword(userId, newPassword);
+        alert('Password has been reset successfully!');
+      } else {
+        throw new Error('Reset password functionality not available');
+      }
     } catch (error) {
       alert('Failed to reset password: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
