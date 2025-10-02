@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { quizService, QuestionOption } from "@/services/quizService";
+import { QuestionOption } from "@/services/quizService";
 
 const Icons = {
   Option: () => (
@@ -60,14 +60,24 @@ export default function QuestionOptionAdminDashboard() {
   const loadInitialData = async () => {
     setLoading(true);
     try {
-      const [optionsData, questionsData] = await Promise.all([
-        quizService.getQuestionOptions(),
-        quizService.getQuestions()
+      const [optionsResponse, questionsResponse] = await Promise.all([
+        fetch('/api/admin/question-options'),
+        fetch('/api/admin/quiz-questions')
       ]);
+      
+      if (!optionsResponse.ok || !questionsResponse.ok) {
+        throw new Error('Failed to fetch data');
+      }
+      
+      const [optionsData, questionsData] = await Promise.all([
+        optionsResponse.json(),
+        questionsResponse.json()
+      ]);
+      
       setOptions(optionsData);
       setQuestions(questionsData);
     } catch (e) {
-      // error state is set elsewhere if needed
+      console.error('Failed to load data:', e);
     } finally {
       setLoading(false);
     }
@@ -87,18 +97,28 @@ export default function QuestionOptionAdminDashboard() {
     setError("");
     setLoading(true);
     try {
-      let option;
-      // No updateQuestionOption exists, so always use createQuestionOption
-      option = await quizService.createQuestionOption(formData.questionId, formData.text, formData.isCorrect);
-      if (option) {
+      const response = await fetch('/api/admin/question-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questionId: formData.questionId,
+          text: formData.text,
+          isCorrect: formData.isCorrect
+        })
+      });
+
+      if (response.ok) {
+        const option = await response.json();
         setFormData({ questionId: "", text: "", isCorrect: false });
         setEditingOption(null);
         setViewMode('list');
         await loadInitialData();
       } else {
-        setError("Failed to save option");
+        const errorData = await response.json();
+        setError(errorData.error || "Failed to save option");
       }
-    } catch (e) {
+    } catch (error) {
+      console.error('Error creating question option:', error);
       setError("Failed to save option");
     } finally {
       setLoading(false);

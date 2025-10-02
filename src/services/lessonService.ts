@@ -111,6 +111,10 @@ export const serverLessonService = {
             id,
             title
           )
+        ),
+        profiles!instructor_id(
+          id,
+          full_name
         )
       `, { count: 'exact' })
       .order('created_at', { ascending: false });
@@ -133,70 +137,19 @@ export const serverLessonService = {
 
     if (error) throw error;
 
-    // Transform data to include proper nesting
+    // Transform data to include proper nesting (much faster - no additional queries)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const transformedData = await Promise.all((data || []).map(async (lesson: any) => {
-      // Debug: Log raw lesson data from Supabase
-      console.log('Raw lesson data from Supabase:', {
-        id: lesson.id,
-        title: lesson.title,
-        instructor_id: lesson.instructor_id,
-        instructor: lesson.instructor,
-        modules: lesson.modules,
-        allKeys: Object.keys(lesson)
-      });
-
-      // Manually fetch instructor data if instructor_id exists
-      let instructorData = null;
-      if (lesson.instructor_id) {
-        console.log(`Attempting to fetch instructor with ID: ${lesson.instructor_id}`);
-        
-        const { data: instructor, error: instructorError } = await supabaseClient
-          .from('profiles')
-          .select('id, full_name')
-          .eq('id', lesson.instructor_id)
-          .single();
-        
-        console.log('Instructor fetch result:', {
-          instructor_id: lesson.instructor_id,
-          instructor: instructor,
-          error: instructorError,
-          errorMessage: instructorError?.message,
-          errorDetails: instructorError?.details
-        });
-        
-        if (!instructorError && instructor) {
-          instructorData = instructor;
-        }
-      }
-
-      // Get content counts
-      const [videosCount, articlesCount, projectsCount, quizzesCount] = await Promise.all([
-        supabaseClient.from('videos').select('id', { count: 'exact' }).eq('lesson_id', lesson.id),
-        supabaseClient.from('articles').select('id', { count: 'exact' }).eq('lesson_id', lesson.id),
-        supabaseClient.from('projects').select('id', { count: 'exact' }).eq('lesson_id', lesson.id),
-        supabaseClient.from('quizzes').select('id', { count: 'exact' }).eq('lesson_id', lesson.id)
-      ]);
-
-      const transformedLesson = {
+    const transformedData = (data || []).map((lesson: any) => {
+      return {
         ...lesson,
         module: lesson.modules,
-        instructor: instructorData, // Use manually fetched instructor data
-        videos_count: videosCount.count || 0,
-        articles_count: articlesCount.count || 0,
-        projects_count: projectsCount.count || 0,
-        quizzes_count: quizzesCount.count || 0
+        instructor: lesson.profiles, // Instructor data from join
+        videos_count: 0, // Remove expensive content counts for now - add them back later if needed
+        articles_count: 0,
+        projects_count: 0,
+        quizzes_count: 0
       };
-
-      console.log('Transformed lesson data:', {
-        id: transformedLesson.id,
-        title: transformedLesson.title,
-        instructor_id: transformedLesson.instructor_id,
-        instructor: transformedLesson.instructor
-      });
-
-      return transformedLesson;
-    }));
+    });
 
     return { lessons: transformedData, total: count || 0 };
   },

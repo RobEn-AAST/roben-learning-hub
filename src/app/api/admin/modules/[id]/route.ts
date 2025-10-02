@@ -1,38 +1,73 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { moduleService } from '@/services/moduleService';
+import { createAdminClient, checkAdminOrInstructorPermission } from '@/lib/adminHelpers';
 import { createClient } from '@/lib/supabase/server';
 import { activityLogService } from '@/services/activityLogService';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    console.log('[MODULES API GET BY ID] Request received');
     
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const permissionError = await checkAdminOrInstructorPermission();
+    if (permissionError) {
+      console.log('[MODULES API GET BY ID] Permission denied');
+      return permissionError;
     }
 
-    // Check if user is admin
-    const { data: profile } = await supabase
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const { id } = await params;
+    
+    // Get user role to determine which client to use
+    const adminClient = createAdminClient();
+    const { data: profile } = await adminClient
       .from('profiles')
       .select('role')
-      .eq('id', user.id)
+      .eq('id', user!.id)
       .single();
 
-    if (profile?.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    // Use admin client for admins, regular client for instructors (to respect RLS)
+    const client = profile?.role === 'admin' ? adminClient : supabase;
+
+    console.log('[MODULES API GET BY ID] Fetching module:', id, 'userRole:', profile?.role);
+
+    const { data: module, error } = await client
+      .from('modules')
+      .select(`
+        *,
+        courses!inner(
+          id,
+          title,
+          status
+        )
+      `)
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      console.error('[MODULES API GET BY ID] Query error:', error);
+      if (error.code === 'PGRST116') {
+        return NextResponse.json({ error: 'Module not found' }, { status: 404 });
+      }
+      throw new Error(`Failed to fetch module: ${error.message}`);
     }
 
-    const module = await moduleService.getModuleById(params.id);
-    
-    if (!module) {
-      return NextResponse.json({ error: 'Module not found' }, { status: 404 });
-    }
+    // Get lesson count
+    const { count: lessonsCount } = await client
+      .from('lessons')
+      .select('id', { count: 'exact' })
+      .eq('module_id', id);
 
-    return NextResponse.json(module);
+    const result = {
+      ...module,
+      course: module.courses,
+      lessons_count: lessonsCount || 0
+    };
+
+    console.log('[MODULES API GET BY ID] Success:', result.id);
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Error fetching module:', error);
     return NextResponse.json(
@@ -44,49 +79,80 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    console.log('[MODULES API PUT] Request received');
     
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const permissionError = await checkAdminOrInstructorPermission();
+    if (permissionError) {
+      console.log('[MODULES API PUT] Permission denied');
+      return permissionError;
     }
 
-    // Check if user is admin
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (profile?.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const adminClient = createAdminClient();
+    const { id } = await params;
 
     const body = await request.json();
     const { course_id, title, description, position, metadata } = body;
+
+    console.log('[MODULES API PUT] Body received:', { course_id, title, description, position });
 
     const updateData = {
       ...(course_id && { course_id }),
       ...(title && { title }),
       ...(description && { description }),
       ...(position !== undefined && { position }),
-      ...(metadata && { metadata })
+      ...(metadata && { metadata }),
+      updated_at: new Date().toISOString()
     };
 
-    const updatedModule = await moduleService.updateModule(params.id, updateData);
+    // Update module using admin client
+    const { data: updatedModule, error } = await adminClient
+      .from('modules')
+      .update(updateData)
+      .eq('id', id)
+      .select(`
+        *,
+        courses!inner(
+          id,
+          title,
+          status
+        )
+      `)
+      .single();
+
+    if (error) {
+      console.error('[MODULES API PUT] Update error:', error);
+      if (error.code === 'PGRST116') {
+        return NextResponse.json({ error: 'Module not found' }, { status: 404 });
+      }
+      throw new Error(`Failed to update module: ${error.message}`);
+    }
+
+    console.log('[MODULES API PUT] Module updated successfully:', updatedModule.id);
     
     // Log the action
     await activityLogService.logActivity({
       action: 'UPDATE',
       resource_type: 'modules',
-      resource_id: params.id,
+      resource_id: id,
       details: `Updated module: ${updatedModule.title}`
     });
 
-    return NextResponse.json(updatedModule);
+    // Get lesson count
+    const { count: lessonsCount } = await adminClient
+      .from('lessons')
+      .select('id', { count: 'exact' })
+      .eq('module_id', id);
+
+    const result = {
+      ...updatedModule,
+      course: updatedModule.courses,
+      lessons_count: lessonsCount || 0
+    };
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Error updating module:', error);
     return NextResponse.json(
@@ -98,41 +164,53 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    console.log('[MODULES API DELETE] Request received');
     
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const permissionError = await checkAdminOrInstructorPermission();
+    if (permissionError) {
+      console.log('[MODULES API DELETE] Permission denied');
+      return permissionError;
     }
 
-    // Check if user is admin
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (profile?.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const adminClient = createAdminClient();
+    const { id } = await params;
 
     // Get module details before deletion for logging
-    const module = await moduleService.getModuleById(params.id);
-    
-    if (!module) {
+    console.log('[MODULES API DELETE] Deleting module:', id);
+
+    // First get the module to log its title
+    const { data: module, error: fetchError } = await adminClient
+      .from('modules')
+      .select('id, title')
+      .eq('id', id)
+      .single();
+
+    if (fetchError || !module) {
+      console.error('[MODULES API DELETE] Module not found:', fetchError);
       return NextResponse.json({ error: 'Module not found' }, { status: 404 });
     }
 
-    await moduleService.deleteModule(params.id);
+    // Delete the module
+    const { error: deleteError } = await adminClient
+      .from('modules')
+      .delete()
+      .eq('id', id);
+
+    if (deleteError) {
+      console.error('[MODULES API DELETE] Delete error:', deleteError);
+      throw new Error(`Failed to delete module: ${deleteError.message}`);
+    }
+
+    console.log('[MODULES API DELETE] Module deleted successfully:', id);
     
     // Log the action
     await activityLogService.logActivity({
       action: 'DELETE',
       resource_type: 'modules',
-      resource_id: params.id,
+      resource_id: id,
       details: `Deleted module: ${module.title}`
     });
 

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Lesson, LessonStats, Module } from '@/services/lessonService';
+import { createClient } from '@/lib/supabase/client';
 
 // Icons
 const Icons = {
@@ -85,6 +86,7 @@ export function LessonsAdminDashboard() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [filters, setFilters] = useState<Filters>({});
+  const [currentUser, setCurrentUser] = useState<{ id: string; role: string; full_name?: string } | null>(null);
   const [formData, setFormData] = useState<LessonFormData>({
     module_id: '',
     title: '',
@@ -94,12 +96,39 @@ export function LessonsAdminDashboard() {
   });
 
   useEffect(() => {
+    loadCurrentUser();
     loadInitialData();
   }, []);
 
   useEffect(() => {
     loadLessons();
   }, [currentPage, filters]);
+
+  const loadCurrentUser = async () => {
+    try {
+      const supabase = createClient();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError || !user) return;
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, role, full_name')
+        .eq('id', user.id)
+        .single();
+
+      if (profile) {
+        setCurrentUser(profile);
+        
+        // Auto-assign instructor if current user is instructor
+        if (profile.role === 'instructor') {
+          setFormData(prev => ({ ...prev, instructor_id: profile.id }));
+        }
+      }
+    } catch (error) {
+      console.error('Error loading current user:', error);
+    }
+  };
 
   const loadInitialData = async () => {
     try {
@@ -165,6 +194,14 @@ export function LessonsAdminDashboard() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      console.log('Submitting lesson form data:', formData);
+      
+      // Validate required fields before sending
+      if (!formData.module_id || !formData.title || !formData.lesson_type || !formData.instructor_id) {
+        alert('Please fill in all required fields: Module, Title, Lesson Type, and Instructor');
+        return;
+      }
+      
       const url = editingLesson 
         ? `/api/admin/lessons/${editingLesson.id}`
         : '/api/admin/lessons';
@@ -235,7 +272,7 @@ export function LessonsAdminDashboard() {
       title: '',
       lesson_type: 'video',
       status: 'hidden',
-      instructor_id: ''
+      instructor_id: currentUser?.role === 'instructor' ? currentUser.id : ''
     });
     setEditingLesson(null);
     setShowForm(false);
@@ -312,24 +349,27 @@ export function LessonsAdminDashboard() {
                   </select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="instructor_id" className="text-black">Instructor *</Label>
-                  <select
-                    id="instructor_id"
-                    value={formData.instructor_id}
-                    onChange={(e) => setFormData({ ...formData, instructor_id: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    style={{ backgroundColor: 'white', color: 'black' }}
-                    required
-                  >
-                    <option value="" style={{ backgroundColor: 'white', color: 'black' }}>Select an instructor</option>
-                    {instructors.map((instructor) => (
-                      <option key={instructor.id} value={instructor.id} style={{ backgroundColor: 'white', color: 'black' }}>
-                        {instructor.full_name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+{/* Only show instructor selection for admins */}
+                {currentUser?.role === 'admin' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="instructor_id" className="text-black">Instructor *</Label>
+                    <select
+                      id="instructor_id"
+                      value={formData.instructor_id}
+                      onChange={(e) => setFormData({ ...formData, instructor_id: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      style={{ backgroundColor: 'white', color: 'black' }}
+                      required
+                    >
+                      <option value="" style={{ backgroundColor: 'white', color: 'black' }}>Select an instructor</option>
+                      {instructors.map((instructor) => (
+                        <option key={instructor.id} value={instructor.id} style={{ backgroundColor: 'white', color: 'black' }}>
+                          {instructor.full_name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -598,14 +638,16 @@ export function LessonsAdminDashboard() {
                     <th className="text-left p-4 font-medium text-black">Lesson Details</th>
                     <th className="text-left p-4 font-medium text-black">Course & Module</th>
                     <th className="text-left p-4 font-medium text-black">Type & Status</th>
-                    <th className="text-left p-4 font-medium text-black">Instructor</th>
+                    {currentUser?.role === 'admin' && (
+                      <th className="text-left p-4 font-medium text-black">Instructor</th>
+                    )}
                     <th className="text-left p-4 font-medium text-black">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {lessons.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="text-center py-8 text-gray-600">
+                      <td colSpan={currentUser?.role === 'admin' ? 5 : 4} className="text-center py-8 text-gray-600">
                         No lessons found.
                       </td>
                     </tr>
@@ -633,12 +675,13 @@ export function LessonsAdminDashboard() {
                             {getStatusBadge(lesson.status)}
                           </div>
                         </td>
-                        <td className="p-4">
-                          <div className="text-sm text-black">
-                            {lesson.instructor?.full_name || 
-                             `No instructor (ID: ${lesson.instructor_id || 'none'})`}
-                          </div>
-                        </td>
+                        {currentUser?.role === 'admin' && (
+                          <td className="p-4">
+                            <div className="text-sm text-black">
+                              {lesson.instructor?.full_name || 'No instructor assigned'}
+                            </div>
+                          </td>
+                        )}
                         <td className="p-4">
                           <div className="flex space-x-2">
                             <Button

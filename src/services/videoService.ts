@@ -81,17 +81,30 @@ class VideoService {
         .from('videos')
         .select('duration_seconds, provider, transcript');
 
-      if (videosError) throw videosError;
+      if (videosError) {
+        console.error('Videos query error:', videosError);
+        throw new Error(`Failed to fetch videos: ${videosError.message}`);
+      }
 
-      // Get videos with questions count
-      const { data: questionsData, error: questionsError } = await this.supabase
-        .from('video_questions')
-        .select('video_id');
+      // Get videos with questions count (handle if table doesn't exist)
+      let videosWithQuestions = 0;
+      
+      try {
+        const { data: questionsData, error: questionsError } = await this.supabase
+          .from('video_questions')
+          .select('video_id');
 
-      if (questionsError) throw questionsError;
-
-      const uniqueVideoIds = new Set(questionsData?.map(q => q.video_id) || []);
-      const videosWithQuestions = uniqueVideoIds.size;
+        if (questionsError) {
+          console.warn('Video questions table error (may not exist):', questionsError);
+          // Don't throw - just use 0 count
+        } else {
+          const uniqueVideoIds = new Set(questionsData?.map(q => q.video_id) || []);
+          videosWithQuestions = uniqueVideoIds.size;
+        }
+      } catch (questionsTableError) {
+        console.warn('Video questions table not accessible:', questionsTableError);
+        // Use default value of 0
+      }
 
       const totalVideos = videosData?.length || 0;
       const totalDurationSeconds = videosData?.reduce((sum, video) => sum + (video.duration_seconds || 0), 0) || 0;
@@ -310,6 +323,7 @@ class VideoService {
             courses(title)
           )
         `)
+        .eq('lesson_type', 'video')  // Only get video lessons
         .order('title');
 
       if (error) throw error;

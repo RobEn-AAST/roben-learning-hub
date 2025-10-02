@@ -1,27 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { videoService } from '@/services/videoService';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient, checkAdminOrInstructorPermission } from '@/lib/adminHelpers';
 import { activityLogService } from '@/services/activityLogService';
 
 export async function GET() {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // Check admin or instructor permission
+    const permissionError = await checkAdminOrInstructorPermission();
+    if (permissionError) return permissionError;
 
-    // Check if user is admin or instructor
-    const { data: profile } = await supabase
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // Check user role to determine which client to use
+    const adminClient = createAdminClient();
+    const { data: profile } = await adminClient
       .from('profiles')
       .select('role')
-      .eq('id', user.id)
+      .eq('id', user!.id)
       .single();
 
-    if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const isAdmin = profile?.role === 'admin';
+    // Use admin client for admins (bypasses RLS), regular client for instructors (respects RLS)
+    const clientToUse = isAdmin ? adminClient : supabase;
 
     const videos = await videoService.getAllVideos();
     return NextResponse.json(videos);
@@ -36,23 +38,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Check if user is admin or instructor
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    // Check admin or instructor permission
+    const permissionError = await checkAdminOrInstructorPermission();
+    if (permissionError) return permissionError;
 
     const videoData = await request.json();
     const video = await videoService.createVideo(videoData);

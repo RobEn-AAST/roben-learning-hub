@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { InstructorDashboardNew } from '@/components/instructor/InstructorDashboardNew';
 import { ModulesAdminDashboard } from '@/components/admin/ModulesAdminDashboard';
 import { LessonsAdminDashboard } from '@/components/admin/LessonsAdminDashboard';
 import VideoAdminDashboard from '@/components/admin/VideoAdminDashboard';
@@ -74,9 +73,8 @@ interface DatabaseTable {
   category: 'content' | 'user' | 'analytics';
 }
 
-// Instructor-accessible tables (excluding Courses and User Profiles)
+// Instructor-accessible tables
 const databaseTables: DatabaseTable[] = [
-  // Content Management Tables
   {
     name: 'modules',
     displayName: 'Course Modules',
@@ -140,30 +138,6 @@ const databaseTables: DatabaseTable[] = [
     icon: <Icons.Question />,
     status: 'available',
     category: 'content'
-  },
-  {
-    name: 'video_questions',
-    displayName: 'Video Questions',
-    description: 'Time-based questions within video content',
-    icon: <Icons.Video />,
-    status: 'development',
-    category: 'content'
-  },
-  {
-    name: 'course_enrollments',
-    displayName: 'Course Enrollments',
-    description: 'User enrollments and course access management',
-    icon: <Icons.Users />,
-    status: 'development',
-    category: 'user'
-  },
-  {
-    name: 'lesson_progress',
-    displayName: 'Lesson Progress',
-    description: 'Track user progress through individual lessons',
-    icon: <Icons.Progress />,
-    status: 'development',
-    category: 'analytics'
   }
 ];
 
@@ -185,56 +159,23 @@ const categoryBadgeColors = {
   analytics: 'bg-orange-600 text-white border-orange-600'
 };
 
-export function InstructorDashboard() {
+export function InstructorTablesManager() {
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [showLegacyTables, setShowLegacyTables] = useState(false);
 
   React.useEffect(() => {
-    // Log that instructor dashboard was accessed
-    activityLogService.logSystemAction('INSTRUCTOR_DASHBOARD_VIEW', 'Instructor dashboard accessed');
+    // Log that instructor tables page was accessed
+    activityLogService.logSystemAction('INSTRUCTOR_TABLES_VIEW', 'Instructor tables management page accessed');
   }, []);
 
   const filteredTables = selectedCategory === 'all' 
     ? databaseTables 
     : databaseTables.filter(table => table.category === selectedCategory);
 
-  // Show new instructor dashboard by default
-  if (!showLegacyTables && !selectedTable) {
-    return (
-      <div className="space-y-6">
-        <InstructorDashboardNew />
-        
-        {/* Advanced Management Tools */}
-        <div className="border-t pt-6">
-          <Card className="bg-white border border-gray-200">
-            <CardHeader>
-              <CardTitle className="text-gray-900">Advanced Management Tools</CardTitle>
-              <CardDescription className="text-gray-600">
-                Access detailed table management tools (advanced users only)
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button 
-                variant="outline" 
-                onClick={() => window.location.href = '/instructor/tables'}
-                className="flex items-center space-x-2"
-              >
-                <Icons.Database />
-                <span>Access Table Management</span>
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
-  const categories = ['all', 'content', 'user', 'analytics'];
+  const categories = ['all', 'content'];
 
   const handleTableClick = (tableName: string, status: string) => {
     if (status === 'available') {
-      // Log table access
       activityLogService.logTableAccess(tableName);
       setSelectedTable(tableName);
     }
@@ -245,18 +186,17 @@ export function InstructorDashboard() {
   };
 
   const handleBackToDashboard = () => {
-    setSelectedTable(null);
-    setShowLegacyTables(false);
+    window.location.href = '/instructor';
   };
 
-  // If a table is selected and it's videos, show the VideoAdminDashboard
+  // Individual table views
   if (selectedTable === 'videos') {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 bg-gray-50 min-h-screen p-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-gray-900">Video Management</h1>
-            <p className="text-gray-600">Full CRUD operations for video content and metadata</p>
+            <p className="text-gray-600">Manage video content for your assigned courses</p>
           </div>
           <Button 
             variant="outline" 
@@ -272,83 +212,13 @@ export function InstructorDashboard() {
     );
   }
 
-  // If a table is selected and it's articles, show the ArticleAdminDashboard
-  if (selectedTable === 'articles') {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Article Management</h1>
-            <p className="text-gray-600">Full CRUD operations for written content and articles</p>
-          </div>
-          <Button 
-            variant="outline" 
-            onClick={handleBackToTables}
-            className="flex items-center space-x-2"
-          >
-            <span>←</span>
-            <span>Back to Tables</span>
-          </Button>
-        </div>
-        <ArticleAdminDashboard />
-      </div>
-    );
-  }
-
-  // If a table is selected and it's projects, show the ProjectAdminDashboard
-  if (selectedTable === 'projects') {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Project Management</h1>
-            <p className="text-gray-600">Full CRUD operations for student projects and assignments</p>
-          </div>
-          <Button 
-            variant="outline" 
-            onClick={handleBackToTables}
-            className="flex items-center space-x-2"
-          >
-            <span>←</span>
-            <span>Back to Tables</span>
-          </Button>
-        </div>
-        <ProjectAdminDashboard />
-      </div>
-    );
-  }
-
-  // If a table is selected and it's lessons, show the LessonsAdminDashboard
-  if (selectedTable === 'lessons') {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Lessons Management</h1>
-            <p className="text-gray-600">Full CRUD operations for lessons - videos, articles, projects, and quizzes</p>
-          </div>
-          <Button 
-            variant="outline" 
-            onClick={handleBackToTables}
-            className="flex items-center space-x-2"
-          >
-            <span>←</span>
-            <span>Back to Tables</span>
-          </Button>
-        </div>
-        <LessonsAdminDashboard />
-      </div>
-    );
-  }
-
-  // If a table is selected and it's modules, show the ModulesAdminDashboard
   if (selectedTable === 'modules') {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 bg-gray-50 min-h-screen p-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-gray-900">Course Modules Management</h1>
-            <p className="text-gray-600">Full CRUD operations for course modules and organization</p>
+            <p className="text-gray-600">Manage modules for your assigned courses</p>
           </div>
           <Button 
             variant="outline" 
@@ -364,14 +234,79 @@ export function InstructorDashboard() {
     );
   }
 
-  // If a table is selected and it's quizzes, show the QuizAdminDashboard
+  if (selectedTable === 'lessons') {
+    return (
+      <div className="space-y-6 bg-gray-50 min-h-screen p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Lessons Management</h1>
+            <p className="text-gray-600">Manage lessons for your assigned courses</p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={handleBackToTables}
+            className="flex items-center space-x-2"
+          >
+            <span>←</span>
+            <span>Back to Tables</span>
+          </Button>
+        </div>
+        <LessonsAdminDashboard />
+      </div>
+    );
+  }
+
+  if (selectedTable === 'articles') {
+    return (
+      <div className="space-y-6 bg-gray-50 min-h-screen p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Articles Management</h1>
+            <p className="text-gray-600">Manage article content for your courses</p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={handleBackToTables}
+            className="flex items-center space-x-2"
+          >
+            <span>←</span>
+            <span>Back to Tables</span>
+          </Button>
+        </div>
+        <ArticleAdminDashboard />
+      </div>
+    );
+  }
+
+  if (selectedTable === 'projects') {
+    return (
+      <div className="space-y-6 bg-gray-50 min-h-screen p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Project Management</h1>
+            <p className="text-gray-600">Manage student projects and assignments</p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={handleBackToTables}
+            className="flex items-center space-x-2"
+          >
+            <span>←</span>
+            <span>Back to Tables</span>
+          </Button>
+        </div>
+        <ProjectAdminDashboard />
+      </div>
+    );
+  }
+
   if (selectedTable === 'quizzes') {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 bg-gray-50 min-h-screen p-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-gray-900">Quiz Management</h1>
-            <p className="text-gray-600">Full CRUD operations for quizzes and assessment tools</p>
+            <p className="text-gray-600">Manage quizzes and assessments</p>
           </div>
           <Button 
             variant="outline" 
@@ -387,14 +322,13 @@ export function InstructorDashboard() {
     );
   }
 
-  // If a table is selected and it's questions, show the QuizQuestionAdminDashboard
   if (selectedTable === 'questions') {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 bg-gray-50 min-h-screen p-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-gray-900">Quiz Questions Management</h1>
-            <p className="text-gray-600">Full CRUD operations for quiz questions and assessments</p>
+            <p className="text-gray-600">Manage quiz questions and assessments</p>
           </div>
           <Button 
             variant="outline" 
@@ -410,14 +344,13 @@ export function InstructorDashboard() {
     );
   }
 
-  // If a table is selected and it's question_options, show the QuestionOptionAdminDashboard
   if (selectedTable === 'question_options') {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 bg-gray-50 min-h-screen p-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-gray-900">Question Options Management</h1>
-            <p className="text-gray-600">Full CRUD operations for multiple choice question options</p>
+            <p className="text-gray-600">Manage answer options for quiz questions</p>
           </div>
           <Button 
             variant="outline" 
@@ -433,14 +366,15 @@ export function InstructorDashboard() {
     );
   }
 
+  // Main tables listing
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 bg-gray-50 min-h-screen p-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Database Tables</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Content Management Tables</h1>
           <p className="text-gray-600">
-            Manage all database tables and content. Click on available tables to access CRUD operations.
+            Manage content for your assigned courses. Click on available tables to access management tools.
           </p>
         </div>
         <Button 
@@ -472,11 +406,11 @@ export function InstructorDashboard() {
         {filteredTables.map((table) => (
           <Card 
             key={table.name}
-            className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
+            className={`cursor-pointer transition-all duration-200 hover:shadow-md bg-white border border-gray-200 ${
               table.status === 'available' 
-                ? 'hover:shadow-lg border-2 hover:border-blue-300' 
+                ? 'hover:shadow-lg hover:border-blue-300' 
                 : 'opacity-75 hover:opacity-90'
-            } ${categoryColors[table.category]}`}
+            }`}
             onClick={() => handleTableClick(table.name, table.status)}
           >
             <CardHeader className="pb-3">
@@ -495,7 +429,7 @@ export function InstructorDashboard() {
               <div className="flex items-center space-x-2">
                 <Badge 
                   variant="outline" 
-                  className={`text-xs font-medium ${categoryBadgeColors[table.category]}`}
+                  className={`text-xs font-medium ${categoryBadgeColors[table.category]} border`}
                 >
                   {categoryLabels[table.category]}
                 </Badge>
@@ -511,62 +445,30 @@ export function InstructorDashboard() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mt-8">
-        <Card className="bg-white">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <Icons.Database />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-600">Available Tables</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {databaseTables.filter(t => t.status === 'available').length}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-white">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-amber-100 rounded-lg">
-                <Icons.Progress />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-600">In Development</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {databaseTables.filter(t => t.status === 'development').length}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-white">
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="bg-white border border-gray-200">
           <CardContent className="p-4">
             <div className="flex items-center space-x-3">
               <div className="p-2 bg-blue-100 rounded-lg">
                 <Icons.Table />
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Tables</p>
-                <p className="text-2xl font-bold text-gray-900">{databaseTables.length}</p>
+                <p className="text-sm font-medium text-gray-600">Available Tables</p>
+                <p className="text-2xl font-bold text-gray-900">{databaseTables.filter(t => t.status === 'available').length}</p>
               </div>
             </div>
           </CardContent>
         </Card>
         
-        <Card className="bg-white">
+        <Card className="bg-white border border-gray-200">
           <CardContent className="p-4">
             <div className="flex items-center space-x-3">
-              <div className="p-2 bg-purple-100 rounded-lg">
+              <div className="p-2 bg-green-100 rounded-lg">
                 <Icons.Book />
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-600">Categories</p>
-                <p className="text-2xl font-bold text-gray-900">3</p>
+                <p className="text-sm font-medium text-gray-600">Content Types</p>
+                <p className="text-2xl font-bold text-gray-900">{databaseTables.filter(t => t.category === 'content').length}</p>
               </div>
             </div>
           </CardContent>
@@ -578,7 +480,7 @@ export function InstructorDashboard() {
         <CardHeader>
           <CardTitle className="text-blue-900 flex items-center space-x-2">
             <Icons.Table />
-            <span>How to Use Table Management</span>
+            <span>How to Use Content Management</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="text-blue-800">
@@ -586,17 +488,18 @@ export function InstructorDashboard() {
             <div>
               <h4 className="font-semibold mb-2">Available Tables</h4>
               <ul className="space-y-1 text-sm">
-                <li>• Click on tables marked as "Available" to access full CRUD operations</li>
-                <li>• Create, edit, delete, and manage records</li>
-                <li>• Real-time data updates and validation</li>
+                <li>• Click on tables marked as "Available" to access management tools</li>
+                <li>• Create, edit, and manage content for your assigned courses</li>
+                <li>• All content is automatically filtered to your assigned courses</li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold mb-2">Under Development</h4>
+              <h4 className="font-semibold mb-2">Content Management</h4>
               <ul className="space-y-1 text-sm">
-                <li>• Tables marked as "Under Development" are not yet functional</li>
-                <li>• CRUD interfaces are being built for these tables</li>
-                <li>• Check back for updates as development progresses</li>
+                <li>• Modules: Organize course content into sections</li>
+                <li>• Lessons: Create individual learning units</li>
+                <li>• Videos, Articles, Projects: Add rich content to lessons</li>
+                <li>• Quizzes: Create assessments and track progress</li>
               </ul>
             </div>
           </div>

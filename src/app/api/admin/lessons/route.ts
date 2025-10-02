@@ -1,48 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { lessonService, serverLessonService } from '@/services/lessonService';
 import { createClient } from '@/lib/supabase/server';
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { createAdminClient, checkAdminOrInstructorPermission } from '@/lib/adminHelpers';
 import { activityLogService } from '@/services/activityLogService';
-
-// Create admin client with service role key to bypass RLS
-const createAdminClient = () => {
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  
-  if (!serviceRoleKey) {
-    throw new Error('SUPABASE_SERVICE_ROLE_KEY environment variable is not set');
-  }
-
-  return createSupabaseClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    serviceRoleKey,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    }
-  );
-};
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // Check admin or instructor permission
+    const permissionError = await checkAdminOrInstructorPermission();
+    if (permissionError) return permissionError;
 
-    // Check if user is admin or instructor
-    const { data: profile } = await supabase
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // Check user role to determine which client to use
+    const adminClient = createAdminClient();
+    const { data: profile } = await adminClient
       .from('profiles')
       .select('role')
-      .eq('id', user.id)
+      .eq('id', user!.id)
       .single();
 
-    if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const isAdmin = profile?.role === 'admin';
+    // Use admin client for admins (bypasses RLS), regular client for instructors (respects RLS)
+    const clientToUse = isAdmin ? adminClient : supabase;
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
@@ -59,9 +40,8 @@ export async function GET(request: NextRequest) {
       ...(status && { status: status })
     };
 
-    // Use admin client to bypass RLS for instructor data fetching
-    const adminClient = createAdminClient();
-    const result = await serverLessonService.getLessons(adminClient, page, limit, filters);
+    // Use appropriate client based on user role
+    const result = await serverLessonService.getLessons(clientToUse, page, limit, filters);
     
     // Debug: Log the first lesson to see the data structure
     if (result.lessons && result.lessons.length > 0) {
@@ -86,23 +66,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Check if user is admin or instructor
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    // Check admin or instructor permission
+    const permissionError = await checkAdminOrInstructorPermission();
+    if (permissionError) return permissionError;
 
     const body = await request.json();
     const { module_id, title, lesson_type, position, status, instructor_id, metadata } = body;
@@ -141,7 +107,7 @@ export async function POST(request: NextRequest) {
       metadata: metadata || {}
     };
 
-    // Use admin client to bypass RLS for lesson creation
+    // Use admin client for lesson creation (only admins should create lessons via RLS policies)
     const adminClient = createAdminClient();
     const newLesson = await serverLessonService.createLesson(adminClient, lessonData);
     

@@ -78,10 +78,21 @@ export default function QuizAdminDashboard() {
   const loadInitialData = async () => {
     setLoading(true);
     try {
-      const [quizzesData, lessonsData] = await Promise.all([
-        quizService.getQuizzes(),
+      const [quizzesResponse, lessonsResponse] = await Promise.all([
+        fetch('/api/admin/quizzes'),
+        // Use quiz service for lessons since there's no lessons API endpoint yet
         quizService.getLessons()
       ]);
+      
+      if (!quizzesResponse.ok) {
+        throw new Error('Failed to fetch quizzes');
+      }
+      
+      const [quizzesData, lessonsData] = await Promise.all([
+        quizzesResponse.json(),
+        lessonsResponse
+      ]);
+      
       setQuizzes(quizzesData);
       setLessons(lessonsData);
     } catch (e) {
@@ -111,7 +122,23 @@ export default function QuizAdminDashboard() {
         quiz = null;
       } else {
         console.log('Creating quiz with data:', formData);
-        quiz = await quizService.createQuiz(formData.lessonId, formData.title, formData.description);
+        const response = await fetch('/api/admin/quizzes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lessonId: formData.lessonId,
+            title: formData.title,
+            description: formData.description
+          })
+        });
+        
+        if (response.ok) {
+          quiz = await response.json();
+        } else {
+          const errorData = await response.json();
+          console.error('Quiz creation failed:', errorData);
+          throw new Error(errorData.error || 'Failed to create quiz');
+        }
         console.log('Quiz creation result:', quiz);
       }
       if (quiz) {
@@ -176,19 +203,33 @@ export default function QuizAdminDashboard() {
     if (!currentQuizId) return;
     
     try {
-      const question = await quizService.createQuizQuestion(
-        currentQuizId, 
-        questionFormData.text, 
-        questionFormData.type as 'multiple_choice' | 'short_answer' | 'true_false'
-      );
-      if (question) {
+      const response = await fetch('/api/admin/quiz-questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          quizId: currentQuizId,
+          text: questionFormData.text,
+          type: questionFormData.type
+        })
+      });
+
+      if (response.ok) {
+        const question = await response.json();
         setCurrentQuestionId(question.id);
         setQuestionFormData({ text: '', type: 'multiple_choice' });
+        
         // Load questions for display
-        const questionsData = await quizService.getQuestions();
-        setQuestions(questionsData.filter(q => q.quizId === currentQuizId));
+        const questionsResponse = await fetch('/api/admin/quiz-questions');
+        if (questionsResponse.ok) {
+          const questionsData = await questionsResponse.json();
+          setQuestions(questionsData.filter((q: any) => q.quizId === currentQuizId));
+        }
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to create question');
       }
-    } catch (e) {
+    } catch (error) {
+      console.error('Error creating question:', error);
       setError('Failed to create question');
     }
   };
@@ -198,18 +239,32 @@ export default function QuizAdminDashboard() {
     if (!currentQuestionId) return;
     
     try {
-      const option = await quizService.createQuestionOption(
-        currentQuestionId, 
-        optionFormData.text, 
-        optionFormData.isCorrect
-      );
-      if (option) {
+      const response = await fetch('/api/admin/question-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questionId: currentQuestionId,
+          text: optionFormData.text,
+          isCorrect: optionFormData.isCorrect
+        })
+      });
+
+      if (response.ok) {
+        const option = await response.json();
         setOptionFormData({ text: '', isCorrect: false });
+        
         // Load options for display
-        const optionsData = await quizService.getQuestionOptions();
-        setOptions(optionsData.filter(o => o.questionId === currentQuestionId));
+        const optionsResponse = await fetch('/api/admin/question-options');
+        if (optionsResponse.ok) {
+          const optionsData = await optionsResponse.json();
+          setOptions(optionsData.filter((o: any) => o.questionId === currentQuestionId));
+        }
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to create option');
       }
-    } catch (e) {
+    } catch (error) {
+      console.error('Error creating option:', error);
       setError('Failed to create option');
     }
   };

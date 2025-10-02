@@ -91,23 +91,30 @@ export const moduleService = {
         .select('id, title, status')
         .in('id', courseIds);
 
+      // Get lesson counts for all modules at once (performance optimization)
+      const moduleIds = modules.map(m => m.id);
+      const { data: lessonCounts } = await supabase
+        .from('lessons')
+        .select('module_id')
+        .in('module_id', moduleIds);
+
+      // Count lessons per module
+      const lessonCountMap: { [moduleId: string]: number } = {};
+      lessonCounts?.forEach(lesson => {
+        lessonCountMap[lesson.module_id] = (lessonCountMap[lesson.module_id] || 0) + 1;
+      });
+
       // Transform data to include proper nesting and lesson counts
-      const transformedData = await Promise.all(modules.map(async (module: Module) => {
+      const transformedData = modules.map((module: Module) => {
         // Find course info
         const course = courses?.find(c => c.id === module.course_id);
         
-        // Get lesson count for this module
-        const { count: lessonsCount } = await supabase
-          .from('lessons')
-          .select('id', { count: 'exact' })
-          .eq('module_id', module.id);
-
         return {
           ...module,
           course: course || null,
-          lessons_count: lessonsCount || 0
+          lessons_count: lessonCountMap[module.id] || 0
         };
-      }));
+      });
 
       return { modules: transformedData, total: count || 0 };
     } catch (error) {

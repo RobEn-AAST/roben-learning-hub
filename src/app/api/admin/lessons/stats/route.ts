@@ -11,15 +11,15 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is admin
+    // Check if user is admin or instructor
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single();
 
-    if (profile?.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
+      return NextResponse.json({ error: 'Admin or Instructor access required' }, { status: 403 });
     }
 
     const stats = await lessonService.getLessonStats();

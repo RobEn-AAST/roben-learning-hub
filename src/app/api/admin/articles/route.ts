@@ -9,24 +9,32 @@ export async function GET() {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
+      console.log('❌ GET /api/admin/articles - Auth error:', authError);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is admin or instructor
+    // Check user role to determine which client to use
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single();
 
+    console.log('🔍 GET /api/admin/articles - User role:', profile?.role);
+
     if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const articles = await articleService.getAllArticles();
+    // Role-based client selection
+    const clientToUse = profile?.role === 'admin' ? 'admin' : 'regular';
+    console.log('🎯 GET /api/admin/articles - Using client type:', clientToUse);
+
+    const articles = await articleService.getAllArticles(clientToUse);
+    console.log('✅ GET /api/admin/articles - Successfully fetched', articles?.length || 0, 'articles');
     return NextResponse.json(articles);
   } catch (error) {
-    console.error('Error fetching articles:', error);
+    console.error('❌ GET /api/admin/articles - Error:', error);
     return NextResponse.json(
       { error: 'Failed to fetch articles' },
       { status: 500 }
@@ -40,15 +48,18 @@ export async function POST(request: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
+      console.log('❌ POST /api/admin/articles - Auth error:', authError);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is admin or instructor
+    // Check user role to determine which client to use
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single();
+
+    console.log('🔍 POST /api/admin/articles - User role:', profile?.role);
 
     if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -57,8 +68,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { lesson_id, title, content, summary, reading_time_minutes, metadata } = body;
 
+    console.log('📝 POST /api/admin/articles - Creating article:', { lesson_id, title: title?.substring(0, 50) + '...' });
+
     // Validate required fields
     if (!lesson_id || !title || !content) {
+      console.log('❌ POST /api/admin/articles - Missing required fields');
       return NextResponse.json(
         { error: 'Missing required fields: lesson_id, title, content' },
         { status: 400 }
@@ -80,7 +94,11 @@ export async function POST(request: NextRequest) {
       metadata: metadata || {}
     };
 
-    const newArticle = await articleService.createArticle(articleData);
+    // Role-based client selection
+    const clientToUse = profile?.role === 'admin' ? 'admin' : 'regular';
+    console.log('🎯 POST /api/admin/articles - Using client type:', clientToUse);
+
+    const newArticle = await articleService.createArticle(articleData, clientToUse);
     
     // Log the action
     await activityLogService.logActivity({
@@ -90,9 +108,10 @@ export async function POST(request: NextRequest) {
       details: `Created article: ${title}`
     });
 
+    console.log('✅ POST /api/admin/articles - Article created successfully:', newArticle.id);
     return NextResponse.json(newArticle, { status: 201 });
   } catch (error) {
-    console.error('Error creating article:', error);
+    console.error('❌ POST /api/admin/articles - Error:', error);
     return NextResponse.json(
       { error: 'Failed to create article' },
       { status: 500 }

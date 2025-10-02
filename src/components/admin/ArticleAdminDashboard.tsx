@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+
 import { articleService, Article, ArticleStats, Lesson, CreateArticleData, UpdateArticleData } from '@/services/articleService';
 import { activityLogService } from '@/services/activityLogService';
 
@@ -78,6 +79,171 @@ function StatsCard({ title, value, icon, color }: StatsCardProps) {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// Article Form Component
+interface ArticleFormProps {
+  article: Article | null;
+  lessons: Lesson[];
+  onSave: (data: CreateArticleData | UpdateArticleData) => void;
+  onCancel: () => void;
+  isEdit: boolean;
+}
+
+function ArticleForm({ article, lessons, onSave, onCancel, isEdit }: ArticleFormProps) {
+  const [formData, setFormData] = useState({
+    lesson_id: article?.lesson_id || '',
+    title: article?.title || '',
+    content: article?.content || '',
+    summary: article?.summary || '',
+    reading_time_minutes: article?.reading_time_minutes || 0,
+    metadata: article?.metadata || {}
+  });
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validation
+    const newErrors: Record<string, string> = {};
+    if (!formData.lesson_id) newErrors.lesson_id = 'Please select a lesson';
+    if (!formData.title.trim()) newErrors.title = 'Title is required';
+    if (!formData.content.trim()) newErrors.content = 'Content is required';
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    // Auto-calculate reading time if not provided
+    const calculatedReadingTime = formData.reading_time_minutes || Math.max(1, Math.ceil(formData.content.trim().split(/\s+/).length / 200));
+    
+    // Auto-generate summary if not provided
+    const generatedSummary = formData.summary.trim() || (formData.content.length > 200 ? formData.content.substring(0, 200) + '...' : formData.content);
+
+    onSave({
+      ...formData,
+      reading_time_minutes: calculatedReadingTime,
+      summary: generatedSummary
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold text-black">
+          {isEdit ? 'Edit Article' : 'Create New Article'}
+        </h1>
+        <Button onClick={onCancel} variant="outline">
+          ← Back to List
+        </Button>
+      </div>
+      
+      <Card className="bg-white">
+        <CardHeader>
+          <CardTitle className="text-black">
+            {isEdit ? 'Edit Article' : 'Create Article'}
+          </CardTitle>
+          <CardDescription className="text-gray-600">
+            {isEdit ? 'Update article information' : 'Add a new article to the learning platform'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Lesson Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="lesson_id" className="text-black">Lesson *</Label>
+              <select
+                id="lesson_id"
+                value={formData.lesson_id}
+                onChange={(e) => setFormData({...formData, lesson_id: e.target.value})}
+                className="w-full p-2 border border-gray-300 rounded bg-white text-black"
+                required
+              >
+                <option value="">Select a lesson...</option>
+                {lessons.map((lesson) => (
+                  <option key={lesson.id} value={lesson.id}>
+                    {lesson.course_title} → {lesson.module_title} → {lesson.title}
+                  </option>
+                ))}
+              </select>
+              {errors.lesson_id && <p className="text-red-500 text-sm">{errors.lesson_id}</p>}
+            </div>
+
+            {/* Title */}
+            <div className="space-y-2">
+              <Label htmlFor="title" className="text-black">Title *</Label>
+              <Input
+                id="title"
+                value={formData.title}
+                onChange={(e) => setFormData({...formData, title: e.target.value})}
+                placeholder="Enter article title..."
+                className="bg-white text-black"
+                required
+              />
+              {errors.title && <p className="text-red-500 text-sm">{errors.title}</p>}
+            </div>
+
+            {/* Content */}
+            <div className="space-y-2">
+              <Label htmlFor="content" className="text-black">Content *</Label>
+              <textarea
+                id="content"
+                value={formData.content}
+                onChange={(e) => setFormData({...formData, content: e.target.value})}
+                placeholder="Write your article content here..."
+                className="w-full p-3 border border-gray-300 rounded bg-white text-black min-h-64"
+                required
+              />
+              {errors.content && <p className="text-red-500 text-sm">{errors.content}</p>}
+            </div>
+
+            {/* Summary */}
+            <div className="space-y-2">
+              <Label htmlFor="summary" className="text-black">Summary</Label>
+              <textarea
+                id="summary"
+                value={formData.summary}
+                onChange={(e) => setFormData({...formData, summary: e.target.value})}
+                placeholder="Brief summary (auto-generated if left empty)..."
+                className="w-full p-3 border border-gray-300 rounded bg-white text-black"
+                rows={3}
+              />
+              <p className="text-sm text-gray-500">Leave empty to auto-generate from content</p>
+            </div>
+
+            {/* Reading Time */}
+            <div className="space-y-2">
+              <Label htmlFor="reading_time" className="text-black">Reading Time (minutes)</Label>
+              <Input
+                id="reading_time"
+                type="number"
+                value={formData.reading_time_minutes}
+                onChange={(e) => setFormData({...formData, reading_time_minutes: parseInt(e.target.value) || 0})}
+                placeholder="Auto-calculated if left as 0..."
+                className="bg-white text-black"
+                min="0"
+              />
+              <p className="text-sm text-gray-500">Leave as 0 to auto-calculate from content length</p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-4 pt-4">
+              <Button type="submit" className="flex items-center space-x-2">
+                <Icons.Save />
+                <span>{isEdit ? 'Update Article' : 'Create Article'}</span>
+              </Button>
+              <Button type="button" variant="outline" onClick={onCancel}>
+                <Icons.Cancel />
+                <span className="ml-2">Cancel</span>
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
@@ -203,35 +369,13 @@ export default function ArticleAdminDashboard() {
 
   // Create/Edit Form View
   if (viewMode === 'create' || viewMode === 'edit') {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-black">
-            {viewMode === 'create' ? 'Create New Article' : 'Edit Article'}
-          </h1>
-          <Button onClick={handleBackToList} variant="outline">
-            ← Back to List
-          </Button>
-        </div>
-        
-        <Card className="bg-white">
-          <CardHeader>
-            <CardTitle className="text-black flex items-center gap-2">
-              {viewMode === 'create' ? 'Create Article' : 'Edit Article'}
-              <Badge variant="secondary" className="text-xs">Coming Soon</Badge>
-            </CardTitle>
-            <CardDescription className="text-gray-600">
-              {viewMode === 'create' ? 'Add a new article to the learning platform' : 'Update article information'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="text-center py-8 text-gray-500">
-              Form functionality coming soon
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    return <ArticleForm 
+      article={selectedArticle}
+      lessons={lessons}
+      onSave={handleSaveArticle}
+      onCancel={handleBackToList}
+      isEdit={viewMode === 'edit'}
+    />;
   }
 
   // View Details
@@ -356,7 +500,6 @@ export default function ArticleAdminDashboard() {
         <CardHeader>
           <CardTitle className="text-black flex items-center gap-2">
             Articles Management
-            <Badge variant="secondary" className="text-xs">Read Only</Badge>
           </CardTitle>
           <CardDescription className="text-gray-600">Manage all your articles</CardDescription>
         </CardHeader>

@@ -1,32 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { lessonService } from '@/services/lessonService';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient, checkAdminOrInstructorPermission } from '@/lib/adminHelpers';
 import { activityLogService } from '@/services/activityLogService';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { id } = await params;
     
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // Check admin or instructor permission
+    const permissionError = await checkAdminOrInstructorPermission();
+    if (permissionError) return permissionError;
 
-    // Check if user is admin
-    const { data: profile } = await supabase
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // Check user role to determine which client to use
+    const adminClient = createAdminClient();
+    const { data: profile } = await adminClient
       .from('profiles')
       .select('role')
-      .eq('id', user.id)
+      .eq('id', user!.id)
       .single();
 
-    if (profile?.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const isAdmin = profile?.role === 'admin';
+    // Use admin client for admins (bypasses RLS), regular client for instructors (respects RLS)
+    const clientToUse = isAdmin ? adminClient : supabase;
 
-    const lesson = await lessonService.getLessonById(params.id);
+    const lesson = await lessonService.getLessonById(id);
     
     if (!lesson) {
       return NextResponse.json({ error: 'Lesson not found' }, { status: 404 });
@@ -44,26 +48,14 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { id } = await params;
     
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Check if user is admin
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (profile?.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    // Check admin or instructor permission
+    const permissionError = await checkAdminOrInstructorPermission();
+    if (permissionError) return permissionError;
 
     const body = await request.json();
     const { title, lesson_type, position, status, instructor_id, metadata } = body;
@@ -93,13 +85,57 @@ export async function PUT(
       ...(metadata && { metadata })
     };
 
-    const updatedLesson = await lessonService.updateLesson(params.id, updateData);
+    // Check user role to determine which client to use
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const adminClient = createAdminClient();
+    const { data: profile } = await adminClient
+      .from('profiles')
+      .select('role')
+      .eq('id', user!.id)
+      .single();
+
+    const isAdmin = profile?.role === 'admin';
+    // Use admin client for admins (bypasses RLS), regular client for instructors (respects RLS)
+    const clientToUse = isAdmin ? adminClient : supabase;
+
+    // Update the lesson using the appropriate client
+    const { data: updatedLesson, error: updateError } = await clientToUse
+      .from('lessons')
+      .update({
+        ...updateData,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select(`
+        *,
+        modules!inner(
+          id,
+          title,
+          course_id,
+          courses!inner(
+            id,
+            title
+          )
+        ),
+        profiles(
+          id,
+          full_name
+        )
+      `)
+      .single();
+
+    if (updateError) {
+      console.error('Update lesson error:', updateError);
+      throw new Error(`Failed to update lesson: ${updateError.message}`);
+    }
     
     // Log the action
     await activityLogService.logActivity({
       action: 'UPDATE',
       resource_type: 'lessons',
-      resource_id: params.id,
+      resource_id: id,
       details: `Updated lesson: ${updatedLesson.title}`
     });
 
@@ -115,41 +151,83 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const supabase = await createClient();
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { id } = await params;
     
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // Check admin or instructor permission
+    const permissionError = await checkAdminOrInstructorPermission();
+    if (permissionError) return permissionError;
 
-    // Check if user is admin
-    const { data: profile } = await supabase
+    // Check user role to determine which client to use
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const adminClient = createAdminClient();
+    const { data: profile } = await adminClient
       .from('profiles')
       .select('role')
-      .eq('id', user.id)
+      .eq('id', user!.id)
       .single();
 
-    if (profile?.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const isAdmin = profile?.role === 'admin';
+    // Use admin client for admins (bypasses RLS), regular client for instructors (respects RLS)
+    const clientToUse = isAdmin ? adminClient : supabase;
 
     // Get lesson details before deletion for logging
-    const lesson = await lessonService.getLessonById(params.id);
+    const { data: lesson, error: fetchError } = await clientToUse
+      .from('lessons')
+      .select('id, title')
+      .eq('id', id)
+      .single();
     
-    if (!lesson) {
+    if (fetchError || !lesson) {
       return NextResponse.json({ error: 'Lesson not found' }, { status: 404 });
     }
 
-    await lessonService.deleteLesson(params.id);
+    // Delete the lesson using the appropriate client
+    console.log(`[DELETE LESSON] Attempting to delete lesson with ID: ${id}`);
+    console.log(`[DELETE LESSON] User role: ${profile?.role}, Using client: ${isAdmin ? 'admin' : 'regular'}`);
+    
+    const { error: deleteError, count } = await clientToUse
+      .from('lessons')
+      .delete()
+      .eq('id', id);
+
+    if (deleteError) {
+      console.error('[DELETE LESSON] Delete error details:', {
+        message: deleteError.message,
+        details: deleteError.details,
+        hint: deleteError.hint,
+        code: deleteError.code
+      });
+      throw new Error(`Failed to delete lesson: ${deleteError.message}`);
+    }
+
+    console.log(`[DELETE LESSON] Delete operation completed. Affected rows: ${count}`);
+
+    console.log(`[DELETE LESSON] Successfully deleted lesson: ${lesson.title} (${id})`);
+    
+    // Verify deletion by trying to fetch the lesson again
+    const { data: verifyLesson } = await clientToUse
+      .from('lessons')
+      .select('id')
+      .eq('id', id)
+      .single();
+    
+    if (verifyLesson) {
+      console.error('[DELETE LESSON] ERROR: Lesson still exists after deletion attempt!');
+      return NextResponse.json({ error: 'Failed to delete lesson - lesson still exists' }, { status: 500 });
+    } else {
+      console.log('[DELETE LESSON] VERIFIED: Lesson successfully removed from database');
+    }
     
     // Log the action
     await activityLogService.logActivity({
       action: 'DELETE',
       resource_type: 'lessons',
-      resource_id: params.id,
+      resource_id: id,
       details: `Deleted lesson: ${lesson.title}`
     });
 

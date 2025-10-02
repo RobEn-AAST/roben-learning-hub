@@ -1,6 +1,7 @@
 import ProfileCompletionForm from '@/components/profile-completion-form';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
+import { createAdminClient } from '@/lib/adminHelpers';
 
 export default async function CompleteProfilePage() {
   const supabase = await createClient();
@@ -20,20 +21,43 @@ export default async function CompleteProfilePage() {
     .eq('id', user.id)
     .single();
 
-  // If profile doesn't exist, create it first
+  // If profile doesn't exist, create it first using admin client
   if (error && error.code === 'PGRST116') {
-    // Profile doesn't exist, create it
-    const { error: createError } = await supabase
-      .from('profiles')
-      .insert([{
-        id: user.id,
-        full_name: '',
-        bio: null,
-        avatar_url: null
-      }]);
+    console.log('Profile not found for user:', user.id, 'Creating new profile...');
     
-    if (createError) {
-      console.error('Error creating profile:', createError);
+    try {
+      // Use admin client to create profile (bypasses RLS)
+      const adminClient = createAdminClient();
+      
+      const { data: createdProfile, error: createError } = await adminClient
+        .from('profiles')
+        .insert([{
+          id: user.id,
+          email: user.email || '',
+          full_name: '',
+          bio: null,
+          avatar_url: null,
+          role: 'student' // Default role
+        }])
+        .select()
+        .single();
+      
+      if (createError) {
+        console.error('Error creating profile with admin client:', {
+          code: createError.code,
+          message: createError.message,
+          details: createError.details,
+          hint: createError.hint,
+          userId: user.id,
+          userEmail: user.email
+        });
+        redirect('/auth/error?message=Failed to create profile. Please contact support.');
+      }
+      
+      console.log('Profile created successfully:', createdProfile);
+      
+    } catch (adminError) {
+      console.error('Admin client error:', adminError);
       redirect('/auth/error?message=Failed to create profile. Please contact support.');
     }
     
@@ -45,6 +69,7 @@ export default async function CompleteProfilePage() {
       .single();
     
     if (newError) {
+      console.error('Failed to fetch newly created profile:', newError);
       redirect('/auth/error?message=Profile creation failed. Please contact support.');
     }
     
