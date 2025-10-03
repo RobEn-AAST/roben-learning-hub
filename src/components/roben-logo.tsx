@@ -1,25 +1,13 @@
 export function RobenLogo() {
   return (
-    <div className="flex items-center space-x-2">
-      {/* You can replace this with an actual image */}
+    <div className="flex items-center justify-center w-full">
       <img 
         src="/assets/roben-logo.png" 
-        alt="Roben Learning" 
-        width={40} 
-        height={40}
-        className="object-contain"
-        onError={(e) => {
-          // Fallback to text logo if image fails to load
-          e.currentTarget.style.display = 'none';
-          const nextElement = e.currentTarget.nextElementSibling as HTMLElement;
-          if (nextElement) nextElement.style.display = 'block';
-        }}
+        alt="Roben Logo" 
+        width={64} 
+        height={64}
+        className="object-contain mx-auto"
       />
-      {/* Fallback text logo */}
-      <div className="hidden font-bold text-2xl text-blue-600">
-        Roben
-      </div>
-      <span className="font-semibold text-lg text-gray-800">Learning</span>
     </div>
   );
 }

@@ -2,22 +2,12 @@ import { RobenLogoSVG } from "./roben-logo";
 
 export function Hero() {
   return (
-    <div className="flex flex-col gap-16 items-center">
-      <div className="flex gap-8 justify-center items-center">
-        <RobenLogoSVG />
+  <div className="flex flex-col items-start gap-2 w-full max-w-3xl pt-8 pl-8">
+      <h1 className="text-3xl lg:text-4xl font-extrabold text-blue-900 mb-2">Welcome to RobEn Learning Hub</h1>
+      <div className="flex flex-col items-start">
+        <span className="text-lg lg:text-xl font-semibold text-gray-800 mb-1">Control your future with the RobEn comprehensive learning management platform</span>
+        <span className="text-lg lg:text-xl text-blue-600 font-medium"></span>
       </div>
-      <h1 className="sr-only">Roben Learning Platform</h1>
-      <p className="text-3xl lg:text-4xl !leading-tight mx-auto max-w-xl text-center">
-        Welcome to{" "}
-        <span className="font-bold text-blue-600">
-          Roben Learning
-        </span>
-        <br />
-        <span className="text-2xl lg:text-3xl text-gray-600">
-          Your comprehensive learning management platform
-        </span>
-      </p>
-      <div className="w-full p-[1px] bg-gradient-to-r from-transparent via-foreground/10 to-transparent my-8" />
     </div>
   );
 }

@@ -27,31 +27,30 @@ export async function AuthButton() {
   }
 
   // Get user profile to check role
+
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, full_name')
     .eq('id', user.id)
     .single();
 
   const userRole = profile?.role;
+  const fullName = profile?.full_name || user.email;
 
   return (
     <div className="flex items-center gap-4">
-      Hey, {user.email}!
-      
+      Hey, {fullName}!
       {/* Dashboard Navigation Buttons */}
       {userRole === 'admin' && (
         <Button asChild size="sm" variant={"outline"}>
           <Link href="/admin">Admin Dashboard</Link>
         </Button>
       )}
-      
       {userRole === 'instructor' && (
         <Button asChild size="sm" variant={"outline"}>
           <Link href="/instructor">Instructor Dashboard</Link>
         </Button>
       )}
-      
       <LogoutButton />
     </div>
   );
