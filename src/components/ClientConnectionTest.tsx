@@ -62,18 +62,18 @@ export default function ClientConnectionTest() {
   }, []);
 
   return (
-    <div className="p-4 border rounded-lg">
-      <h3 className="text-lg font-semibold mb-2">Client-Side Connection Test</h3>
-      <p className="mb-2">{status}</p>
+    <div className="p-4 border rounded-lg bg-white">
+      <h3 className="text-lg font-semibold mb-2 text-gray-900">Client-Side Connection Test</h3>
+      <p className="mb-2 text-gray-800">{status}</p>
       {quizData && (
-        <div className="text-sm">
-          <p>Profiles found: {quizData.profiles}</p>
-          <p>Quizzes found: {quizData.quizzes}</p>
-          <p>Questions found: {quizData.questions}</p>
+        <div className="text-sm text-gray-700">
+          <p className="text-gray-800">Profiles found: {quizData.profiles}</p>
+          <p className="text-gray-800">Quizzes found: {quizData.quizzes}</p>
+          <p className="text-gray-800">Questions found: {quizData.questions}</p>
           {quizData.quizzes > 0 && (
             <details className="mt-2">
-              <summary>Quiz Data</summary>
-              <pre className="text-xs bg-gray-100 p-2 mt-1 rounded">
+              <summary className="text-gray-900 font-medium cursor-pointer">Quiz Data</summary>
+              <pre className="text-xs bg-gray-100 text-gray-900 p-2 mt-1 rounded border">
                 {JSON.stringify(quizData.quizData, null, 2)}
               </pre>
             </details>

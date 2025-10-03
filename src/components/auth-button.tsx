@@ -6,9 +6,12 @@ import { LogoutButton } from "./logout-button";
 export async function AuthButton() {
   const supabase = await createClient();
 
-  // You can also use getUser() which will be slower.
-  const { data } = await supabase.auth.getClaims();
-  const user = data?.claims;
+  // Using getUser() for better reliability
+  const { data: { user }, error } = await supabase.auth.getUser();
+  
+  if (error) {
+    console.error('Auth error:', error);
+  }
 
   if (!user) {
     return (
@@ -27,7 +30,7 @@ export async function AuthButton() {
   const { data: profile } = await supabase
     .from('profiles')
     .select('role')
-    .eq('id', user.sub)
+    .eq('id', user.id)
     .single();
 
   const userRole = profile?.role;

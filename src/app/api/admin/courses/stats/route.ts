@@ -9,27 +9,46 @@ export async function GET() {
 
     const adminClient = createAdminClient();
 
-    // Get all course statistics using admin client (bypasses RLS)
+    // Ultra-fast approach: Get only what we need without full table scans
     const [
-      { count: totalCourses },
-      { count: publishedCourses },
-      { count: draftCourses },
+      { data: coursesData },
       { count: totalEnrollments },
       { count: totalModules },
       { count: totalLessons }
     ] = await Promise.all([
-      adminClient.from('courses').select('*', { count: 'exact', head: true }),
-      adminClient.from('courses').select('*', { count: 'exact', head: true }).eq('status', 'published'),
-      adminClient.from('courses').select('*', { count: 'exact', head: true }).eq('status', 'draft'),
-      adminClient.from('course_enrollments').select('*', { count: 'exact', head: true }),
-      adminClient.from('modules').select('*', { count: 'exact', head: true }),
-      adminClient.from('lessons').select('*', { count: 'exact', head: true })
+      // Only select status field to minimize data transfer
+      adminClient
+        .from('courses')
+        .select('status'),
+      
+      // Use estimated counts for large tables (much faster than exact)
+      adminClient
+        .from('course_enrollments')
+        .select('*', { count: 'estimated', head: true }),
+      
+      adminClient
+        .from('modules')
+        .select('*', { count: 'estimated', head: true }),
+      
+      adminClient
+        .from('lessons')
+        .select('*', { count: 'estimated', head: true })
     ]);
 
+    // Process courses data efficiently
+    const totalCourses = coursesData?.length || 0;
+    let publishedCourses = 0;
+    let draftCourses = 0;
+    
+    coursesData?.forEach(course => {
+      if (course.status === 'published') publishedCourses++;
+      else if (course.status === 'draft') draftCourses++;
+    });
+
     const stats = {
-      totalCourses: totalCourses || 0,
-      publishedCourses: publishedCourses || 0,
-      draftCourses: draftCourses || 0,
+      totalCourses,
+      publishedCourses,
+      draftCourses,
       totalEnrollments: totalEnrollments || 0,
       totalModules: totalModules || 0,
       totalLessons: totalLessons || 0,
