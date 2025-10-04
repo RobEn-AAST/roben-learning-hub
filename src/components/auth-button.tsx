@@ -16,7 +16,7 @@ export async function AuthButton() {
   if (!user) {
     return (
       <div className="flex gap-2">
-        <Button asChild size="sm" variant={"outline"}>
+        <Button asChild size="sm" variant={"outline"} className="text-black dark:text-white">
           <Link href="/auth/login">Sign in</Link>
         </Button>
         <Button asChild size="sm" variant={"default"}>
@@ -42,12 +42,12 @@ export async function AuthButton() {
       Hey, {fullName}!
       {/* Dashboard Navigation Buttons */}
       {userRole === 'admin' && (
-        <Button asChild size="sm" variant={"outline"}>
+        <Button asChild size="sm" variant={"outline"} className="text-black dark:text-white bg-white dark:bg-black border-none">
           <Link href="/admin">Admin Dashboard</Link>
         </Button>
       )}
       {userRole === 'instructor' && (
-        <Button asChild size="sm" variant={"outline"}>
+        <Button asChild size="sm" variant={"outline"} className="text-black dark:text-white bg-white dark:bg-black border-none">
           <Link href="/instructor">Instructor Dashboard</Link>
         </Button>
       )}

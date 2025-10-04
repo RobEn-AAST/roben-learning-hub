@@ -11,10 +11,17 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <main className="min-h-screen flex flex-col items-center">
-      <div className="flex-1 w-full flex flex-col gap-20 items-center">
+    <main className="min-h-screen flex flex-col items-center relative overflow-hidden">
+      {/* Background Image */}
+      <img
+        src="/assets/bg3.png"
+        alt="Background"
+        className="fixed inset-0 w-full h-full object-cover object-center z-0"
+        style={{ pointerEvents: 'none', minWidth: '100vw', minHeight: '100vh' }}
+      />
+  <div className="flex-1 w-full flex flex-col gap-20 items-center relative z-10 text-white">
         {/* Header Bar */}
-  <nav className="w-full flex justify-center h-16 shadow-md bg-gradient-to-r from-blue-800 via-blue-500 to-purple-600">
+        <nav className="w-full flex justify-center h-16 shadow-md bg-gradient-to-r from-blue-800 via-blue-500 to-purple-600">
           <div className="w-full max-w-5xl flex justify-between items-center p-3 px-5 text-sm">
             <div className="flex items-center h-10">
               <Link href="/" className="flex items-center gap-2 group h-full">
@@ -29,7 +36,10 @@ export default function Home() {
                 </span>
               </Link>
             </div>
-            {!hasEnvVars ? <EnvVarWarning /> : <AuthButton />}
+            <div className="flex items-center gap-4">
+              {!hasEnvVars ? <EnvVarWarning /> : <AuthButton />}
+              <ThemeSwitcher />
+            </div>
           </div>
         </nav>
         {/* Main Content */}
@@ -37,20 +47,7 @@ export default function Home() {
           <Hero />
         </div>
 
-        <footer className="w-full flex items-center justify-center border-t mx-auto text-center text-xs gap-8 py-16">
-          <p>
-            Powered by{" "}
-            <a
-              href="https://supabase.com/?utm_source=create-next-app&utm_medium=template&utm_term=nextjs"
-              target="_blank"
-              className="font-bold hover:underline"
-              rel="noreferrer"
-            >
-              Supabase
-            </a>
-          </p>
-          <ThemeSwitcher />
-        </footer>
+  {/* Footer removed as requested */}
       </div>
     </main>
   );
