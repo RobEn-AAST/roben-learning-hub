@@ -51,6 +51,11 @@ export async function AuthButton() {
           <Link href="/instructor">Instructor Dashboard</Link>
         </Button>
       )}
+      {userRole === 'student' && (
+        <Button asChild size="sm" variant={"outline"} className="text-black dark:text-white bg-white dark:bg-black border-none">
+          <Link href="/students/enrolled-courses">My Courses</Link>
+        </Button>
+      )}
       <LogoutButton />
     </div>
   );
