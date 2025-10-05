@@ -15,7 +15,7 @@ export default function Home() {
       {/* No background image, just white background */}
   <div className="flex-1 w-full flex flex-col gap-20 items-center relative z-10 text-black">
         {/* Header Bar */}
-        <nav className="w-full flex justify-center h-16 shadow-md bg-gradient-to-r from-blue-800 via-blue-500 to-purple-600">
+  <nav className="w-full flex justify-center h-16 shadow-md bg-gradient-to-r from-blue-800 via-blue-500 to-purple-600">
           <div className="w-full max-w-5xl flex justify-between items-center p-3 px-5 text-sm">
             <div className="flex items-center h-10">
               <Link href="/" className="flex items-center gap-2 group h-full">
@@ -44,11 +44,11 @@ export default function Home() {
             <h2 className="text-2xl font-bold text-black mb-4">About RobEn Learning Hub</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="bg-white/60 rounded-lg p-6 shadow-lg border border-blue-200/30">
-                <h3 className="text-xl font-semibold text-yellow-600 mb-2">What is RobEn Learning Hub?</h3>
+                <h3 className="text-xl font-semibold text-purple-600 mb-2">What is RobEn Learning Hub?</h3>
                 <p className="text-black text-base">RobEn Learning Hub is a modern platform designed to empower learners and educators. It provides a seamless experience for managing courses, tracking progress, and engaging with interactive content.</p>
               </div>
               <div className="bg-white/60 rounded-lg p-6 shadow-lg border border-blue-200/30">
-                <h3 className="text-xl font-semibold text-yellow-600 mb-2">Our Mission</h3>
+                <h3 className="text-xl font-semibold text-purple-600 mb-2">Our Mission</h3>
                 <p className="text-black text-base">Our mission is to make high-quality education accessible to everyone, everywhere. We believe in the power of technology to transform learning and help you control your future.</p>
               </div>
             </div>
@@ -86,17 +86,17 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               <div className="bg-white/10 rounded-lg p-6 shadow-lg border border-blue-200/30 flex flex-col items-center">
                 <div className="w-16 h-16 rounded-full bg-blue-300 mb-3 flex items-center justify-center text-2xl font-bold text-blue-900">A</div>
-                <h4 className="text-lg font-semibold text-yellow-600 mb-1">Alex Johnson</h4>
+                <h4 className="text-lg font-semibold text-purple-600 mb-1">Alex Johnson</h4>
                 <p className="text-black text-base text-center">Expert in Web Development and JavaScript. Passionate about teaching and building real-world projects.</p>
               </div>
               <div className="bg-white/10 rounded-lg p-6 shadow-lg border border-blue-200/30 flex flex-col items-center">
                 <div className="w-16 h-16 rounded-full bg-blue-300 mb-3 flex items-center justify-center text-2xl font-bold text-blue-900">S</div>
-                <h4 className="text-lg font-semibold text-yellow-600 mb-1">Sara Lee</h4>
+                <h4 className="text-lg font-semibold text-purple-600 mb-1">Sara Lee</h4>
                 <p className="text-black text-base text-center">Data Scientist with 10+ years of experience. Loves making complex topics simple and fun.</p>
               </div>
               <div className="bg-white/10 rounded-lg p-6 shadow-lg border border-blue-200/30 flex flex-col items-center">
                 <div className="w-16 h-16 rounded-full bg-blue-300 mb-3 flex items-center justify-center text-2xl font-bold text-blue-900">M</div>
-                <h4 className="text-lg font-semibold text-yellow-600 mb-1">Mohamed Ali</h4>
+                <h4 className="text-lg font-semibold text-purple-600 mb-1">Mohamed Ali</h4>
                 <p className="text-black text-base text-center">Specialist in Python and AI. Focused on hands-on learning and student engagement.</p>
               </div>
             </div>
