@@ -91,10 +91,33 @@ export async function POST(request: NextRequest) {
     const { questionId, text, isCorrect } = body;
 
     console.log('📝 Creating question option:', { questionId, text: text?.substring(0, 50) + '...', isCorrect });
+    console.log('📝 Full request body:', body);
 
     if (!questionId || !text) {
+      console.log('❌ Missing required fields:', { questionId: !!questionId, text: !!text });
       return NextResponse.json({ error: 'Missing required fields: questionId, text' }, { status: 400 });
     }
+
+    // If trying to set as correct, check if another option is already correct for this question
+    if (isCorrect) {
+      const { data: existingCorrectOptions } = await supabase
+        .from('question_options')
+        .select('id')
+        .eq('question_id', questionId)
+        .eq('is_correct', true);
+
+      if (existingCorrectOptions && existingCorrectOptions.length > 0) {
+        return NextResponse.json({ 
+          error: 'Another option is already marked as correct for this question. Only one correct answer is allowed per question.' 
+        }, { status: 400 });
+      }
+    }
+
+    console.log('📝 About to insert into database:', {
+      question_id: questionId,
+      content: text,
+      is_correct: isCorrect || false
+    });
 
     const { data: option, error } = await supabase
       .from('question_options')
@@ -108,8 +131,11 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       console.error('❌ Database error:', error);
-      return NextResponse.json({ error: 'Failed to create question option' }, { status: 500 });
+      console.error('❌ Error details:', JSON.stringify(error, null, 2));
+      return NextResponse.json({ error: 'Failed to create question option', details: error.message }, { status: 500 });
     }
+
+    console.log('✅ Database insert successful, raw option:', option);
 
     console.log(`✅ Successfully created question option: ${option.id}`);
 

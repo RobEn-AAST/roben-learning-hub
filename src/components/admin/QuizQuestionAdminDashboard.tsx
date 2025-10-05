@@ -103,31 +103,66 @@ export default function QuizQuestionAdminDashboard() {
     setError("");
     setLoading(true);
     try {
-      const response = await fetch('/api/admin/quiz-questions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          quizId: formData.quizId,
-          text: formData.text,
-          type: formData.type
-        }),
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create question');
+      let question;
+      if (editingQuestion) {
+        // Update existing question
+        console.log('Updating question with data:', formData);
+        const response = await fetch(`/api/admin/quiz-questions/${editingQuestion.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            text: formData.text,
+            type: formData.type
+          }),
+        });
+        
+        if (response.ok) {
+          question = await response.json();
+          console.log('Question update result:', question);
+          // Close form after successful update
+          resetForm();
+        } else {
+          const errorData = await response.json();
+          console.error('Question update failed:', errorData);
+          throw new Error(errorData.error || 'Failed to update question');
+        }
+      } else {
+        // Create new question
+        console.log('Creating question with data:', formData);
+        const response = await fetch('/api/admin/quiz-questions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            quizId: formData.quizId,
+            text: formData.text,
+            type: formData.type
+          }),
+        });
+        
+        if (response.ok) {
+          question = await response.json();
+          console.log('Question creation result:', question);
+          setCurrentQuestionId(question.id);
+          // Don't close the form, just enable option creation
+        } else {
+          const errorData = await response.json();
+          console.error('Question creation failed:', errorData);
+          throw new Error(errorData.error || 'Failed to create question');
+        }
       }
       
-      const question = await response.json();
-      setCurrentQuestionId(question.id);
-      setFormData({ quizId: "", text: "", type: "multiple_choice" });
-      setEditingQuestion(null);
-      setError('');
-      await loadInitialData();
+      if (question) {
+        setError('');
+        await loadInitialData();
+      } else {
+        setError('Failed to process question - check console for details');
+      }
     } catch (e: any) {
-      setError(e.message || "Failed to create question");
+      setError(e.message || "Failed to process question");
     } finally {
       setLoading(false);
     }
@@ -190,8 +225,33 @@ export default function QuizQuestionAdminDashboard() {
   };
 
   const handleDelete = async (question: QuizQuestion) => {
-    // Implement delete logic if needed
-    alert("Delete not implemented");
+    if (!confirm(`Are you sure you want to delete the question "${question.text.substring(0, 50)}..."? This action cannot be undone and will also delete all associated answer options.`)) {
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    
+    try {
+      console.log('Deleting question:', question.id);
+      const response = await fetch(`/api/admin/quiz-questions/${question.id}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        console.log('Question deleted successfully');
+        await loadInitialData(); // Refresh the list
+      } else {
+        const errorData = await response.json();
+        console.error('Question deletion failed:', errorData);
+        setError(errorData.error || 'Failed to delete question');
+      }
+    } catch (error) {
+      console.error('Error deleting question:', error);
+      setError('Failed to delete question');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resetForm = () => {
@@ -240,19 +300,25 @@ export default function QuizQuestionAdminDashboard() {
             </Button>
           </div>
           <Card className="bg-white">
+            <CardHeader>
+              <CardTitle className="text-black">Question Details</CardTitle>
+              <CardDescription className="text-gray-600">
+                {editingQuestion ? 'Update question information' : 'Enter question information for the selected quiz.'}
+              </CardDescription>
+            </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="quizId" className="text-black">Quiz *</Label>
+                    <Label htmlFor="quizId" className="text-black font-semibold text-sm mb-2 block">Quiz *</Label>
                     <select
                       id="quizId"
                       name="quizId"
                       value={formData.quizId}
                       onChange={e => setFormData({ ...formData, quizId: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      style={{ backgroundColor: 'white', color: 'black' }}
+                      className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
                       required
+                      disabled={editingQuestion ? true : false}
                     >
                       <option value="" style={{ backgroundColor: 'white', color: 'black' }}>Select a quiz</option>
                       {quizzes.map((quiz) => (
@@ -261,29 +327,34 @@ export default function QuizQuestionAdminDashboard() {
                         </option>
                       ))}
                     </select>
+                    {editingQuestion && (
+                      <p className="text-sm text-gray-500 mt-1">
+                        Quiz cannot be changed when editing a question
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="text" className="text-black">Question Text *</Label>
+                    <Label htmlFor="text" className="text-black font-semibold text-sm mb-2 block">Question Text *</Label>
                     <Input
                       id="text"
                       name="text"
                       value={formData.text}
                       onChange={e => setFormData({ ...formData, text: e.target.value })}
                       placeholder="Enter question text"
+                      className="mt-2"
                       style={{ backgroundColor: 'white', color: 'black' }}
                       required
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="type" className="text-black">Type *</Label>
+                  <Label htmlFor="type" className="text-black font-semibold text-sm mb-2 block">Type *</Label>
                   <select
                     id="type"
                     name="type"
                     value={formData.type}
                     onChange={e => setFormData({ ...formData, type: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    style={{ backgroundColor: 'white', color: 'black' }}
+                    className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
                     required
                   >
                     <option value="multiple_choice">Multiple Choice</option>
@@ -291,7 +362,10 @@ export default function QuizQuestionAdminDashboard() {
                     <option value="true_false">True/False</option>
                   </select>
                 </div>
-                <div className="flex justify-end space-x-2">
+                <div className="flex justify-end space-x-3 pt-6">
+                  <Button type="button" variant="outline" onClick={resetForm}>
+                    Cancel
+                  </Button>
                   <Button type="submit" disabled={loading}>
                     {loading ? (editingQuestion ? 'Updating...' : 'Creating...') : (editingQuestion ? 'Update Question' : 'Create Question')}
                   </Button>

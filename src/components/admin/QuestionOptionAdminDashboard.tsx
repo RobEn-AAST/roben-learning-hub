@@ -97,29 +97,103 @@ export default function QuestionOptionAdminDashboard() {
     setError("");
     setLoading(true);
     try {
-      const response = await fetch('/api/admin/question-options', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          questionId: formData.questionId,
-          text: formData.text,
-          isCorrect: formData.isCorrect
-        })
-      });
+      // Frontend validation: Check if trying to set as correct when another option is already correct
+      if (formData.isCorrect) {
+        const questionId = editingOption ? editingOption.questionId : formData.questionId;
+        const existingCorrectOption = options.find(option => 
+          option.questionId === questionId && 
+          option.isCorrect && 
+          option.id !== (editingOption?.id || '')
+        );
+        
+        if (existingCorrectOption) {
+          setError('Another option is already marked as correct for this question. Only one correct answer is allowed per question.');
+          setLoading(false);
+          return;
+        }
+      }
 
-      if (response.ok) {
-        const option = await response.json();
+      let option;
+      if (editingOption) {
+        // Update existing option
+        console.log('Updating option with data:', formData);
+        const response = await fetch(`/api/admin/question-options/${editingOption.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: formData.text,
+            isCorrect: formData.isCorrect
+          })
+        });
+        
+        if (response.ok) {
+          option = await response.json();
+          console.log('Option update result:', option);
+        } else {
+          console.log('Update response status:', response.status);
+          console.log('Update response statusText:', response.statusText);
+          
+          let errorData;
+          let responseText;
+          try {
+            responseText = await response.text();
+            console.log('Update raw response:', responseText);
+            errorData = JSON.parse(responseText);
+            console.error('Option update failed:', errorData);
+          } catch (parseError) {
+            console.error('Failed to parse update error response:', parseError);
+            console.error('Update raw response text:', responseText);
+            throw new Error(`Failed to update option (HTTP ${response.status}): ${responseText || 'Unknown error'}`);
+          }
+          
+          throw new Error(errorData.error || `Failed to update option (HTTP ${response.status})`);
+        }
+      } else {
+        // Create new option
+        console.log('Creating option with data:', formData);
+        const response = await fetch('/api/admin/question-options', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            questionId: formData.questionId,
+            text: formData.text,
+            isCorrect: formData.isCorrect
+          })
+        });
+        
+        if (response.ok) {
+          option = await response.json();
+          console.log('Option creation result:', option);
+        } else {
+          console.log('Response status:', response.status);
+          console.log('Response statusText:', response.statusText);
+          
+          let errorData;
+          let responseText;
+          try {
+            responseText = await response.text();
+            console.log('Raw response:', responseText);
+            errorData = JSON.parse(responseText);
+            console.error('Option creation failed:', errorData);
+          } catch (parseError) {
+            console.error('Failed to parse error response:', parseError);
+            console.error('Raw response text:', responseText);
+            throw new Error(`Failed to create option (HTTP ${response.status}): ${responseText || 'Unknown error'}`);
+          }
+          
+          throw new Error(errorData.error || `Failed to create option (HTTP ${response.status})`);
+        }
+      }
+      
+      if (option) {
         setFormData({ questionId: "", text: "", isCorrect: false });
         setEditingOption(null);
         setViewMode('list');
         await loadInitialData();
-      } else {
-        const errorData = await response.json();
-        setError(errorData.error || "Failed to save option");
       }
-    } catch (error) {
-      console.error('Error creating question option:', error);
-      setError("Failed to save option");
+    } catch (error: any) {
+      console.error('Error processing option:', error);
+      setError(error.message || "Failed to save option");
     } finally {
       setLoading(false);
     }
@@ -135,9 +209,34 @@ export default function QuestionOptionAdminDashboard() {
     setViewMode('edit');
   };
 
-  const handleDelete = async (option: QuestionOption) => {
-    // Implement delete logic if needed
-    alert("Delete not implemented");
+  const handleDelete = async (option: any) => {
+    if (!confirm(`Are you sure you want to delete the option "${option.text}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+    
+    try {
+      console.log('Deleting option:', option.id);
+      const response = await fetch(`/api/admin/question-options/${option.id}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        console.log('Option deleted successfully');
+        await loadInitialData(); // Refresh the list
+      } else {
+        const errorData = await response.json();
+        console.error('Option deletion failed:', errorData);
+        setError(errorData.error || 'Failed to delete option');
+      }
+    } catch (error) {
+      console.error('Error deleting option:', error);
+      setError('Failed to delete option');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resetForm = () => {
@@ -187,7 +286,7 @@ export default function QuestionOptionAdminDashboard() {
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid gap-6 md:grid-cols-2">
                   <div>
-                    <Label htmlFor="questionId">Question *</Label>
+                    <Label htmlFor="questionId" className="text-black font-semibold text-sm mb-2 block">Question *</Label>
                     <select
                       id="questionId"
                       name="questionId"
@@ -195,6 +294,7 @@ export default function QuestionOptionAdminDashboard() {
                       onChange={e => setFormData({ ...formData, questionId: e.target.value })}
                       className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
                       required
+                      disabled={editingOption ? true : false}
                     >
                       <option value="">Select a question</option>
                       {questions.map((question) => (
@@ -203,9 +303,14 @@ export default function QuestionOptionAdminDashboard() {
                         </option>
                       ))}
                     </select>
+                    {editingOption && (
+                      <p className="text-sm text-gray-500 mt-1">
+                        Question cannot be changed when editing an option
+                      </p>
+                    )}
                   </div>
                   <div>
-                    <Label htmlFor="text">Option Text *</Label>
+                    <Label htmlFor="text" className="text-black font-semibold text-sm mb-2 block">Option Text *</Label>
                     <Input
                       id="text"
                       name="text"
@@ -213,19 +318,40 @@ export default function QuestionOptionAdminDashboard() {
                       onChange={e => setFormData({ ...formData, text: e.target.value })}
                       placeholder="Option text"
                       className="mt-2"
+                      style={{ backgroundColor: 'white', color: 'black' }}
                       required
                     />
                   </div>
                 </div>
                 <div>
-                  <Label htmlFor="isCorrect">Is Correct?</Label>
-                  <input
-                    id="isCorrect"
-                    name="isCorrect"
-                    type="checkbox"
-                    checked={formData.isCorrect}
-                    onChange={e => setFormData({ ...formData, isCorrect: e.target.checked })}
-                  />
+                  <div className="flex items-center space-x-3">
+                    <input
+                      id="isCorrect"
+                      name="isCorrect"
+                      type="checkbox"
+                      checked={formData.isCorrect}
+                      onChange={e => setFormData({ ...formData, isCorrect: e.target.checked })}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <Label htmlFor="isCorrect" className="text-black font-semibold text-sm cursor-pointer">Is Correct?</Label>
+                  </div>
+                  {(() => {
+                    const questionId = editingOption ? editingOption.questionId : formData.questionId;
+                    const existingCorrectOption = questionId ? options.find(option => 
+                      option.questionId === questionId && 
+                      option.isCorrect && 
+                      option.id !== (editingOption?.id || '')
+                    ) : null;
+                    
+                    return existingCorrectOption ? (
+                      <p className="text-sm text-amber-600 mt-1 flex items-center">
+                        <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        Warning: Another option is already marked as correct for this question
+                      </p>
+                    ) : null;
+                  })()}
                 </div>
                 <div className="flex justify-end space-x-3 pt-6">
                   <Button type="button" variant="outline" onClick={resetForm}>
@@ -298,6 +424,7 @@ export default function QuestionOptionAdminDashboard() {
                       value={search}
                       onChange={e => setSearch(e.target.value)}
                       className="pl-10 w-full sm:w-64"
+                      style={{ backgroundColor: 'white', color: 'black' }}
                     />
                   </div>
                   <select
