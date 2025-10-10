@@ -1,0 +1,360 @@
+'use client';
+
+import React, { useEffect, useState } from "react";
+import Link from "next/link";
+import { AuthButton } from "@/components/auth-button";
+import { hasEnvVars } from "@/lib/utils";
+import { EnvVarWarning } from "@/components/env-var-warning";
+import { motion } from 'framer-motion';
+import Image from 'next/image';
+
+interface Course {
+  id: string;
+  title: string;
+  description: string;
+  cover_image: string | null;
+  created_at: string;
+}
+
+export default function AllCoursesPage() {
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [enrolledCourses, setEnrolledCourses] = useState<Course[]>([]);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<'all' | 'enrolled' | 'available'>('all');
+
+  useEffect(() => {
+    async function fetchCourses() {
+      try {
+        const response = await fetch('/api/landing');
+        const data = await response.json();
+        setCourses(data.courses || []);
+        setEnrolledCourses(data.enrolledCourses || []);
+        setIsAuthenticated(data.isAuthenticated || false);
+      } catch (error) {
+        console.error('Error fetching courses:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchCourses();
+  }, []);
+
+  const getFilteredCourses = () => {
+    if (filter === 'enrolled') {
+      return enrolledCourses;
+    }
+    if (filter === 'available' && isAuthenticated) {
+      const enrolledIds = enrolledCourses.map(c => c.id);
+      return courses.filter(c => !enrolledIds.includes(c.id));
+    }
+    return courses;
+  };
+
+  const filteredCourses = getFilteredCourses();
+
+  return (
+    <main className="min-h-screen flex flex-col items-center relative overflow-hidden bg-white">
+      <div className="flex-1 w-full flex flex-col items-center relative z-10">
+        {/* Header Bar */}
+        <nav className="w-full flex justify-center h-20 shadow-md bg-gradient-to-r from-blue-600 via-blue-500 to-blue-700 sticky top-0 z-50 backdrop-blur-lg bg-opacity-95">
+          <div className="w-full max-w-7xl flex justify-between items-center px-6 text-sm">
+            <div className="flex items-center h-full">
+              <Link href="/" className="flex items-center gap-3 group h-full transition-transform hover:scale-105">
+                <span className="flex items-center gap-3 font-bold text-lg bg-transparent border-none shadow-none cursor-pointer select-none focus:outline-none h-full">
+                  <span className="flex items-center h-12 w-12 rounded-full bg-white p-2 shadow-lg group-hover:shadow-xl transition-shadow">
+                    <img src="/assets/favicon.png" alt="favicon" className="h-full w-full object-contain" />
+                  </span>
+                  <span className="flex flex-col leading-tight">
+                    <span className="font-extrabold text-2xl text-white tracking-wide">RobEn</span>
+                    <span className="font-semibold text-sm text-blue-100 tracking-wide">Learning Hub</span>
+                  </span>
+                </span>
+              </Link>
+            </div>
+            
+            <div className="flex items-center gap-6">
+              <Link href="/" className="text-white hover:text-blue-100 font-semibold transition-colors">
+                Home
+              </Link>
+              {!hasEnvVars ? <EnvVarWarning /> : <AuthButton />}
+            </div>
+          </div>
+        </nav>
+
+        {/* Main Content */}
+        <div className="w-full max-w-7xl px-6 py-12">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+          >
+            <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">
+              All <span className="text-blue-600">Courses</span>
+            </h1>
+            <p className="text-xl text-gray-600 mb-8">
+              {isAuthenticated 
+                ? 'Browse and manage your learning journey'
+                : 'Explore our comprehensive collection of courses'}
+            </p>
+
+            {/* Filter Buttons */}
+            {isAuthenticated && enrolledCourses.length > 0 && (
+              <div className="flex flex-wrap gap-4 mb-8">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setFilter('all')}
+                  className={`px-6 py-2 rounded-lg font-semibold transition-all duration-300 ${
+                    filter === 'all'
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'bg-white text-blue-600 border-2 border-blue-600'
+                  }`}
+                >
+                  All Courses ({courses.length})
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setFilter('enrolled')}
+                  className={`px-6 py-2 rounded-lg font-semibold transition-all duration-300 ${
+                    filter === 'enrolled'
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'bg-white text-blue-600 border-2 border-blue-600'
+                  }`}
+                >
+                  My Courses ({enrolledCourses.length})
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setFilter('available')}
+                  className={`px-6 py-2 rounded-lg font-semibold transition-all duration-300 ${
+                    filter === 'available'
+                      ? 'bg-blue-600 text-white shadow-lg'
+                      : 'bg-white text-blue-600 border-2 border-blue-600'
+                  }`}
+                >
+                  Available ({courses.length - enrolledCourses.length})
+                </motion.button>
+              </div>
+            )}
+          </motion.div>
+
+          {/* Courses Grid */}
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="animate-pulse">
+                  <div className="bg-gray-200 h-48 rounded-t-xl" />
+                  <div className="bg-white p-6 rounded-b-xl shadow-lg">
+                    <div className="h-6 bg-gray-200 rounded mb-4" />
+                    <div className="h-4 bg-gray-200 rounded mb-2" />
+                    <div className="h-4 bg-gray-200 rounded w-2/3" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : filteredCourses.length > 0 ? (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6 }}
+              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {filteredCourses.map((course) => (
+                <motion.div
+                  key={course.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  whileHover={{ y: -10, scale: 1.02 }}
+                  className="group"
+                >
+                  <div className="bg-white rounded-xl shadow-lg overflow-hidden transition-all duration-300 group-hover:shadow-2xl border border-gray-100 h-full flex flex-col">
+                    {/* Course Image */}
+                    <div className="relative h-48 bg-gradient-to-br from-blue-400 to-blue-600 overflow-hidden">
+                      {course.cover_image ? (
+                        <Image
+                          src={course.cover_image}
+                          alt={course.title}
+                          fill
+                          className="object-cover transition-transform duration-300 group-hover:scale-110"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <svg
+                            className="w-20 h-20 text-white opacity-50"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                            />
+                          </svg>
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                      
+                      {/* Enrollment Badge */}
+                      {isAuthenticated && enrolledCourses.some(c => c.id === course.id) && (
+                        <div className="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
+                          Enrolled
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Course Content */}
+                    <div className="p-6 flex-1 flex flex-col">
+                      <h3 className="text-xl font-bold text-gray-900 mb-3 line-clamp-2 group-hover:text-blue-600 transition-colors">
+                        {course.title}
+                      </h3>
+                      <p className="text-gray-600 mb-4 line-clamp-3 flex-1">
+                        {course.description}
+                      </p>
+                      <Link
+                        href={`/courses/${course.id}`}
+                        className="inline-flex items-center text-blue-600 font-semibold hover:text-blue-700 transition-colors mt-auto"
+                      >
+                        {isAuthenticated && enrolledCourses.some(c => c.id === course.id)
+                          ? 'Continue Learning'
+                          : 'Learn More'}
+                        <svg
+                          className="w-5 h-5 ml-2 transform group-hover:translate-x-1 transition-transform"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M9 5l7 7-7 7"
+                          />
+                        </svg>
+                      </Link>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </motion.div>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-xl text-gray-600">
+                {filter === 'enrolled'
+                  ? "You haven't enrolled in any courses yet."
+                  : filter === 'available'
+                  ? "No available courses at the moment. You've enrolled in all our courses!"
+                  : 'No courses available at the moment. Check back soon!'}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </main>
+  );
+}
+                <button className="w-full bg-gradient-to-r from-blue-800 via-blue-500 to-purple-600 hover:from-blue-900 hover:to-purple-700 text-white font-semibold py-4 px-6 rounded-lg shadow transition text-lg mb-2">Introduction to Programming</button>
+              </Link>
+              <div className="bg-white/60 text-black rounded p-3 mb-4 text-sm">
+                Learn the basics of programming with hands-on modules in Python, C++, JavaScript, and Java. Perfect for beginners!
+              </div>
+            </div>
+            <div>
+              <Link href="/courses/web-dev-bootcamp">
+                <button className="w-full bg-gradient-to-r from-blue-800 via-blue-500 to-purple-700 text-white font-semibold py-4 px-6 rounded-lg shadow transition text-lg mb-2">Web Development Bootcamp</button>
+              </Link>
+              <div className="bg-white/10 text-black rounded p-3 mb-4 text-sm">
+                Build modern websites from scratch: HTML, CSS, JavaScript, and React. No prior experience required.
+              </div>
+            </div>
+            <div>
+              <Link href="/courses/data-science-essentials">
+                <button className="w-full bg-gradient-to-r from-blue-800 via-blue-500 to-purple-600 hover:from-blue-900 hover:to-purple-700 text-white font-semibold py-4 px-6 rounded-lg shadow transition text-lg mb-2">Data Science Essentials</button>
+              </Link>
+              <div className="bg-white/10 text-black rounded p-3 mb-4 text-sm">
+                Dive into data analysis, visualization, and Python tools like Pandas and Numpy. Start your data journey here.
+              </div>
+            </div>
+            <div>
+              <Link href="/courses/ai-for-beginners">
+                <button className="w-full bg-gradient-to-r from-blue-800 via-blue-500 to-purple-600 hover:from-blue-900 hover:to-purple-700 text-white font-semibold py-4 px-6 rounded-lg shadow transition text-lg mb-2">AI for Beginners</button>
+              </Link>
+              <div className="bg-white/10 text-black rounded p-3 mb-4 text-sm">
+                Understand the fundamentals of Artificial Intelligence and Machine Learning with beginner-friendly projects.
+              </div>
+            </div>
+            <div>
+              <Link href="/courses/advanced-python">
+                <button className="w-full bg-gradient-to-r from-blue-800 via-blue-500 to-purple-600 hover:from-blue-900 hover:to-purple-700 text-white font-semibold py-4 px-6 rounded-lg shadow transition text-lg mb-2">Advanced Python</button>
+              </Link>
+              <div className="bg-white/10 text-black rounded p-3 mb-4 text-sm">
+                Master advanced Python concepts: OOP, async programming, and real-world applications.
+              </div>
+            </div>
+            <div>
+              <Link href="/courses/ui-ux-design">
+                <button className="w-full bg-gradient-to-r from-blue-800 via-blue-500 to-purple-600 hover:from-blue-900 hover:to-purple-700 text-white font-semibold py-4 px-6 rounded-lg shadow transition text-lg mb-2">UI/UX Design</button>
+              </Link>
+              <div className="bg-white/10 text-black rounded p-3 mb-4 text-sm">
+                Explore the world of user interface and experience design. Learn Figma, design systems, and more.
+              </div>
+            </div>
+            {/* New Courses */}
+            <div>
+              <Link href="/courses/mobile-app-development">
+                <button className="w-full bg-gradient-to-r from-blue-800 via-blue-500 to-purple-600 hover:from-blue-900 hover:to-purple-700 text-white font-semibold py-4 px-6 rounded-lg shadow transition text-lg mb-2">Mobile App Development</button>
+              </Link>
+              <div className="bg-white/10 text-black rounded p-3 mb-4 text-sm">
+                Create mobile apps for Android and iOS using React Native and Flutter. Learn to deploy and publish your own apps.
+              </div>
+            </div>
+            <div>
+              <Link href="/courses/cybersecurity-basics">
+                <button className="w-full bg-gradient-to-r from-blue-800 via-blue-500 to-purple-600 hover:from-blue-900 hover:to-purple-700 text-white font-semibold py-4 px-6 rounded-lg shadow transition text-lg mb-2">Cybersecurity Basics</button>
+              </Link>
+              <div className="bg-white/10 text-black rounded p-3 mb-4 text-sm">
+                Understand the essentials of cybersecurity, ethical hacking, and how to protect yourself and organizations online.
+              </div>
+            </div>
+            <div>
+              <Link href="/courses/cloud-computing">
+                <button className="w-full bg-gradient-to-r from-blue-800 via-blue-500 to-purple-600 hover:from-blue-900 hover:to-purple-700 text-white font-semibold py-4 px-6 rounded-lg shadow transition text-lg mb-2">Cloud Computing</button>
+              </Link>
+              <div className="bg-white/10 text-black rounded p-3 mb-4 text-sm">
+                Learn about AWS, Azure, and Google Cloud. Deploy scalable applications and understand cloud architecture.
+              </div>
+            </div>
+            <div>
+              <Link href="/courses/blockchain-fundamentals">
+                <button className="w-full bg-gradient-to-r from-blue-800 via-blue-500 to-purple-600 hover:from-blue-900 hover:to-purple-700 text-white font-semibold py-4 px-6 rounded-lg shadow transition text-lg mb-2">Blockchain Fundamentals</button>
+              </Link>
+              <div className="bg-white/10 text-black rounded p-3 mb-4 text-sm">
+                Discover how blockchain works, smart contracts, and the basics of cryptocurrencies and decentralized apps.
+              </div>
+            </div>
+            <div>
+              <Link href="/courses/game-development">
+                <button className="w-full bg-gradient-to-r from-blue-800 via-blue-500 to-purple-600 hover:from-blue-900 hover:to-purple-700 text-white font-semibold py-4 px-6 rounded-lg shadow transition text-lg mb-2">Game Development</button>
+              </Link>
+              <div className="bg-white/10 text-black rounded p-3 mb-4 text-sm">
+                Design and build games using Unity and Unreal Engine. Learn game mechanics, graphics, and publishing.
+              </div>
+            </div>
+            <div>
+              <Link href="/courses/digital-marketing">
+                <button className="w-full bg-gradient-to-r from-blue-800 via-blue-500 to-purple-600 hover:from-blue-900 hover:to-purple-700 text-white font-semibold py-4 px-6 rounded-lg shadow transition text-lg mb-2">Digital Marketing</button>
+              </Link>
+              <div className="bg-white/10 text-black rounded p-3 mb-4 text-sm">
+                Master SEO, social media, and online advertising. Grow your brand and reach new audiences effectively.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}

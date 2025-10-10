@@ -1,0 +1,207 @@
+'use client';
+
+import { motion } from 'framer-motion';
+import { useEffect, useState } from 'react';
+import Image from 'next/image';
+
+interface Instructor {
+  id: string;
+  full_name: string;
+  email: string;
+  avatar_url: string | null;
+  bio: string | null;
+}
+
+export function DynamicInstructorsSection() {
+  const [instructors, setInstructors] = useState<Instructor[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchInstructors() {
+      try {
+        const response = await fetch('/api/landing');
+        const data = await response.json();
+        setInstructors(data.instructors || []);
+      } catch (error) {
+        console.error('Error fetching instructors:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchInstructors();
+  }, []);
+
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.15,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, scale: 0.8 },
+    visible: {
+      opacity: 1,
+      scale: 1,
+      transition: {
+        duration: 0.5,
+      },
+    },
+  };
+
+  if (loading) {
+    return (
+      <section className="w-full py-20 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">
+              Loading Instructors...
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="animate-pulse">
+                <div className="bg-white p-8 rounded-xl shadow-lg">
+                  <div className="w-32 h-32 bg-gray-200 rounded-full mx-auto mb-4" />
+                  <div className="h-6 bg-gray-200 rounded mb-3" />
+                  <div className="h-4 bg-gray-200 rounded" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
+  return (
+    <section className="w-full py-20 bg-gradient-to-b from-blue-50 to-white">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.8 }}
+          className="text-center mb-16"
+        >
+          <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">
+            Meet Our <span className="text-blue-600">Expert Instructors</span>
+          </h2>
+          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+            Learn from industry professionals who are passionate about sharing their knowledge
+          </p>
+        </motion.div>
+
+        {instructors.length > 0 ? (
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-100px" }}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8"
+          >
+            {instructors.map((instructor) => (
+              <motion.div
+                key={instructor.id}
+                variants={itemVariants}
+                whileHover={{ y: -10, scale: 1.03 }}
+                className="group"
+              >
+                <div className="bg-white rounded-xl shadow-lg p-8 text-center transition-all duration-300 group-hover:shadow-2xl border border-gray-100">
+                  {/* Avatar */}
+                  <div className="relative mb-6">
+                    {instructor.avatar_url ? (
+                      <div className="relative w-32 h-32 mx-auto">
+                        <Image
+                          src={instructor.avatar_url}
+                          alt={instructor.full_name}
+                          fill
+                          className="rounded-full object-cover border-4 border-blue-200 group-hover:border-blue-400 transition-colors"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-32 h-32 mx-auto rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center border-4 border-blue-200 group-hover:border-blue-400 transition-all">
+                        <span className="text-4xl font-bold text-white">
+                          {getInitials(instructor.full_name)}
+                        </span>
+                      </div>
+                    )}
+                    <motion.div
+                      className="absolute -bottom-2 -right-2 w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center shadow-lg"
+                      whileHover={{ rotate: 360 }}
+                      transition={{ duration: 0.5 }}
+                    >
+                      <svg
+                        className="w-6 h-6 text-white"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                    </motion.div>
+                  </div>
+
+                  {/* Info */}
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
+                    {instructor.full_name}
+                  </h3>
+                  
+                  {instructor.bio ? (
+                    <p className="text-gray-600 mb-4 line-clamp-3">
+                      {instructor.bio}
+                    </p>
+                  ) : (
+                    <p className="text-gray-600 mb-4">
+                      Expert instructor at RobEn Learning Hub
+                    </p>
+                  )}
+
+                  {/* Stats */}
+                  <div className="flex justify-center gap-6 mt-6 pt-6 border-t border-gray-200">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-blue-600">10+</p>
+                      <p className="text-sm text-gray-600">Courses</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-blue-600">500+</p>
+                      <p className="text-sm text-gray-600">Students</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-blue-600">4.8</p>
+                      <p className="text-sm text-gray-600">Rating</p>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </motion.div>
+        ) : (
+          <div className="text-center py-12">
+            <p className="text-xl text-gray-600">
+              Our instructors will be announced soon!
+            </p>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
