@@ -147,3 +147,29 @@ npm install package-name
 npm outdated
 ```
 
+
+## Course Player (Coursera-like)
+
+A Coursera-style learning experience is available under `/courses/[courseId]/learn`:
+
+- Sidebar with course outline and completion ticks
+- Main area renders Video, Article, and Quiz lessons
+- Progress via "Mark as Complete", Previous/Next navigation
+
+APIs used:
+
+- `GET /api/courses/[courseId]` returns course, modules, and lessons with `content_type` and optional `quizId`.
+- `POST /api/lessons/[lessonId]/progress` marks a lesson as completed.
+- `GET /api/quizzes/[quizId]` provides quiz with questions and options for the renderer.
+
+Key components:
+
+- `src/components/course-player/LessonContentRenderer.tsx`
+- `src/components/course-player/QuizRenderer.tsx`
+
+Try it:
+
+1. Open a course page at `/courses/[courseId]` and enroll.
+2. Click "Start/Continue" to go to `/courses/[courseId]/learn`.
+3. Choose a quiz item, answer, and submit to see scoring and lesson completion.
+

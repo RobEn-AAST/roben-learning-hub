@@ -58,7 +58,16 @@ export async function GET(
           articles (
             id,
             title,
-            reading_time_minutes
+            reading_time_minutes,
+            content
+          ),
+          quizzes (
+            id
+          ),
+          projects (
+            id,
+            submission_instructions,
+            external_link
           )
         )
       `)
@@ -69,27 +78,77 @@ export async function GET(
       console.error('Error fetching modules:', modulesError);
     }
 
+    // Build a lessonId list for quiz lessons to fetch quizzes separately (more reliable with RLS)
+    const quizLessonIds: string[] = [];
+    (modules || []).forEach((m: any) => {
+      (m.lessons || []).forEach((l: any) => {
+        if (l.lesson_type === 'quiz') quizLessonIds.push(l.id);
+      });
+    });
+
+    let quizzesByLesson: Record<string, string> = {};
+    if (quizLessonIds.length > 0) {
+      const { data: quizzesList } = await supabase
+        .from('quizzes')
+        .select('id, lesson_id')
+        .in('lesson_id', quizLessonIds);
+      (quizzesList || []).forEach((q: any) => {
+        // one quiz per lesson is enforced
+        quizzesByLesson[q.lesson_id] = q.id;
+      });
+    }
+
     // Transform and sort lessons within each module
     const sortedModules = modules?.map(module => ({
       ...module,
       order_index: module.position,
       lessons: module.lessons?.sort((a: any, b: any) => a.position - b.position).map((lesson: any) => {
-        // Get video or article data
-        const video = lesson.videos?.[0];
-        const article = lesson.articles?.[0];
-        
-        return {
+        // Handle videos - could be array or single object
+        const video = Array.isArray(lesson.videos) ? lesson.videos[0] : lesson.videos;
+        const article = Array.isArray(lesson.articles) ? lesson.articles[0] : lesson.articles;
+        const quiz = Array.isArray(lesson.quizzes) ? lesson.quizzes[0] : lesson.quizzes;
+        const project = Array.isArray(lesson.projects) ? lesson.projects[0] : lesson.projects;
+
+        const base: any = {
           id: lesson.id,
           title: lesson.title,
           description: '', // Not in schema
-          content_type: lesson.lesson_type === 'video' ? 'video' : 'article',
-          content_url: video?.url || video?.provider_video_id ? 
-            (video.provider === 'youtube' ? `https://www.youtube.com/watch?v=${video.provider_video_id}` : video.url) : 
-            '',
-          duration: video?.duration_seconds ? Math.ceil(video.duration_seconds / 60) : (article?.reading_time_minutes || 0),
+          content_type: lesson.lesson_type,
+          content_url: '',
+          duration: 0,
           order_index: lesson.position,
-          is_preview: false // Not in schema
+          is_preview: false,
         };
+
+        if (lesson.lesson_type === 'video') {
+          // Construct the video URL properly based on provider
+          let videoUrl = '';
+          if (video?.url) {
+            // If we have a direct URL, use it
+            videoUrl = video.url;
+          } else if (video?.provider === 'youtube' && video?.provider_video_id) {
+            // For YouTube videos, construct the URL from the provider_video_id
+            videoUrl = `https://www.youtube.com/embed/${video.provider_video_id}`;
+          }
+          
+          // Set the content URL and duration
+          base.content_url = videoUrl;
+          base.duration = video?.duration_seconds ? Math.ceil(video.duration_seconds / 60) : 0;
+        }
+        if (lesson.lesson_type === 'article') {
+          base.content_url = base.content_url || '';
+          base.duration = article?.reading_time_minutes || 0;
+          base.articleContent = article?.content || null;
+        }
+        if (lesson.lesson_type === 'quiz') {
+          base.quizId = quiz?.id || quizzesByLesson[lesson.id] || null;
+        }
+        if (lesson.lesson_type === 'project') {
+          base.projectInstructions = project?.submission_instructions || null;
+          base.projectExternalLink = project?.external_link || null;
+        }
+
+        return base;
       }) || []
     })) || [];
 

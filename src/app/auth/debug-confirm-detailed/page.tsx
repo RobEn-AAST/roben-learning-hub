@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,7 +14,7 @@ interface DebugResult {
   error?: string;
 }
 
-export default function DebugConfirmPage() {
+function DebugConfirmInner() {
   const [results, setResults] = useState<DebugResult[]>([]);
   const [loading, setLoading] = useState(false);
   const searchParams = useSearchParams();
@@ -184,5 +184,13 @@ export default function DebugConfirmPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function DebugConfirmPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading…</div>}>
+      <DebugConfirmInner />
+    </Suspense>
   );
 }

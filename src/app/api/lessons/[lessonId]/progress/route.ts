@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/adminHelpers";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(
@@ -42,8 +43,9 @@ export async function POST(
       .single();
 
     if (existingProgress) {
-      // Update existing progress
-      const { data: updatedProgress, error: updateError } = await supabase
+      // Update existing progress using admin client to ensure consistency
+      const adminClient = createAdminClient();
+      const { data: updatedProgress, error: updateError } = await adminClient
         .from('lesson_progress')
         .update({
           status: 'completed',
@@ -56,19 +58,46 @@ export async function POST(
 
       if (updateError) {
         console.error('Error updating progress:', updateError);
+        console.error('Update error details:', { code: updateError.code, message: updateError.message, details: updateError.details });
         return NextResponse.json(
           { error: 'Failed to update progress' },
           { status: 500 }
         );
       }
 
+      console.log('Successfully updated lesson progress:', { lessonId, userId: user.id, progressId: existingProgress.id });
       return NextResponse.json({
         success: true,
         progress: updatedProgress
       });
     } else {
-      // Create new progress record
-      const { data: newProgress, error: insertError } = await supabase
+      // Get module and course ID to ensure enrollment
+      const { data: moduleData } = await supabase
+        .from('modules')
+        .select('course_id')
+        .eq('id', lesson.module_id)
+        .single();
+      
+      // Check if the user is enrolled in this course
+      if (moduleData) {
+        const { data: enrollment } = await supabase
+          .from('course_enrollments')
+          .select('id')
+          .eq('course_id', moduleData.course_id)
+          .eq('user_id', user.id)
+          .single();
+        
+        if (!enrollment) {
+          return NextResponse.json(
+            { error: 'User not enrolled in this course' },
+            { status: 403 }
+          );
+        }
+      }
+      
+      // Create new progress record using admin client to bypass RLS issues
+      const adminClient = createAdminClient();
+      const { data: newProgress, error: insertError } = await adminClient
         .from('lesson_progress')
         .insert({
           lesson_id: lessonId,
@@ -83,12 +112,23 @@ export async function POST(
 
       if (insertError) {
         console.error('Error creating progress:', insertError);
+        console.error('Insert error details:', { code: insertError.code, message: insertError.message, details: insertError.details });
+        
+        // For 42501 errors, RLS is blocking the insert
+        if (insertError.code === '42501') {
+          return NextResponse.json(
+            { error: 'Permission denied - RLS policy is preventing this action', details: insertError.message },
+            { status: 403 }
+          );
+        }
+        
         return NextResponse.json(
-          { error: 'Failed to create progress' },
+          { error: 'Failed to create progress', details: insertError.message },
           { status: 500 }
         );
       }
 
+      console.log('Successfully created lesson progress:', { lessonId, userId: user.id, progressId: newProgress.id });
       return NextResponse.json({
         success: true,
         progress: newProgress

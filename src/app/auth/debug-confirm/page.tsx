@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
-export default function DebugConfirmPage() {
+function DebugConfirmInner() {
   const [urlParams, setUrlParams] = useState<Record<string, string>>({});
   const searchParams = useSearchParams();
 
@@ -70,5 +70,13 @@ export default function DebugConfirmPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function DebugConfirmPage() {
+  return (
+    <Suspense fallback={<div className="p-6">Loading…</div>}>
+      <DebugConfirmInner />
+    </Suspense>
   );
 }
