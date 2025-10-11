@@ -67,6 +67,7 @@ export default function CourseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [enrolling, setEnrolling] = useState(false);
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
   useEffect(() => {
     if (courseId) {
@@ -77,12 +78,9 @@ export default function CourseDetailPage() {
   const fetchCourseData = async () => {
     try {
       const response = await fetch(`/api/courses/${courseId}`);
-      if (response.status === 401) {
-        router.push('/auth/login?redirect=/courses/' + courseId);
-        return;
-      }
       const data = await response.json();
       setCourseData(data);
+      setIsAuthenticated(data.isAuthenticated || false);
       // Expand first module by default
       if (data.modules.length > 0) {
         setExpandedModules(new Set([data.modules[0].id]));
@@ -248,39 +246,53 @@ export default function CourseDetailPage() {
                   </div>
                 )}
                 
-                {isEnrolled ? (
-                  <>
-                    {progress && (
-                      <div className="mb-4">
-                        <div className="flex justify-between text-sm mb-2">
-                          <span>Your Progress</span>
-                          <span className="font-semibold">{progress.percentage}%</span>
+                {isAuthenticated ? (
+                  isEnrolled ? (
+                    <>
+                      {progress && (
+                        <div className="mb-4">
+                          <div className="flex justify-between text-sm mb-2">
+                            <span>Your Progress</span>
+                            <span className="font-semibold">{progress.percentage}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div 
+                              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                              style={{ width: `${progress.percentage}%` }}
+                            />
+                          </div>
+                          <p className="text-xs text-gray-600 mt-1">
+                            {progress.completedLessons} of {progress.totalLessons} lessons completed
+                          </p>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div 
-                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                            style={{ width: `${progress.percentage}%` }}
-                          />
-                        </div>
-                        <p className="text-xs text-gray-600 mt-1">
-                          {progress.completedLessons} of {progress.totalLessons} lessons completed
-                        </p>
-                      </div>
-                    )}
-                    <Button asChild className="w-full bg-blue-600 hover:bg-blue-700 text-white">
-                      <Link href={`/courses/${courseId}/learn`}>
-                        {progress && progress.completedLessons > 0 ? 'Continue Learning' : 'Start Course'}
-                      </Link>
+                      )}
+                      <Button asChild className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+                        <Link href={`/courses/${courseId}/learn`}>
+                          {progress && progress.completedLessons > 0 ? 'Continue Learning' : 'Start Course'}
+                        </Link>
+                      </Button>
+                    </>
+                  ) : (
+                    <Button 
+                      onClick={handleEnroll} 
+                      disabled={enrolling}
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      {enrolling ? 'Enrolling...' : 'Enroll Now'}
                     </Button>
-                  </>
+                  )
                 ) : (
-                  <Button 
-                    onClick={handleEnroll} 
-                    disabled={enrolling}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                  >
-                    {enrolling ? 'Enrolling...' : 'Enroll Now'}
-                  </Button>
+                  <div className="text-center">
+                    <p className="text-gray-600 mb-4">Sign up to enroll in this course and start learning!</p>
+                    <div className="space-y-2">
+                      <Button asChild className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+                        <Link href="/auth/sign-up">Sign Up to Enroll</Link>
+                      </Button>
+                      <Button asChild variant="outline" className="w-full">
+                        <Link href="/auth/login">Already have an account? Sign In</Link>
+                      </Button>
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
@@ -345,6 +357,9 @@ export default function CourseDetailPage() {
                           <p className="font-medium text-gray-900">{lesson.title}</p>
                           {lesson.description && (
                             <p className="text-sm text-gray-600">{lesson.description}</p>
+                          )}
+                          {!isAuthenticated && !lesson.is_preview && (
+                            <p className="text-xs text-blue-600 mt-1">🔒 Sign up to access this lesson</p>
                           )}
                         </div>
                       </div>

@@ -200,25 +200,32 @@ export function DynamicCoursesSection() {
                       <p className="text-gray-600 mb-4 line-clamp-3">
                         {course.description}
                       </p>
-                      <Link
-                        href={`/courses/${course.id}`}
-                        className="inline-flex items-center text-blue-600 font-semibold hover:text-blue-700 transition-colors"
-                      >
-                        Learn More
-                        <svg
-                          className="w-5 h-5 ml-2 transform group-hover:translate-x-1 transition-transform"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
+                      <div className="flex flex-col gap-2">
+                        <Link
+                          href={`/courses/${course.id}`}
+                          className="inline-flex items-center text-blue-600 font-semibold hover:text-blue-700 transition-colors"
                         >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M9 5l7 7-7 7"
-                          />
-                        </svg>
-                      </Link>
+                          {isAuthenticated ? 'Learn More' : 'Preview Course'}
+                          <svg
+                            className="w-5 h-5 ml-2 transform group-hover:translate-x-1 transition-transform"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 5l7 7-7 7"
+                            />
+                          </svg>
+                        </Link>
+                        {!isAuthenticated && (
+                          <p className="text-sm text-gray-500">
+                            <Link href="/auth/sign-up" className="text-blue-600 hover:text-blue-700 font-medium">Sign up</Link> to enroll in this course
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </motion.div>

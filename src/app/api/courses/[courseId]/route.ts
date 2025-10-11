@@ -11,13 +11,7 @@ export async function GET(
 
     // Check authentication
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
+    const isAuthenticated = !authError && !!user;
 
     // Fetch course details
     const { data: course, error: courseError } = await supabase
@@ -152,13 +146,17 @@ export async function GET(
       }) || []
     })) || [];
 
-    // Check if user is enrolled
-    const { data: enrollment } = await supabase
-      .from('course_enrollments')
-      .select('id, enrolled_at, role')
-      .eq('course_id', courseId)
-      .eq('user_id', user.id)
-      .single();
+    // Check if user is enrolled (only for authenticated users)
+    let enrollment = null;
+    if (isAuthenticated && user) {
+      const { data: enrollmentData } = await supabase
+        .from('course_enrollments')
+        .select('id, enrolled_at, role')
+        .eq('course_id', courseId)
+        .eq('user_id', user.id)
+        .single();
+      enrollment = enrollmentData;
+    }
 
     // Fetch instructor details from the first lesson's instructor
     let instructor = null;
@@ -185,9 +183,9 @@ export async function GET(
       .select('*', { count: 'exact', head: true })
       .eq('course_id', courseId);
 
-    // If enrolled, get progress
+    // If enrolled, get progress (only for authenticated users)
     let progress = null;
-    if (enrollment) {
+    if (enrollment && isAuthenticated && user) {
       const { data: completedLessons } = await supabase
         .from('lesson_progress')
         .select('lesson_id')
@@ -208,6 +206,7 @@ export async function GET(
       course,
       modules: sortedModules,
       isEnrolled: !!enrollment,
+      isAuthenticated,
       enrollment,
       instructor: instructor || null,
       stats: {

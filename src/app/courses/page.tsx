@@ -27,12 +27,6 @@ export default function AllCoursesPage() {
         const response = await fetch('/api/landing');
         const data = await response.json();
         
-        // Redirect to login if not authenticated
-        if (!data.isAuthenticated) {
-          window.location.href = '/auth/login?redirect=/courses';
-          return;
-        }
-        
         setCourses(data.courses || []);
         setEnrolledCourses(data.enrolledCourses || []);
         setIsAuthenticated(data.isAuthenticated || false);
@@ -149,10 +143,22 @@ export default function AllCoursesPage() {
                     <div className="p-6 flex-1 flex flex-col">
                       <h3 className="text-xl font-bold text-gray-900 mb-3 line-clamp-2 group-hover:text-blue-600 transition-colors">{course.title}</h3>
                       <p className="text-gray-600 mb-4 line-clamp-3 flex-1">{course.description}</p>
-                      <Link href={'/courses/' + course.id} className="inline-flex items-center text-blue-600 font-semibold hover:text-blue-700 transition-colors mt-auto">
-                        {isAuthenticated && enrolledCourses.some(c => c.id === course.id) ? 'Continue Learning' : 'Learn More'}
-                        <svg className="w-5 h-5 ml-2 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                      </Link>
+                      {isAuthenticated ? (
+                        <Link href={'/courses/' + course.id} className="inline-flex items-center text-blue-600 font-semibold hover:text-blue-700 transition-colors mt-auto">
+                          {enrolledCourses.some(c => c.id === course.id) ? 'Continue Learning' : 'View Course'}
+                          <svg className="w-5 h-5 ml-2 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                        </Link>
+                      ) : (
+                        <div className="mt-auto">
+                          <Link href={'/courses/' + course.id} className="inline-flex items-center text-blue-600 font-semibold hover:text-blue-700 transition-colors mb-3">
+                            Preview Course
+                            <svg className="w-5 h-5 ml-2 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                          </Link>
+                          <div className="text-sm text-gray-500">
+                            <Link href="/auth/sign-up" className="text-blue-600 hover:text-blue-700 font-medium">Sign up</Link> to enroll in this course
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </motion.div>
