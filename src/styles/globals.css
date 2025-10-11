@@ -137,4 +137,78 @@
   ::-webkit-scrollbar-thumb:hover {
     background: #2563eb;
   }
+
+  /* Enhanced Auth Form Animations */
+  .auth-tab-transition {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .auth-form-enter {
+    opacity: 0;
+    transform: translateX(-10px);
+    animation: authFormEnter 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+
+  @keyframes authFormEnter {
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  /* Password Strength Indicators */
+  .password-strength-weak {
+    background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+  }
+
+  .password-strength-medium {
+    background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
+  }
+
+  .password-strength-strong {
+    background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+  }
+
+  /* Custom Input Focus States */
+  .auth-input {
+    transition: all 0.2s ease-in-out;
+  }
+
+  .auth-input:focus {
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    border-color: #3b82f6;
+  }
+
+  /* Floating Labels Effect */
+  .floating-label {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    transition: all 0.2s ease-in-out;
+    pointer-events: none;
+    color: #6b7280;
+  }
+
+  .floating-label-active {
+    top: -8px;
+    font-size: 0.75rem;
+    color: #3b82f6;
+    background: white;
+    padding: 0 4px;
+  }
+
+  /* Glass morphism effect for auth container */
+  .auth-glass {
+    backdrop-filter: blur(20px);
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  }
+
+  /* Social button hover effects */
+  .social-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
 }

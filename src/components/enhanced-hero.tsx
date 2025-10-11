@@ -142,7 +142,7 @@ export function EnhancedHero() {
                 Explore Courses
               </motion.a>
               <motion.a
-                href="/auth/sign-up"
+                href="/auth?mode=signup"
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
                 className="bg-white text-blue-600 border-2 border-blue-600 px-8 py-4 rounded-lg font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300"

@@ -28,7 +28,7 @@ export default async function AuthCallbackPage() {
       }
     } else {
       // No session, redirect to login
-      redirect('/auth/login');
+      redirect('/auth?mode=login');
     }
   } catch (error) {
     console.error('Auth callback error:', error);
@@ -45,7 +45,7 @@ export default async function AuthCallbackPage() {
             </p>
             <div className="flex gap-2">
               <Button asChild className="flex-1">
-                <Link href="/auth/login">Sign In</Link>
+                <Link href="/auth?mode=login">Sign In</Link>
               </Button>
               <Button asChild variant="outline" className="flex-1">
                 <Link href="/">Home</Link>

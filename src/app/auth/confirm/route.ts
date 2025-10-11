@@ -62,9 +62,40 @@ export async function GET(request: NextRequest) {
         
         console.log('Profile check result:', { profile, profileError });
         
-        // If profile doesn't exist or full_name is empty, redirect to complete profile
-        if (profileError || !profile || !profile.full_name || profile.full_name.trim() === '') {
-          console.log('Redirecting to complete profile');
+        // If profile doesn't exist, create it with user metadata if available
+        if (profileError && profileError.code === 'PGRST116') {
+          console.log('Profile does not exist, creating from user metadata');
+          
+          // Try to get name from user metadata
+          const fullName = user.user_metadata?.full_name || 
+                          (user.user_metadata?.first_name && user.user_metadata?.last_name 
+                            ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`.trim() 
+                            : '');
+          
+          if (fullName) {
+            // Create profile with metadata
+            const { error: createError } = await supabase
+              .from('profiles')
+              .insert({
+                id: user.id,
+                full_name: fullName,
+                email: user.email,
+                updated_at: new Date().toISOString(),
+              });
+            
+            if (createError) {
+              console.error('Profile creation error:', createError);
+              redirect('/complete-profile');
+            } else {
+              console.log('Profile created successfully, redirecting to:', next);
+              redirect(next === '/complete-profile' ? '/' : next);
+            }
+          } else {
+            console.log('No name in metadata, redirecting to complete profile');
+            redirect('/complete-profile');
+          }
+        } else if (!profile || !profile.full_name || profile.full_name.trim() === '') {
+          console.log('Profile incomplete, redirecting to complete profile');
           redirect('/complete-profile');
         } else {
           console.log('Profile complete, redirecting to:', next);
@@ -74,7 +105,7 @@ export async function GET(request: NextRequest) {
       } else {
         console.log('No user found after verification, redirecting to login');
         // No user found, redirect to login
-        redirect('/auth/login');
+        redirect('/auth?mode=login');
       }
     } else {
       console.error('Email verification error details:', {

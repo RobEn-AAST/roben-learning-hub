@@ -1,7 +1,31 @@
-import { ForgotPasswordForm } from "@/components/forgot-password-form";
-import { RobenLogo } from "@/components/roben-logo";
+"use client";
 
-export default function ForgotPasswordPage() {
+import { EnhancedAuthForm } from "@/components/enhanced-auth-form";
+import { RobenLogo } from "@/components/roben-logo";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+
+export default function AuthPage() {
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    // Check URL to determine initial mode
+    const mode = searchParams.get('mode');
+    if (mode === 'signup') {
+      setAuthMode('signup');
+    }
+  }, [searchParams]);
+
+  const handleModeChange = (mode: 'login' | 'signup') => {
+    setAuthMode(mode);
+    // Update URL without causing a full page reload
+    const url = new URL(window.location.href);
+    url.searchParams.set('mode', mode);
+    window.history.replaceState({}, '', url.toString());
+  };
+
   return (
     <main className="min-h-screen flex flex-col items-center relative overflow-hidden bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       {/* Background Pattern */}
@@ -28,13 +52,16 @@ export default function ForgotPasswordPage() {
               RobEn Learning Hub
             </h1>
             <p className="text-gray-600">
-              Reset your password to regain access to your account.
+              Your gateway to professional development and learning
             </p>
           </div>
 
-          {/* Form Container */}
+          {/* Auth Form Container */}
           <div className="auth-glass rounded-2xl p-8 auth-form-enter">
-            <ForgotPasswordForm />
+            <EnhancedAuthForm 
+              mode={authMode} 
+              onModeChange={handleModeChange}
+            />
           </div>
 
           {/* Footer */}
