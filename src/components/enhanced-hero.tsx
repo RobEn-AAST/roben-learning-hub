@@ -3,6 +3,52 @@
 import { motion } from 'framer-motion';
 import Image from 'next/image';
 
+function StaticLogo() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 50 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.8, ease: "easeOut" }}
+      className="flex justify-center lg:justify-end"
+    >
+      <motion.div
+        animate={{
+          y: [0, -20, 0],
+        }}
+        transition={{
+          duration: 3,
+          repeat: Infinity,
+          ease: "easeInOut",
+        }}
+        className="relative w-64 h-64 sm:w-80 sm:h-80"
+      >
+        {/* Animated background glow */}
+        <motion.div 
+          className="absolute inset-0 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full blur-3xl opacity-30"
+          animate={{
+            scale: [1, 1.1, 1],
+            opacity: [0.3, 0.5, 0.3],
+          }}
+          transition={{
+            duration: 4,
+            repeat: Infinity,
+            ease: "easeInOut",
+          }}
+        />
+        
+        <Image
+          src="/assets/roben-logo.png"
+          alt="RobEn Logo"
+          width={320}
+          height={320}
+          className="relative z-10 drop-shadow-2xl"
+          priority
+        />
+      </motion.div>
+    </motion.div>
+  );
+}
+
 export function EnhancedHero() {
   return (
     <div className="relative w-full min-h-[80vh] flex items-center justify-center overflow-hidden bg-gradient-to-br from-white via-blue-50 to-blue-100">
@@ -107,42 +153,7 @@ export function EnhancedHero() {
           </motion.div>
 
           {/* Right side - Logo */}
-          <motion.div
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
-            className="flex justify-center lg:justify-end"
-          >
-            <motion.div
-              animate={{
-                y: [0, -20, 0],
-                rotateY: [0, 360],
-              }}
-              transition={{
-                y: {
-                  duration: 3,
-                  repeat: Infinity,
-                  ease: "easeInOut",
-                },
-                rotateY: {
-                  duration: 10,
-                  repeat: Infinity,
-                  ease: "linear",
-                },
-              }}
-              className="relative w-64 h-64 sm:w-80 sm:h-80"
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full blur-3xl opacity-30 animate-pulse" />
-              <Image
-                src="/assets/roben-logo.png"
-                alt="RobEn Logo"
-                width={320}
-                height={320}
-                className="relative z-10 drop-shadow-2xl"
-                priority
-              />
-            </motion.div>
-          </motion.div>
+          <StaticLogo />
         </div>
       </div>
 

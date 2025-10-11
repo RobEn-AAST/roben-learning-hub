@@ -8,6 +8,7 @@ import { DynamicInstructorsSection } from "@/components/dynamic-instructors-sect
 import { WhatWeProvideSection } from "@/components/what-we-provide-section";
 import { AdminsSection } from "@/components/admins-section";
 import { ThreeDBackground } from "@/components/3d-elements";
+import { InteractiveHeaderLogo } from "@/components/interactive-header-logo";
 
 export default function Home() {
   return (
@@ -20,17 +21,7 @@ export default function Home() {
         <nav className="w-full flex justify-center h-20 shadow-md bg-gradient-to-r from-blue-600 via-blue-500 to-blue-700 sticky top-0 z-50 backdrop-blur-lg bg-opacity-95">
           <div className="w-full max-w-7xl flex justify-between items-center px-6 text-sm">
             <div className="flex items-center h-full">
-              <Link href="/" className="flex items-center gap-3 group h-full transition-transform hover:scale-105">
-                <span className="flex items-center gap-3 font-bold text-lg bg-transparent border-none shadow-none cursor-pointer select-none focus:outline-none h-full">
-                  <span className="flex items-center h-12 w-12 rounded-full bg-white p-2 shadow-lg group-hover:shadow-xl transition-shadow">
-                    <img src="/assets/favicon.png" alt="favicon" className="h-full w-full object-contain" />
-                  </span>
-                  <span className="flex flex-col leading-tight">
-                    <span className="font-extrabold text-2xl text-white tracking-wide">RobEn</span>
-                    <span className="font-semibold text-sm text-blue-100 tracking-wide">Learning Hub</span>
-                  </span>
-                </span>
-              </Link>
+              <InteractiveHeaderLogo />
             </div>
             
             <div className="flex items-center gap-6">
