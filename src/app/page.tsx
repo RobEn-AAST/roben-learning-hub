@@ -1,6 +1,3 @@
-import { EnvVarWarning } from "@/components/env-var-warning";
-import { AuthButton } from "@/components/auth-button";
-import { hasEnvVars } from "@/lib/utils";
 import Link from "next/link";
 import { EnhancedHero } from "@/components/enhanced-hero";
 import { DynamicCoursesSection } from "@/components/dynamic-courses-section";
@@ -8,7 +5,7 @@ import { DynamicInstructorsSection } from "@/components/dynamic-instructors-sect
 import { WhatWeProvideSection } from "@/components/what-we-provide-section";
 import { AdminsSection } from "@/components/admins-section";
 import { ThreeDBackground } from "@/components/3d-elements";
-import { InteractiveHeaderLogo } from "@/components/interactive-header-logo";
+import { Navigation } from "@/components/navigation";
 
 export default function Home() {
   return (
@@ -17,27 +14,8 @@ export default function Home() {
       <ThreeDBackground />
       
       <div className="flex-1 w-full flex flex-col items-center relative z-10">
-        {/* Header Bar */}
-        <nav className="w-full flex justify-center h-20 shadow-md bg-gradient-to-r from-blue-600 via-blue-500 to-blue-700 sticky top-0 z-50 backdrop-blur-lg bg-opacity-95">
-          <div className="w-full max-w-7xl flex justify-between items-center px-6 text-sm">
-            <div className="flex items-center h-full">
-              <InteractiveHeaderLogo />
-            </div>
-            
-            <div className="flex items-center gap-6">
-              <Link href="/courses" className="text-white hover:text-blue-100 font-semibold transition-colors hidden md:block">
-                Courses
-              </Link>
-              <Link href="/about" className="text-white hover:text-blue-100 font-semibold transition-colors hidden md:block">
-                About
-              </Link>
-              <Link href="/contact" className="text-white hover:text-blue-100 font-semibold transition-colors hidden md:block">
-                Contact
-              </Link>
-              {!hasEnvVars ? <EnvVarWarning /> : <AuthButton />}
-            </div>
-          </div>
-        </nav>
+        {/* Unified Navigation */}
+        <Navigation />
 
         {/* Main Content */}
         <div className="flex-1 w-full">

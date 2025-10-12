@@ -43,10 +43,10 @@ export function LoginForm({
       const { data: { user } } = await supabase.auth.getUser();
       
       if (user) {
-        // Check if user has completed their profile
+        // Check if user has completed their profile and get their role
         const { data: profile } = await supabase
           .from('profiles')
-          .select('full_name')
+          .select('full_name, role')
           .eq('id', user.id)
           .single();
         
@@ -54,11 +54,21 @@ export function LoginForm({
         if (!profile || !profile.full_name || profile.full_name.trim() === '') {
           router.push('/complete-profile');
         } else {
-          // Profile is complete, redirect to protected area
-          router.push("/protected");
+          // Profile is complete, redirect based on user role
+          const role = profile.role || 'user';
+          switch (role) {
+            case 'admin':
+              router.push('/admin');
+              break;
+            case 'instructor':
+              router.push('/instructor');
+              break;
+            default:
+              router.push('/dashboard');
+          }
         }
       } else {
-        router.push("/protected");
+        router.push('/dashboard');
       }
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred");

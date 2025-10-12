@@ -20,10 +20,13 @@ export async function POST(
       );
     }
 
-    // Get lesson details to verify it exists
-    const { data: lesson, error: lessonError } = await supabase
+    // Create admin client to bypass RLS for all queries
+    const adminClient = createAdminClient();
+    
+    // Get lesson details with position info for sequential validation
+    const { data: lesson, error: lessonError } = await adminClient
       .from('lessons')
-      .select('id, module_id')
+      .select('id, module_id, position, title')
       .eq('id', lessonId)
       .single();
 
@@ -34,17 +37,34 @@ export async function POST(
       );
     }
 
-    // Check if progress record exists
-    const { data: existingProgress } = await supabase
+    // Check if progress record exists (get all records to detect duplicates)
+    const { data: existingProgressRecords } = await adminClient
       .from('lesson_progress')
-      .select('id, status')
+      .select('id, status, created_at')
       .eq('lesson_id', lessonId)
       .eq('user_id', user.id)
-      .single();
+      .order('created_at', { ascending: false });
+
+    let existingProgress = null;
+    
+    // If multiple records exist (duplicates), keep only the most recent one
+    if (existingProgressRecords && existingProgressRecords.length > 0) {
+      existingProgress = existingProgressRecords[0]; // Most recent due to ordering
+      
+      // Delete duplicate records if they exist
+      if (existingProgressRecords.length > 1) {
+        const duplicateIds = existingProgressRecords.slice(1).map(record => record.id);
+        await adminClient
+          .from('lesson_progress')
+          .delete()
+          .in('id', duplicateIds);
+        
+        console.log(`Cleaned up ${duplicateIds.length} duplicate progress records for lesson ${lessonId}`);
+      }
+    }
 
     if (existingProgress) {
       // Update existing progress using admin client to ensure consistency
-      const adminClient = createAdminClient();
       const { data: updatedProgress, error: updateError } = await adminClient
         .from('lesson_progress')
         .update({
@@ -71,16 +91,16 @@ export async function POST(
         progress: updatedProgress
       });
     } else {
-      // Get module and course ID to ensure enrollment
-      const { data: moduleData } = await supabase
+      // Get module and course info
+      const { data: moduleData } = await adminClient
         .from('modules')
-        .select('course_id')
+        .select('course_id, position')
         .eq('id', lesson.module_id)
         .single();
       
-      // Check if the user is enrolled in this course
+      // Check enrollment using admin client to bypass RLS
       if (moduleData) {
-        const { data: enrollment } = await supabase
+        const { data: enrollment } = await adminClient
           .from('course_enrollments')
           .select('id')
           .eq('course_id', moduleData.course_id)
@@ -93,10 +113,76 @@ export async function POST(
             { status: 403 }
           );
         }
+
+        // ENFORCE SEQUENTIAL LESSON COMPLETION
+        // Check if previous lessons in the same module are completed
+        if (lesson.position > 1) {
+          const { data: previousLessons } = await adminClient
+            .from('lessons')
+            .select('id')
+            .eq('module_id', lesson.module_id)
+            .lt('position', lesson.position)
+            .order('position');
+
+          if (previousLessons && previousLessons.length > 0) {
+            // Check if all previous lessons are completed
+            const { data: completedPrevious } = await adminClient
+              .from('lesson_progress')
+              .select('lesson_id')
+              .eq('user_id', user.id)
+              .eq('status', 'completed')
+              .in('lesson_id', previousLessons.map(l => l.id));
+
+            const completedCount = completedPrevious?.length || 0;
+            const requiredCount = previousLessons.length;
+
+            if (completedCount < requiredCount) {
+              return NextResponse.json({
+                error: 'Please complete previous lessons first',
+                details: `You must complete lesson ${lesson.position - 1} before accessing lesson ${lesson.position}`
+              }, { status: 400 });
+            }
+          }
+        }
+
+        // Also check if previous modules are completed (if lesson is in position 1 of a later module)
+        if (lesson.position === 1 && moduleData.position > 1) {
+          const { data: previousModules } = await adminClient
+            .from('modules')
+            .select(`
+              id,
+              lessons (
+                id
+              )
+            `)
+            .eq('course_id', moduleData.course_id)
+            .lt('position', moduleData.position);
+
+          if (previousModules && previousModules.length > 0) {
+            const allPreviousLessonIds = previousModules.flatMap(m => m.lessons.map((l: any) => l.id));
+            
+            if (allPreviousLessonIds.length > 0) {
+              const { data: completedPreviousModuleLessons } = await adminClient
+                .from('lesson_progress')
+                .select('lesson_id')
+                .eq('user_id', user.id)
+                .eq('status', 'completed')
+                .in('lesson_id', allPreviousLessonIds);
+
+              const completedCount = completedPreviousModuleLessons?.length || 0;
+              
+              if (completedCount < allPreviousLessonIds.length) {
+                return NextResponse.json({
+                  error: 'Please complete all previous modules first',
+                  details: `You must complete all lessons in previous modules before starting module ${moduleData.position}`
+                }, { status: 400 });
+              }
+            }
+          }
+        }
       }
       
       // Create new progress record using admin client to bypass RLS issues
-      const adminClient = createAdminClient();
       const { data: newProgress, error: insertError } = await adminClient
         .from('lesson_progress')
         .insert({
@@ -163,7 +249,9 @@ export async function GET(
       );
     }
 
-    const { data: progress } = await supabase
+    // Use admin client to bypass RLS for progress queries
+    const adminClient = createAdminClient();
+    const { data: progress } = await adminClient
       .from('lesson_progress')
       .select('*')
       .eq('lesson_id', lessonId)

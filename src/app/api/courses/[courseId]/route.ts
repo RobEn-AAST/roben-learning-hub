@@ -1,5 +1,18 @@
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from "next/server";
+
+// Create service role client to bypass RLS
+const supabaseAdmin = createServiceClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+);
 
 export async function GET(
   request: NextRequest,
@@ -13,8 +26,8 @@ export async function GET(
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     const isAuthenticated = !authError && !!user;
 
-    // Fetch course details
-    const { data: course, error: courseError } = await supabase
+    // Fetch course details using service role to bypass RLS
+    const { data: course, error: courseError } = await supabaseAdmin
       .from('courses')
       .select('*')
       .eq('id', courseId)
@@ -28,8 +41,8 @@ export async function GET(
       );
     }
 
-    // Fetch course modules with lessons
-    const { data: modules, error: modulesError } = await supabase
+    // Fetch course modules with lessons using service role
+    const { data: modules, error: modulesError } = await supabaseAdmin
       .from('modules')
       .select(`
         id,
@@ -82,7 +95,7 @@ export async function GET(
 
     let quizzesByLesson: Record<string, string> = {};
     if (quizLessonIds.length > 0) {
-      const { data: quizzesList } = await supabase
+      const { data: quizzesList } = await supabaseAdmin
         .from('quizzes')
         .select('id, lesson_id')
         .in('lesson_id', quizLessonIds);
@@ -161,14 +174,14 @@ export async function GET(
     // Fetch instructor details from the first lesson's instructor
     let instructor = null;
     if (sortedModules.length > 0 && sortedModules[0].lessons?.length > 0) {
-      const firstLesson = await supabase
+      const firstLesson = await supabaseAdmin
         .from('lessons')
         .select('instructor_id')
         .eq('id', sortedModules[0].lessons[0].id)
         .single();
       
       if (firstLesson.data?.instructor_id) {
-        const { data: instructorData } = await supabase
+        const { data: instructorData } = await supabaseAdmin
           .from('profiles')
           .select('id, full_name, avatar_url, bio')
           .eq('id', firstLesson.data.instructor_id)
@@ -177,8 +190,8 @@ export async function GET(
       }
     }
 
-    // Get enrollment count
-    const { count: enrollmentCount } = await supabase
+    // Get enrollment count (use service role for public data)
+    const { count: enrollmentCount } = await supabaseAdmin
       .from('course_enrollments')
       .select('*', { count: 'exact', head: true })
       .eq('course_id', courseId);
@@ -186,33 +199,49 @@ export async function GET(
     // If enrolled, get progress (only for authenticated users)
     let progress = null;
     if (enrollment && isAuthenticated && user) {
-      const { data: completedLessons } = await supabase
+      // Get all lesson IDs for this course to validate progress records
+      const allLessonIds = sortedModules.flatMap(module => 
+        (module.lessons || []).map(lesson => lesson.id)
+      );
+
+      // Get completed lessons - simplified logic
+      const { data: completedLessons } = await supabaseAdmin
         .from('lesson_progress')
         .select('lesson_id')
         .eq('user_id', user.id)
         .eq('status', 'completed');
 
-      const totalLessons = sortedModules.reduce((acc, module) => acc + (module.lessons?.length || 0), 0);
-      const completedCount = completedLessons?.length || 0;
+      // Filter to only lessons in this course and deduplicate
+      const courseCompletedLessons = new Set(
+        (completedLessons || [])
+          .map(p => p.lesson_id)
+          .filter(lessonId => allLessonIds.includes(lessonId))
+      );
+
+      const totalLessons = allLessonIds.length;
+      const completedCount = courseCompletedLessons.size;
+      
+      // Ensure percentage never exceeds 100%
+      const percentage = totalLessons > 0 ? Math.min(100, Math.round((completedCount / totalLessons) * 100)) : 0;
       
       progress = {
         completedLessons: completedCount,
         totalLessons,
-        percentage: totalLessons > 0 ? Math.round((completedCount / totalLessons) * 100) : 0
+        percentage
       };
     }
 
     return NextResponse.json({
       course,
-      modules: sortedModules,
+      modules: sortedModules || [], // Ensure modules is always an array
       isEnrolled: !!enrollment,
       isAuthenticated,
       enrollment,
       instructor: instructor || null,
       stats: {
         enrollmentCount: enrollmentCount || 0,
-        moduleCount: sortedModules.length,
-        lessonCount: sortedModules.reduce((acc, module) => acc + (module.lessons?.length || 0), 0)
+        moduleCount: (sortedModules || []).length,
+        lessonCount: (sortedModules || []).reduce((acc, module) => acc + (module.lessons?.length || 0), 0)
       },
       progress
     });

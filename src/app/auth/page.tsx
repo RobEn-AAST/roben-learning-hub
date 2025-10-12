@@ -2,10 +2,13 @@
 
 import { EnhancedAuthForm } from "@/components/enhanced-auth-form";
 import { RobenLogo } from "@/components/roben-logo";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function AuthPage() {
+// Force dynamic rendering for this page since it uses search params
+export const dynamic = 'force-dynamic';
+
+function AuthContent() {
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -73,5 +76,25 @@ export default function AuthPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+// Loading fallback for Suspense
+function AuthLoading() {
+  return (
+    <main className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+      <div className="flex flex-col items-center space-y-4">
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-gray-600">Loading authentication...</p>
+      </div>
+    </main>
+  );
+}
+
+export default function AuthPage() {
+  return (
+    <Suspense fallback={<AuthLoading />}>
+      <AuthContent />
+    </Suspense>
   );
 }

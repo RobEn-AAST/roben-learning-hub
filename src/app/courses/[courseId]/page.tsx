@@ -6,6 +6,7 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useParams, useRouter } from "next/navigation";
+import { ProgressCleanupButton } from "@/components/progress-cleanup";
 
 interface Lesson {
   id: string;
@@ -79,10 +80,12 @@ export default function CourseDetailPage() {
     try {
       const response = await fetch(`/api/courses/${courseId}`);
       const data = await response.json();
+      
       setCourseData(data);
       setIsAuthenticated(data.isAuthenticated || false);
-      // Expand first module by default
-      if (data.modules.length > 0) {
+      
+      // Expand first module by default - with null checks
+      if (data.modules && Array.isArray(data.modules) && data.modules.length > 0) {
         setExpandedModules(new Set([data.modules[0].id]));
       }
     } catch (error) {
@@ -258,12 +261,19 @@ export default function CourseDetailPage() {
                           <div className="w-full bg-gray-200 rounded-full h-2">
                             <div 
                               className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                              style={{ width: `${progress.percentage}%` }}
+                              style={{ width: `${Math.min(100, progress.percentage)}%` }}
                             />
                           </div>
                           <p className="text-xs text-gray-600 mt-1">
                             {progress.completedLessons} of {progress.totalLessons} lessons completed
                           </p>
+                        </div>
+                      )}
+                      
+                      {/* Show cleanup button if progress is over 100% or completed > total */}
+                      {progress && (progress.percentage > 100 || progress.completedLessons > progress.totalLessons) && courseData?.course?.id && (
+                        <div className="mb-4">
+                          <ProgressCleanupButton courseId={courseData.course.id} />
                         </div>
                       )}
                       <Button asChild className="w-full bg-blue-600 hover:bg-blue-700 text-white">

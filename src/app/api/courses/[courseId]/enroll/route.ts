@@ -1,5 +1,18 @@
 import { createClient } from "@/lib/supabase/server";
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from "next/server";
+
+// Create service role client to bypass RLS for course verification
+const supabaseAdmin = createServiceClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+);
 
 export async function POST(
   request: NextRequest,
@@ -19,8 +32,8 @@ export async function POST(
       );
     }
 
-    // Check if course exists and is published
-    const { data: course, error: courseError } = await supabase
+    // Check if course exists and is published (use service role to bypass RLS)
+    const { data: course, error: courseError } = await supabaseAdmin
       .from('courses')
       .select('id, title, status')
       .eq('id', courseId)

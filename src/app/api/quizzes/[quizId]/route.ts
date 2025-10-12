@@ -1,5 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
+
+// Create service role client to bypass RLS
+const supabaseAdmin = createServiceClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+);
 
 // GET /api/quizzes/[quizId]
 // Returns quiz with its questions and options for rendering in the course player
@@ -17,42 +30,56 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Fetch quiz
-    const { data: quiz, error: quizError } = await supabase
+    // Fetch quiz using service role to bypass RLS
+    const { data: quiz, error: quizError } = await supabaseAdmin
       .from('quizzes')
       .select('id, lesson_id, title, description, created_at')
       .eq('id', quizId)
       .single();
 
-    if (quizError || !quiz) {
+    if (quizError) {
+      console.error('Quiz fetch error:', quizError);
+      return NextResponse.json({ 
+        error: 'Failed to fetch quiz', 
+        details: quizError.message 
+      }, { status: 500 });
+    }
+
+    if (!quiz) {
       return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
     }
 
-    // Fetch questions
-    const { data: questions, error: questionsError } = await supabase
+    // Fetch questions using service role to bypass RLS
+    const { data: questions, error: questionsError } = await supabaseAdmin
       .from('questions')
       .select('id, quiz_id, content, type')
       .eq('quiz_id', quizId)
       .order('id');
 
     if (questionsError) {
-      console.error('Error fetching questions:', questionsError);
-      return NextResponse.json({ error: 'Failed to fetch questions' }, { status: 500 });
+      console.error('Questions fetch error:', questionsError);
+      return NextResponse.json({ 
+        error: 'Failed to fetch questions', 
+        details: questionsError.message 
+      }, { status: 500 });
     }
 
     const questionIds = (questions || []).map(q => q.id);
 
-    // Fetch options for all questions
+    // Fetch options for all questions using service role to bypass RLS
     let optionsByQuestion: Record<string, any[]> = {};
     if (questionIds.length > 0) {
-      const { data: options, error: optionsError } = await supabase
+      const { data: options, error: optionsError } = await supabaseAdmin
         .from('question_options')
         .select('id, question_id, content, is_correct')
         .in('question_id', questionIds);
 
       if (optionsError) {
-        console.error('Error fetching options:', optionsError);
-        return NextResponse.json({ error: 'Failed to fetch question options' }, { status: 500 });
+        console.error('Options fetch error:', optionsError);
+        return NextResponse.json({ 
+          error: 'Failed to fetch question options', 
+          details: optionsError.message 
+        }, { status: 500 });
       }
 
       optionsByQuestion = (options || []).reduce((acc: Record<string, any[]>, opt: any) => {

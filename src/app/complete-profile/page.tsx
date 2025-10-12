@@ -3,6 +3,9 @@ import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { createAdminClient } from '@/lib/adminHelpers';
 
+// Export dynamic rendering configuration
+export const dynamic = 'force-dynamic';
+
 export default async function CompleteProfilePage() {
   const supabase = await createClient();
   

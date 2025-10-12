@@ -3,7 +3,11 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { Button } from '@/components/ui/button';
+import { LogoutButton } from '@/components/logout-button';
 import { isUserAdmin } from '@/utils/auth';
+
+// Export dynamic rendering configuration for admin authentication
+export const dynamic = 'force-dynamic';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -75,6 +79,7 @@ export default async function AdminLayout({ children }: AdminLayoutProps) {
                   Back to Site
                 </Button>
               </Link>
+              <LogoutButton />
             </div>
           </div>
         </div>

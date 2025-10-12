@@ -4,6 +4,9 @@ import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
+// Export dynamic rendering configuration
+export const dynamic = 'force-dynamic';
+
 function DebugConfirmInner() {
   const [urlParams, setUrlParams] = useState<Record<string, string>>({});
   const searchParams = useSearchParams();
