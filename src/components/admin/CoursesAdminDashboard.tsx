@@ -970,14 +970,39 @@ export function CoursesAdminDashboard() {
       
       if (selectedCourse) {
         // Update existing course
-        console.log('Updating course with ID:', selectedCourse.id);
+
         const result = await coursesService.updateCourse(selectedCourse.id, courseData);
         console.log('Update result:', result);
-        await activityLogService.logCourseUpdated(selectedCourse.id, courseData.title || selectedCourse.title, courseData);
+        
+        // Detect what changed and log appropriately
+        const changes = [];
+        if (courseData.title && courseData.title !== selectedCourse.title) {
+          changes.push(`title from "${selectedCourse.title}" to "${courseData.title}"`);
+        }
+        if (courseData.description && courseData.description !== selectedCourse.description) {
+          changes.push(`description`);
+        }
+        if (courseData.status && courseData.status !== selectedCourse.status) {
+          changes.push(`status from "${selectedCourse.status}" to "${courseData.status}"`);
+        }
+        
+        const changeDescription = changes.length > 0 
+          ? `Updated course ${changes.join(', ')}`
+          : `Updated course: "${courseData.title || selectedCourse.title}"`;
+        
+        // Log the course update with detailed changes
+        await activityLogService.logActivity({
+          action: 'UPDATE',
+          table_name: 'courses',
+          record_id: selectedCourse.id,
+          record_name: courseData.title || selectedCourse.title,
+          description: changeDescription
+        });
+        
         alert('Course updated successfully!');
       } else {
         // Create new course
-        console.log('Creating new course');
+
         const result = await coursesService.createCourse({
           ...courseData,
           metadata: courseData.metadata || {}
@@ -1171,9 +1196,9 @@ export function CoursesAdminDashboard() {
                     </div>
                   </div>
                   <div className="p-3 bg-purple-50 rounded-lg">
-                    <div className="text-sm font-medium text-purple-600">Created By</div>
+                    <div className="text-sm font-medium text-purple-600">Course ID</div>
                     <div className="text-lg font-semibold text-purple-900">
-                      {selectedCourse.creator?.full_name || 'Unknown'}
+                      {selectedCourse.id.substring(0, 8)}...
                     </div>
                   </div>
                 </div>

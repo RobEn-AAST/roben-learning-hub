@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Module, ModuleStats, Course } from '@/services/moduleService';
+import { activityLogService } from '@/services/activityLogService';
 
 // Icons
 const Icons = {
@@ -150,6 +151,26 @@ export function ModulesAdminDashboard() {
       });
 
       if (response.ok) {
+        // Add activity logging
+        if (editingModule) {
+          // Log module update
+          await activityLogService.logModuleUpdated(
+            editingModule.id,
+            formData.title,
+            editingModule.title // old title
+          );
+        } else {
+          // Log module creation
+          const result = await response.json();
+          await activityLogService.logActivity({
+            action: 'CREATE',
+            table_name: 'modules',
+            record_id: result.module?.id,
+            record_name: formData.title,
+            description: `Created new module: "${formData.title}"`
+          });
+        }
+
         await loadModules();
         await loadInitialData();
         resetForm();
@@ -186,6 +207,15 @@ export function ModulesAdminDashboard() {
       });
 
       if (response.ok) {
+        // Log module deletion
+        await activityLogService.logActivity({
+          action: 'DELETE',
+          table_name: 'modules',
+          record_id: module.id,
+          record_name: module.title,
+          description: `Deleted module: "${module.title}"`
+        });
+
         await loadModules();
         await loadInitialData();
       } else {

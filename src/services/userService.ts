@@ -205,11 +205,10 @@ class UserService {
         phone: null
       };
 
-      // Log the activity
-      await activityLogService.logSystemAction(
-        'USER_CREATE',
-        `Created new user: ${userData.full_name} (${userData.email})`,
-        { user_id: data.user.id, role: userData.role }
+      // Log the activity with new method
+      await activityLogService.logUserRegistration(
+        data.user.id,
+        userData.full_name
       );
 
       return createdUser;
@@ -265,11 +264,13 @@ class UserService {
         phone: data.user.phone || null
       };
 
-      // Log the activity
-      await activityLogService.logSystemAction(
-        'USER_UPDATE',
-        `Updated user: ${updateData.full_name || 'User'} (${userId})`,
-        { user_id: userId, changes: updateData }
+      // Log the activity with new method
+      await activityLogService.logProfileUpdate(
+        userId,
+        updateData.full_name || 'User',
+        'profile',
+        undefined,
+        'Updated user profile'
       );
 
       return updatedUser;
@@ -296,12 +297,13 @@ class UserService {
         throw new Error(errorData.error || 'Failed to delete user');
       }
 
-      // Log the activity
-      await activityLogService.logSystemAction(
-        'USER_DELETE',
-        `Deleted user: ${userId}`,
-        { deleted_user_id: userId }
-      );
+      // Log the activity with generic log (since we don't have user name for deleted user)
+      await activityLogService.logActivity({
+        action: 'DELETE',
+        table_name: 'users',
+        record_id: userId,
+        description: `Deleted user: ${userId}`
+      });
     } catch (error) {
       console.error('Error in deleteUser:', error);
       throw error;
@@ -313,11 +315,14 @@ class UserService {
     try {
       await this.updateUser(userId, { role: 'admin' });
 
-      await activityLogService.logSystemAction(
-        'ROLE_CHANGE',
-        `Granted admin role to user: ${userId}`,
-        { user_id: userId, old_role: 'user', new_role: 'admin' }
-      );
+      await activityLogService.logActivity({
+        action: 'UPDATE',
+        table_name: 'profiles',
+        record_id: userId,
+        description: `Granted admin role to user`,
+        old_values: 'user',
+        new_values: 'admin'
+      });
     } catch (error) {
       console.error('Error in makeUserAdmin:', error);
       throw error;
@@ -329,11 +334,14 @@ class UserService {
     try {
       await this.updateUser(userId, { role: 'student' });
 
-      await activityLogService.logSystemAction(
-        'ROLE_CHANGE',
-        `Removed admin role from user: ${userId}`,
-        { user_id: userId, old_role: 'admin', new_role: 'student' }
-      );
+      await activityLogService.logActivity({
+        action: 'UPDATE',
+        table_name: 'profiles',
+        record_id: userId,
+        description: `Removed admin role from user`,
+        old_values: 'admin',
+        new_values: 'student'
+      });
     } catch (error) {
       console.error('Error in removeAdminRole:', error);
       throw error;
@@ -412,11 +420,12 @@ class UserService {
         throw new Error(errorData.error || 'Failed to reset password');
       }
 
-      await activityLogService.logSystemAction(
-        'PASSWORD_RESET',
-        `Reset password for user: ${userId}`,
-        { user_id: userId }
-      );
+      await activityLogService.logActivity({
+        action: 'UPDATE',
+        table_name: 'users',
+        record_id: userId,
+        description: `Reset password for user`
+      });
     } catch (error) {
       console.error('Error in resetUserPassword:', error);
       throw error;

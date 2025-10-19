@@ -2,21 +2,22 @@ import { createClient } from '@/lib/supabase/client';
 
 export interface ActivityLog {
   id: string;
-  user_id: string;
+  user_name: string;
   action: string;
-  resource_type: string;
-  resource_id?: string;
-  details: string;
-  metadata?: any;
+  table_name: string;
+  record_name?: string;
+  description: string;
   created_at: string;
 }
 
 export interface CreateActivityLogData {
   action: string;
-  resource_type: string;
-  resource_id?: string;
-  details: string;
-  metadata?: any;
+  table_name: string;
+  record_id?: string;
+  record_name?: string;
+  description: string;
+  old_values?: string;
+  new_values?: string;
 }
 
 class ActivityLogService {
@@ -32,41 +33,92 @@ class ActivityLogService {
         return;
       }
 
-      const activityData = {
+      // Get user profile to get the full name
+      const { data: profile } = await this.supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .single();
+
+      const user_name = profile?.full_name || 'Unknown User';
+
+      const logData = {
         user_id: user.id,
+        user_name,
         action: data.action,
-        resource_type: data.resource_type,
-        resource_id: data.resource_id,
-        details: data.details,
-        metadata: data.metadata || {},
-        created_at: new Date().toISOString()
+        table_name: data.table_name,
+        record_id: data.record_id,
+        record_name: data.record_name || null,
+        description: data.description,
+        old_values: data.old_values,
+        new_values: data.new_values
       };
 
-      // For now, we'll store in localStorage as a temporary solution
-      // Later you can create a proper database table for this
-      const existingLogs = this.getStoredLogs();
-      const newLog: ActivityLog = {
-        id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        ...activityData
-      };
-      
-      const updatedLogs = [newLog, ...existingLogs].slice(0, 100); // Keep only last 100 logs
-      localStorage.setItem('activity_logs', JSON.stringify(updatedLogs));
+      // Send to database via API
+      const response = await fetch('/api/admin/activity-logs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(logData)
+      });
 
-      console.log('Activity logged:', newLog);
+      if (!response.ok) {
+        console.warn('Failed to log activity to database, using fallback');
+        // Fallback to localStorage
+        this.logToLocalStorage(data, user.id);
+      }
     } catch (error) {
       console.error('Failed to log activity:', error);
+      // Fallback to localStorage
+      const { data: { user } } = await this.supabase.auth.getUser();
+      if (user) {
+        this.logToLocalStorage(data, user.id);
+      }
     }
   }
 
-  // Get recent activity logs
+  // Fallback method for localStorage
+  private logToLocalStorage(data: CreateActivityLogData, userId: string): void {
+    try {
+      const existingLogs = this.getStoredLogs();
+      const newLog: ActivityLog = {
+        id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        user_name: 'Unknown User', // Will be updated when fetched from database
+        action: data.action,
+        table_name: data.table_name,
+        record_name: data.record_name,
+        description: data.description,
+        created_at: new Date().toISOString()
+      };
+
+      const updatedLogs = [newLog, ...existingLogs].slice(0, 100);
+      localStorage.setItem('activity_logs', JSON.stringify(updatedLogs));
+    } catch (error) {
+      console.error('Failed to log to localStorage:', error);
+    }
+  }  // Get recent activity logs
   async getRecentActivities(limit: number = 10): Promise<ActivityLog[]> {
     try {
+      // Try to fetch from database first
+      const response = await fetch(`/api/admin/activity-logs?limit=${limit}`);
+      if (response.ok) {
+        const data = await response.json();
+        return data.logs || [];
+      }
+      
+      // Fallback to localStorage
       const logs = this.getStoredLogs();
       return logs.slice(0, limit);
     } catch (error) {
       console.error('Failed to fetch activity logs:', error);
-      return [];
+      // Fallback to localStorage
+      try {
+        const logs = this.getStoredLogs();
+        return logs.slice(0, limit);
+      } catch {
+        return [];
+      }
     }
   }
 
@@ -89,71 +141,105 @@ class ActivityLogService {
   async logCourseCreated(courseId: string, courseTitle: string): Promise<void> {
     await this.logActivity({
       action: 'CREATE',
-      resource_type: 'course',
-      resource_id: courseId,
-      details: `Created new course: "${courseTitle}"`,
-      metadata: { course_title: courseTitle }
+      table_name: 'courses',
+      record_id: courseId,
+      record_name: courseTitle,
+      description: `Created new course: "${courseTitle}"`
     });
   }
 
-  async logCourseUpdated(courseId: string, courseTitle: string, changes?: any): Promise<void> {
+  async logCourseUpdated(courseId: string, courseTitle: string, oldTitle?: string): Promise<void> {
+    const description = oldTitle 
+      ? `Updated course title from "${oldTitle}" to "${courseTitle}"`
+      : `Updated course: "${courseTitle}"`;
+    
     await this.logActivity({
       action: 'UPDATE',
-      resource_type: 'course',
-      resource_id: courseId,
-      details: `Updated course: "${courseTitle}"`,
-      metadata: { course_title: courseTitle, changes }
+      table_name: 'courses',
+      record_id: courseId,
+      record_name: courseTitle,
+      description,
+      old_values: oldTitle,
+      new_values: courseTitle
     });
   }
 
   async logCourseDeleted(courseId: string, courseTitle: string): Promise<void> {
     await this.logActivity({
       action: 'DELETE',
-      resource_type: 'course',
-      resource_id: courseId,
-      details: `Deleted course: "${courseTitle}"`,
-      metadata: { course_title: courseTitle }
+      table_name: 'courses',
+      record_id: courseId,
+      record_name: courseTitle,
+      description: `Deleted course: "${courseTitle}"`
     });
   }
 
   async logCoursePublished(courseId: string, courseTitle: string): Promise<void> {
     await this.logActivity({
       action: 'PUBLISH',
-      resource_type: 'course',
-      resource_id: courseId,
-      details: `Published course: "${courseTitle}"`,
-      metadata: { course_title: courseTitle }
+      table_name: 'courses',
+      record_id: courseId,
+      record_name: courseTitle,
+      description: `Published course: "${courseTitle}"`
     });
   }
 
-  async logUserLogin(userId: string): Promise<void> {
+  async logModuleUpdated(moduleId: string, moduleTitle: string, oldTitle?: string): Promise<void> {
+    const description = oldTitle 
+      ? `Updated module title from "${oldTitle}" to "${moduleTitle}"`
+      : `Updated module: "${moduleTitle}"`;
+    
     await this.logActivity({
-      action: 'LOGIN',
-      resource_type: 'auth',
-      resource_id: userId,
-      details: 'User logged in to admin dashboard',
-      metadata: { login_time: new Date().toISOString() }
+      action: 'UPDATE',
+      table_name: 'modules',
+      record_id: moduleId,
+      record_name: moduleTitle,
+      description,
+      old_values: oldTitle,
+      new_values: moduleTitle
     });
   }
 
+  async logUserRegistration(userId: string, userName: string): Promise<void> {
+    await this.logActivity({
+      action: 'REGISTER',
+      table_name: 'users',
+      record_id: userId,
+      record_name: userName,
+      description: `New user registered: ${userName}`
+    });
+  }
+
+  async logProfileUpdate(userId: string, userName: string, field: string, oldValue?: string, newValue?: string): Promise<void> {
+    const description = oldValue && newValue
+      ? `Updated ${field} from "${oldValue}" to "${newValue}"`
+      : `Updated profile information`;
+    
+    await this.logActivity({
+      action: 'UPDATE',
+      table_name: 'profiles',
+      record_id: userId,
+      record_name: userName,
+      description,
+      old_values: oldValue,
+      new_values: newValue
+    });
+  }
+
+  // Keep this method for compatibility but make it do nothing
+  // Since you don't want "Admin dashboard accessed" logs
+  async logSystemAction(action: string, details: string): Promise<void> {
+    // Do nothing - you said you don't want these generic system logs
+    console.log(`Ignoring system log: ${action} - ${details}`);
+  }
+
+  // Keep this method for compatibility but make it do nothing
   async logTableAccess(tableName: string): Promise<void> {
-    await this.logActivity({
-      action: 'VIEW',
-      resource_type: 'table',
-      resource_id: tableName,
-      details: `Accessed table management for: ${tableName}`,
-      metadata: { table_name: tableName }
-    });
+    // Do nothing - you said you don't want generic table access logs
+    console.log(`Ignoring table access log: ${tableName}`);
   }
 
-  async logSystemAction(action: string, details: string, metadata?: any): Promise<void> {
-    await this.logActivity({
-      action,
-      resource_type: 'system',
-      details,
-      metadata
-    });
-  }
+
 }
 
 export const activityLogService = new ActivityLogService();

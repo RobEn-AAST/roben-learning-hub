@@ -100,7 +100,7 @@ interface RecentActivity {
   timestamp: string;
   status: 'success' | 'warning' | 'info';
   action?: string;
-  resource_type?: string;
+  table_name?: string;
 }
 
 export function AdminDashboard() {
@@ -120,37 +120,19 @@ export function AdminDashboard() {
 
   useEffect(() => {
     loadDashboardData();
-    // Log that admin dashboard was accessed
-    activityLogService.logSystemAction('DASHBOARD_VIEW', 'Admin dashboard accessed');
+    // Note: No logging for dashboard access as requested
   }, []);
 
   const loadDashboardData = async () => {
     try {
       setLoading(true);
       
-      // Load stats and recent activities
-      const [statsData, activityLogs] = await Promise.all([
-        coursesService.getCourseStats(),
-        activityLogService.getRecentActivities(10)
-      ]);
-
+      // Load only stats for now - recent activity disabled
+      const statsData = await coursesService.getCourseStats();
       setStats(statsData);
       
-      // Transform activity logs into dashboard activities
-      const activities: RecentActivity[] = activityLogs.map((log) => {
-        const activity: RecentActivity = {
-          id: log.id,
-          type: getActivityType(log.resource_type),
-          message: log.details,
-          timestamp: formatTimeAgo(log.created_at),
-          status: getActivityStatus(log.action),
-          action: log.action,
-          resource_type: log.resource_type
-        };
-        return activity;
-      });
-
-      setRecentActivity(activities);
+      // Disable recent activity for now
+      setRecentActivity([]);
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
     } finally {
@@ -160,9 +142,11 @@ export function AdminDashboard() {
 
   const getActivityType = (resourceType: string): RecentActivity['type'] => {
     switch (resourceType) {
-      case 'course': return 'course';
-      case 'table': return 'table';
-      case 'auth': return 'user';
+      case 'courses': return 'course';
+      case 'modules': 
+      case 'lessons': return 'table';
+      case 'users':
+      case 'profiles': return 'user';
       default: return 'system';
     }
   };
@@ -171,7 +155,7 @@ export function AdminDashboard() {
     switch (action) {
       case 'CREATE':
       case 'PUBLISH':
-      case 'LOGIN': return 'success';
+      case 'REGISTER': return 'success';
       case 'DELETE': return 'warning';
       default: return 'info';
     }
@@ -343,29 +327,27 @@ export function AdminDashboard() {
           </CardContent>
         </Card>
 
-        {/* Recent Activity */}
+        {/* Recent Activity - Disabled for now */}
         <Card className="lg:col-span-2 bg-white">
           <CardHeader>
             <CardTitle className="text-black">Recent Activity</CardTitle>
-            <CardDescription className="text-gray-600">Latest course and system events</CardDescription>
+            <CardDescription className="text-gray-600">Feature temporarily disabled - check System Logs instead</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentActivity.length > 0 ? (
-                recentActivity.map((activity) => (
-                  <div key={activity.id} className="flex items-start justify-between space-x-4">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate text-black">{activity.message}</p>
-                      <p className="text-xs text-gray-600">{activity.timestamp}</p>
-                    </div>
-                    <div className="flex-shrink-0">
-                      {getStatusBadge(activity.status)}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="text-gray-500">No recent activity to display.</p>
-              )}
+              <div className="text-center py-8">
+                <p className="text-gray-500">Recent activity is disabled.</p>
+                <p className="text-sm text-gray-400 mt-2">
+                  Go to <span className="font-medium">System Logs</span> to view all activity.
+                </p>
+                <Button 
+                  variant="outline" 
+                  className="mt-4"
+                  onClick={() => window.location.href = '/admin/logs'}
+                >
+                  View System Logs
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
