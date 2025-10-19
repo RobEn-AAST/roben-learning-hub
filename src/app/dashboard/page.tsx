@@ -44,23 +44,22 @@ async function getDashboardData(): Promise<DashboardData> {
       redirect('/auth/login');
     }
 
-    // Get enrolled courses with progress
+    // Get enrolled courses
     const { data: enrolledCoursesData } = await supabase
       .from('course_enrollments')
       .select(`
+        enrolled_at,
         courses!inner (
           id,
           title,
           description,
           cover_image,
           created_at
-        ),
-        progress,
-        completed,
-        last_accessed
+        )
       `)
       .eq('user_id', user.id)
-      .order('last_accessed', { ascending: false });
+      .eq('role', 'student')
+      .order('enrolled_at', { ascending: false });
 
     // Get recent courses (all published courses for discovery)
     const { data: recentCoursesData } = await supabase
@@ -70,25 +69,188 @@ async function getDashboardData(): Promise<DashboardData> {
       .order('created_at', { ascending: false })
       .limit(6);
 
-    const enrolledCourses: EnrolledCourse[] = enrolledCoursesData?.map((enrollment: any) => ({
-      ...enrollment.courses,
-      progress: enrollment.progress || 0,
-      last_accessed: enrollment.last_accessed,
-      completed: enrollment.completed || false,
-    })) || [];
-
     const recentCourses = recentCoursesData || [];
+
+    // If no enrolled courses, return early
+    if (!enrolledCoursesData || enrolledCoursesData.length === 0) {
+      return {
+        user,
+        enrolledCourses: [],
+        recentCourses,
+        stats: {
+          totalCourses: 0,
+          completedCourses: 0,
+          inProgressCourses: 0,
+          totalHours: 0,
+        },
+      };
+    }
+
+    const courseIds = enrolledCoursesData.map((e: any) => e.courses.id);
+
+    // Batch fetch all modules for all courses at once
+    const { data: allModules } = await supabase
+      .from('modules')
+      .select('id, course_id')
+      .in('course_id', courseIds);
+
+    const modulesByCourse = new Map<string, string[]>();
+    const allModuleIds = (allModules || []).map(m => {
+      if (!modulesByCourse.has(m.course_id)) {
+        modulesByCourse.set(m.course_id, []);
+      }
+      modulesByCourse.get(m.course_id)!.push(m.id);
+      return m.id;
+    });
+
+    // If no modules, return early with enrolled courses but no progress
+    if (allModuleIds.length === 0) {
+      const enrolledCourses = enrolledCoursesData.map((enrollment: any) => ({
+        ...enrollment.courses,
+        progress: 0,
+        last_accessed: enrollment.enrolled_at,
+        completed: false,
+      }));
+
+      return {
+        user,
+        enrolledCourses,
+        recentCourses,
+        stats: {
+          totalCourses: enrolledCourses.length,
+          completedCourses: 0,
+          inProgressCourses: 0,
+          totalHours: 0,
+        },
+      };
+    }
+
+    // Batch fetch all lessons for all modules at once
+    const { data: allLessons } = await supabase
+      .from('lessons')
+      .select('id, module_id')
+      .in('module_id', allModuleIds);
+
+    const lessonsByModule = new Map<string, string[]>();
+    const allLessonIds = (allLessons || []).map(l => {
+      if (!lessonsByModule.has(l.module_id)) {
+        lessonsByModule.set(l.module_id, []);
+      }
+      lessonsByModule.get(l.module_id)!.push(l.id);
+      return l.id;
+    });
+
+    // Batch fetch all content (videos, articles, quizzes) and progress at once
+    const [videosData, articlesData, quizzesData, allProgressData] = await Promise.all([
+      supabase.from('videos').select('duration_seconds, lesson_id').in('lesson_id', allLessonIds),
+      supabase.from('articles').select('reading_time_minutes, lesson_id').in('lesson_id', allLessonIds),
+      supabase.from('quizzes').select('time_limit_minutes, lesson_id').in('lesson_id', allLessonIds),
+      supabase.from('lesson_progress').select('lesson_id, status, completed_at').eq('user_id', user.id).in('lesson_id', allLessonIds)
+    ]);
+
+    // Create lookup maps for faster access
+    const videosByLesson = new Map<string, number>();
+    (videosData.data || []).forEach(v => {
+      const current = videosByLesson.get(v.lesson_id) || 0;
+      videosByLesson.set(v.lesson_id, current + (v.duration_seconds || 0) / 60);
+    });
+
+    const articlesByLesson = new Map<string, number>();
+    (articlesData.data || []).forEach(a => {
+      const current = articlesByLesson.get(a.lesson_id) || 0;
+      articlesByLesson.set(a.lesson_id, current + (a.reading_time_minutes || 0));
+    });
+
+    const quizzesByLesson = new Map<string, number>();
+    (quizzesData.data || []).forEach(q => {
+      const current = quizzesByLesson.get(q.lesson_id) || 0;
+      quizzesByLesson.set(q.lesson_id, current + (q.time_limit_minutes || 0));
+    });
+
+    const progressByLesson = new Map<string, any>();
+    (allProgressData.data || []).forEach(p => {
+      progressByLesson.set(p.lesson_id, p);
+    });
+
+    // Calculate progress for each enrolled course
+    let totalMinutes = 0;
+    const enrolledCourses: EnrolledCourse[] = enrolledCoursesData.map((enrollment: any) => {
+      const courseId = enrollment.courses.id;
+      const moduleIds = modulesByCourse.get(courseId) || [];
+      
+      if (moduleIds.length === 0) {
+        return {
+          ...enrollment.courses,
+          progress: 0,
+          last_accessed: enrollment.enrolled_at,
+          completed: false,
+        };
+      }
+
+      // Get all lesson IDs for this course
+      const lessonIds: string[] = [];
+      moduleIds.forEach(moduleId => {
+        const lessons = lessonsByModule.get(moduleId) || [];
+        lessonIds.push(...lessons);
+      });
+
+      if (lessonIds.length === 0) {
+        return {
+          ...enrollment.courses,
+          progress: 0,
+          last_accessed: enrollment.enrolled_at,
+          completed: false,
+        };
+      }
+
+      // Calculate total duration for this course
+      lessonIds.forEach(lessonId => {
+        totalMinutes += (videosByLesson.get(lessonId) || 0);
+        totalMinutes += (articlesByLesson.get(lessonId) || 0);
+        totalMinutes += (quizzesByLesson.get(lessonId) || 0);
+      });
+
+      // Calculate progress
+      const completedLessons = lessonIds.filter(lessonId => {
+        const progress = progressByLesson.get(lessonId);
+        return progress?.status === 'completed';
+      }).length;
+
+      const progress = lessonIds.length > 0 ? Math.round((completedLessons / lessonIds.length) * 100) : 0;
+      const completed = completedLessons === lessonIds.length && lessonIds.length > 0;
+
+      // Get last accessed time
+      let lastAccessed = enrollment.enrolled_at;
+      lessonIds.forEach(lessonId => {
+        const lessonProgress = progressByLesson.get(lessonId);
+        if (lessonProgress?.completed_at) {
+          const progressTime = new Date(lessonProgress.completed_at);
+          const currentLast = new Date(lastAccessed);
+          if (progressTime > currentLast) {
+            lastAccessed = lessonProgress.completed_at;
+          }
+        }
+      });
+
+      return {
+        ...enrollment.courses,
+        progress,
+        last_accessed: lastAccessed,
+        completed,
+      };
+    });
 
     // Calculate stats
     const totalCourses = enrolledCourses.length;
     const completedCourses = enrolledCourses.filter(course => course.completed).length;
     const inProgressCourses = enrolledCourses.filter(course => !course.completed && (course.progress || 0) > 0).length;
+    const totalHours = Math.round((totalMinutes / 60) * 10) / 10;
 
     const stats = {
       totalCourses,
       completedCourses,
       inProgressCourses,
-      totalHours: totalCourses * 2.5, // Estimated hours per course
+      totalHours,
     };
 
     return {

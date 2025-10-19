@@ -922,6 +922,22 @@ export default function CourseLearnPage() {
       if (response.ok) {
         setCompletedLessons(prev => new Set([...prev, currentLesson.id]));
         
+        // Update progress percentage
+        if (courseData) {
+          const totalLessons = courseData.modules.reduce((acc, m) => acc + m.lessons.length, 0);
+          const newCompletedCount = completedLessons.size + 1; // +1 for the newly completed lesson
+          const newPercentage = Math.round((newCompletedCount / totalLessons) * 100);
+          
+          setCourseData({
+            ...courseData,
+            progress: {
+              completedLessons: newCompletedCount,
+              totalLessons: totalLessons,
+              percentage: newPercentage
+            }
+          });
+        }
+        
         // Auto-advance to next lesson
         const nextLesson = getNextLesson();
         if (nextLesson) {

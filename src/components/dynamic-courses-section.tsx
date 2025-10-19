@@ -48,18 +48,18 @@ export function DynamicCoursesSection() {
     visible: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.2,
+        staggerChildren: 0.05,
       },
     },
   };
 
   const itemVariants = {
-    hidden: { opacity: 0, y: 50 },
+    hidden: { opacity: 0, y: 5 },
     visible: {
       opacity: 1,
       y: 0,
       transition: {
-        duration: 0.6,
+        duration: 0.3,
       },
     },
   };
@@ -96,10 +96,10 @@ export function DynamicCoursesSection() {
     <section className="w-full py-20 bg-gradient-to-b from-white to-blue-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
+          initial={{ opacity: 0, y: 5 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.8 }}
+          transition={{ duration: 0.4 }}
           className="text-center mb-16"
         >
           <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">
@@ -119,8 +119,6 @@ export function DynamicCoursesSection() {
           {isAuthenticated && enrolledCourses.length > 0 && (
             <div className="flex justify-center gap-4 mt-6">
               <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
                 onClick={() => setShowingEnrolled(true)}
                 className={`px-6 py-2 rounded-lg font-semibold transition-all duration-300 ${
                   showingEnrolled
@@ -131,8 +129,6 @@ export function DynamicCoursesSection() {
                 My Courses ({enrolledCourses.length})
               </motion.button>
               <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
                 onClick={() => setShowingEnrolled(false)}
                 className={`px-6 py-2 rounded-lg font-semibold transition-all duration-300 ${
                   !showingEnrolled
@@ -159,53 +155,54 @@ export function DynamicCoursesSection() {
                 <motion.div
                   key={course.id}
                   variants={itemVariants}
-                  whileHover={{ y: -10, scale: 1.02 }}
                   className="group"
                 >
-                  <div className="bg-white rounded-xl shadow-lg overflow-hidden transition-all duration-300 group-hover:shadow-2xl border border-gray-100">
-                    {/* Course Image */}
-                    <div className="relative h-48 bg-gradient-to-br from-blue-400 to-blue-600 overflow-hidden">
-                      {course.cover_image ? (
-                        <Image
-                          src={course.cover_image}
-                          alt={course.title}
-                          fill
-                          className="object-cover transition-transform duration-300 group-hover:scale-110"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <svg
-                            className="w-20 h-20 text-white opacity-50"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                            />
-                          </svg>
-                        </div>
-                      )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-                    </div>
+                  <Link href={`/courses/${course.id}`} className="block">
+                    <div className="bg-white rounded-xl shadow-lg overflow-hidden transition-all duration-300 border border-gray-100 hover:shadow-xl cursor-pointer">
+                      {/* Course Image */}
+                      <div className="relative h-48 bg-gradient-to-br from-blue-400 to-blue-600 overflow-hidden">
+                        {course.cover_image ? (
+                          <Image
+                            src={course.cover_image}
+                            alt={course.title}
+                            fill
+                            className="object-cover transition-transform duration-300"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <svg
+                              className="w-20 h-20 text-white opacity-50"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                              />
+                            </svg>
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                        {showingEnrolled && (
+                          <div className="absolute top-4 right-4 bg-green-500 text-white text-xs font-bold px-3 py-1 rounded-full">
+                            Enrolled
+                          </div>
+                        )}
+                      </div>
 
-                    {/* Course Content */}
-                    <div className="p-6">
-                      <h3 className="text-xl font-bold text-gray-900 mb-3 line-clamp-2 group-hover:text-blue-600 transition-colors">
-                        {course.title}
-                      </h3>
-                      <p className="text-gray-600 mb-4 line-clamp-3">
-                        {course.description}
-                      </p>
-                      <div className="flex flex-col gap-2">
-                        <Link
-                          href={`/courses/${course.id}`}
-                          className="inline-flex items-center text-blue-600 font-semibold hover:text-blue-700 transition-colors"
-                        >
-                          {isAuthenticated ? 'Learn More' : 'Preview Course'}
+                      {/* Course Content */}
+                      <div className="p-6">
+                        <h3 className="text-xl font-bold text-gray-900 mb-3 line-clamp-2 group-hover:text-blue-600 transition-colors">
+                          {course.title}
+                        </h3>
+                        <p className="text-gray-600 mb-4 line-clamp-3">
+                          {course.description}
+                        </p>
+                        <div className="flex items-center text-blue-600 font-semibold">
+                          {isAuthenticated && showingEnrolled ? 'Continue Learning' : isAuthenticated ? 'Learn More' : 'Preview Course'}
                           <svg
                             className="w-5 h-5 ml-2 transform group-hover:translate-x-1 transition-transform"
                             fill="none"
@@ -219,31 +216,24 @@ export function DynamicCoursesSection() {
                               d="M9 5l7 7-7 7"
                             />
                           </svg>
-                        </Link>
-                        {!isAuthenticated && (
-                          <p className="text-sm text-gray-500">
-                            <Link href="/auth/sign-up" className="text-blue-600 hover:text-blue-700 font-medium">Sign up</Link> to enroll in this course
-                          </p>
-                        )}
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 </motion.div>
               ))}
             </motion.div>
 
             {!showingEnrolled && (
               <motion.div
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 5 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: 0.5, duration: 0.8 }}
+                transition={{ delay: 0.2, duration: 0.4 }}
                 className="text-center mt-12"
               >
                 <Link href="/courses">
                   <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
                     className="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-8 py-4 rounded-lg font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300"
                   >
                     View All Courses
@@ -261,8 +251,6 @@ export function DynamicCoursesSection() {
             </p>
             {showingEnrolled && (
               <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
                 onClick={() => setShowingEnrolled(false)}
                 className="mt-6 bg-gradient-to-r from-blue-600 to-blue-700 text-white px-8 py-4 rounded-lg font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300"
               >

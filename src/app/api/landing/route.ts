@@ -1,5 +1,18 @@
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
+
+// Create service role client to bypass RLS for public data
+const supabaseAdmin = createServiceClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  }
+);
 
 export async function GET() {
   try {
@@ -65,8 +78,8 @@ export async function GET() {
       }
     }
 
-    // Fetch instructors (users with instructor role in course_enrollments)
-    const { data: instructors, error: instructorsError } = await supabase
+    // Fetch instructors (users with instructor role) - use admin client to bypass RLS
+    const { data: instructors, error: instructorsError } = await supabaseAdmin
       .from('profiles')
       .select('id, full_name, email, avatar_url, bio')
       .eq('role', 'instructor')
@@ -76,8 +89,8 @@ export async function GET() {
       console.error('Error fetching instructors:', instructorsError);
     }
 
-    // Fetch admins
-    const { data: admins, error: adminsError } = await supabase
+    // Fetch admins - use admin client to bypass RLS
+    const { data: admins, error: adminsError } = await supabaseAdmin
       .from('profiles')
       .select('id, full_name, email, avatar_url, bio')
       .eq('role', 'admin')

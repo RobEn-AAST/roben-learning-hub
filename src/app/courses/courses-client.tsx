@@ -29,68 +29,48 @@ function CourseCard({ course, isEnrolled, isAuthenticated }: {
   isAuthenticated: boolean; 
 }) {
   return (
-    <div className="group bg-white rounded-xl shadow-lg overflow-hidden transition-all duration-300 hover:shadow-2xl border border-gray-100 h-full flex flex-col hover:-translate-y-2 hover:scale-[1.02]">
-      <div className="relative h-48 bg-gradient-to-br from-blue-400 to-blue-600 overflow-hidden">
-        {course.cover_image ? (
-          <Image 
-            src={course.cover_image} 
-            alt={course.title} 
-            fill 
-            className="object-cover transition-transform duration-300 group-hover:scale-110" 
-            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-            priority={false}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <svg className="w-20 h-20 text-white opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-            </svg>
-          </div>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-        {isAuthenticated && isEnrolled && (
-          <div className="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
-            Enrolled
-          </div>
-        )}
-      </div>
-      <div className="p-6 flex-1 flex flex-col">
-        <h3 className="text-xl font-bold text-gray-900 mb-3 line-clamp-2 group-hover:text-blue-600 transition-colors">
-          {course.title}
-        </h3>
-        <p className="text-gray-600 mb-4 line-clamp-3 flex-1">
-          {course.description}
-        </p>
-        {isAuthenticated ? (
-          <Link 
-            href={`/courses/${course.id}`} 
-            className="inline-flex items-center text-blue-600 font-semibold hover:text-blue-700 transition-colors mt-auto"
-          >
-            {isEnrolled ? 'Continue Learning' : 'View Course'}
+    <Link href={`/courses/${course.id}`} className="block h-full">
+      <div className="group bg-white rounded-xl shadow-lg overflow-hidden transition-all duration-300 hover:shadow-2xl border border-gray-100 h-full flex flex-col hover:-translate-y-2 hover:scale-[1.02] cursor-pointer">
+        <div className="relative h-48 bg-gradient-to-br from-blue-400 to-blue-600 overflow-hidden">
+          {course.cover_image ? (
+            <Image 
+              src={course.cover_image} 
+              alt={course.title} 
+              fill 
+              className="object-cover transition-transform duration-300 group-hover:scale-110" 
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              priority={false}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <svg className="w-20 h-20 text-white opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+              </svg>
+            </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+          {isAuthenticated && isEnrolled && (
+            <div className="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
+              Enrolled
+            </div>
+          )}
+        </div>
+        <div className="p-6 flex-1 flex flex-col">
+          <h3 className="text-xl font-bold text-gray-900 mb-3 line-clamp-2 group-hover:text-blue-600 transition-colors">
+            {course.title}
+          </h3>
+          <p className="text-gray-600 mb-4 line-clamp-3 flex-1">
+            {course.description}
+          </p>
+          <div className="inline-flex items-center text-blue-600 font-semibold mt-auto">
+            {isAuthenticated ? (isEnrolled ? 'Continue Learning' : 'View Course') : 'Preview Course'}
             <svg className="w-5 h-5 ml-2 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
-          </Link>
-        ) : (
-          <div className="mt-auto">
-            <Link 
-              href={`/courses/${course.id}`} 
-              className="inline-flex items-center text-blue-600 font-semibold hover:text-blue-700 transition-colors mb-3"
-            >
-              Preview Course
-              <svg className="w-5 h-5 ml-2 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </Link>
-            <div className="text-sm text-gray-500">
-              <Link href="/auth/sign-up" className="text-blue-600 hover:text-blue-700 font-medium">
-                Sign up
-              </Link> to enroll in this course
-            </div>
           </div>
-        )}
+        </div>
       </div>
-    </div>
+    </Link>
   );
 }
 

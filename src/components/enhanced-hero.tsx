@@ -9,11 +9,11 @@ function StaticLogo() {
       initial={{ opacity: 0, x: 50 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.8, ease: "easeOut" }}
-      className="flex justify-center lg:justify-end"
+      className="flex justify-center lg:justify-end items-start -mt-8"
     >
       <motion.div
         animate={{
-          y: [0, -20, 0],
+          y: [-50, -70, -50],
         }}
         transition={{
           duration: 3,

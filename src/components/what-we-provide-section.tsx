@@ -128,31 +128,29 @@ export function WhatWeProvideSection() {
     visible: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.1,
+        staggerChildren: 0.05,
       },
     },
   };
 
   const itemVariants = {
-    hidden: { opacity: 0, y: 30 },
+    hidden: { opacity: 0, y: 5 },
     visible: {
       opacity: 1,
       y: 0,
       transition: {
-        duration: 0.6,
+        duration: 0.3,
       },
     },
   };
 
   const statsVariants = {
-    hidden: { scale: 0, opacity: 0 },
+    hidden: { scale: 0.98, opacity: 0 },
     visible: {
       scale: 1,
       opacity: 1,
       transition: {
-        type: "spring" as const,
-        stiffness: 100,
-        damping: 15,
+        duration: 0.3,
       },
     },
   };
@@ -161,10 +159,10 @@ export function WhatWeProvideSection() {
     <section className="w-full py-20 bg-gradient-to-b from-white via-blue-50 to-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
+          initial={{ opacity: 0, y: 5 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.8 }}
+          transition={{ duration: 0.4 }}
           className="text-center mb-16"
         >
           <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">
@@ -238,16 +236,15 @@ export function WhatWeProvideSection() {
             <motion.div
               key={index}
               variants={itemVariants}
-              whileHover={{ y: -10, scale: 1.03 }}
               className="group"
             >
-              <div className="bg-white rounded-xl shadow-lg p-8 h-full transition-all duration-300 group-hover:shadow-2xl border border-gray-100">
+              <div className="bg-white rounded-xl shadow-lg p-8 h-full transition-all duration-300 border border-gray-100">
                 <div
-                  className={`inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br ${feature.color} text-white mb-6 group-hover:scale-110 transition-transform`}
+                  className={`inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br ${feature.color} text-white mb-6 transition-transform`}
                 >
                   {feature.icon}
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-4 group-hover:text-blue-600 transition-colors">
+                <h3 className="text-2xl font-bold text-gray-900 mb-4 transition-colors">
                   {feature.title}
                 </h3>
                 <p className="text-gray-600 leading-relaxed">

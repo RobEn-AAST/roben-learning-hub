@@ -37,18 +37,18 @@ export function DynamicInstructorsSection() {
     visible: {
       opacity: 1,
       transition: {
-        staggerChildren: 0.15,
+        staggerChildren: 0.05,
       },
     },
   };
 
   const itemVariants = {
-    hidden: { opacity: 0, scale: 0.8 },
+    hidden: { opacity: 0, scale: 0.98 },
     visible: {
       opacity: 1,
       scale: 1,
       transition: {
-        duration: 0.5,
+        duration: 0.3,
       },
     },
   };
@@ -91,10 +91,10 @@ export function DynamicInstructorsSection() {
     <section className="w-full py-20 bg-gradient-to-b from-blue-50 to-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
+          initial={{ opacity: 0, y: 5 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.8 }}
+          transition={{ duration: 0.4 }}
           className="text-center mb-16"
         >
           <h2 className="text-4xl sm:text-5xl font-bold text-gray-900 mb-4">
@@ -117,10 +117,9 @@ export function DynamicInstructorsSection() {
               <motion.div
                 key={instructor.id}
                 variants={itemVariants}
-                whileHover={{ y: -10, scale: 1.03 }}
                 className="group"
               >
-                <div className="bg-white rounded-xl shadow-lg p-8 text-center transition-all duration-300 group-hover:shadow-2xl border border-gray-100">
+                <div className="bg-white rounded-xl shadow-lg p-8 text-center transition-all duration-300 border border-gray-100">
                   {/* Avatar */}
                   <div className="relative mb-6">
                     {instructor.avatar_url ? (
@@ -129,20 +128,18 @@ export function DynamicInstructorsSection() {
                           src={instructor.avatar_url}
                           alt={instructor.full_name}
                           fill
-                          className="rounded-full object-cover border-4 border-blue-200 group-hover:border-blue-400 transition-colors"
+                          className="rounded-full object-cover border-4 border-blue-200 transition-colors"
                         />
                       </div>
                     ) : (
-                      <div className="w-32 h-32 mx-auto rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center border-4 border-blue-200 group-hover:border-blue-400 transition-all">
+                      <div className="w-32 h-32 mx-auto rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center border-4 border-blue-200 transition-all">
                         <span className="text-4xl font-bold text-white">
                           {getInitials(instructor.full_name)}
                         </span>
                       </div>
                     )}
-                    <motion.div
+                    <div
                       className="absolute -bottom-2 -right-2 w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center shadow-lg"
-                      whileHover={{ rotate: 360 }}
-                      transition={{ duration: 0.5 }}
                     >
                       <svg
                         className="w-6 h-6 text-white"
@@ -157,11 +154,11 @@ export function DynamicInstructorsSection() {
                           d="M5 13l4 4L19 7"
                         />
                       </svg>
-                    </motion.div>
+                    </div>
                   </div>
 
                   {/* Info */}
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors">
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2 transition-colors">
                     {instructor.full_name}
                   </h3>
                   
