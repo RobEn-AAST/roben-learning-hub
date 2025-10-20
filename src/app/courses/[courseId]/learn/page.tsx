@@ -746,7 +746,46 @@ function QuizRenderer({ lesson }: { lesson: Lesson }) {
                     </div>
                   )}
                 </div>
-              ) : (question.type === 'multiple_choice' || question.type === 'true_false') && (
+              ) : question.type === 'true_false' ? (
+                <div className="space-y-4">
+                  <p className="text-gray-600 text-sm mb-4">Select True or False:</p>
+                  <div className="flex gap-4 justify-center">
+                    {question.options.map((option) => {
+                      const isSelected = userAnswers[question.id] === option.id;
+                      const isTrue = option.text.toLowerCase() === 'true';
+                      
+                      return (
+                        <button
+                          key={option.id}
+                          onClick={() => handleAnswerChange(question.id, option.id)}
+                          className={`flex-1 max-w-xs px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-200 ${
+                            isSelected
+                              ? isTrue
+                                ? 'bg-green-500 text-white shadow-lg ring-4 ring-green-200'
+                                : 'bg-red-500 text-white shadow-lg ring-4 ring-red-200'
+                              : isTrue
+                                ? 'border-2 border-green-300 text-green-700 hover:bg-green-50'
+                                : 'border-2 border-red-300 text-red-700 hover:bg-red-50'
+                          }`}
+                        >
+                          <div className="flex items-center justify-center gap-2">
+                            {isTrue ? (
+                              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            ) : (
+                              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                              </svg>
+                            )}
+                            {option.text}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : question.type === 'multiple_choice' && (
                 <div className="space-y-3">
                   {question.options.map((option) => {
                     const isSelected = userAnswers[question.id] === option.id;

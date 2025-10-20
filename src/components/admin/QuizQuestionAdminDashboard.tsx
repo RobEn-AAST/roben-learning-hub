@@ -147,6 +147,12 @@ export default function QuizQuestionAdminDashboard() {
           question = await response.json();
           console.log('Question creation result:', question);
           setCurrentQuestionId(question.id);
+          
+          // If it's a true_false question, automatically create True and False options
+          if (formData.type === 'true_false') {
+            await createTrueFalseOptions(question.id);
+          }
+          
           // Don't close the form, just enable option creation
         } else {
           const errorData = await response.json();
@@ -165,6 +171,39 @@ export default function QuizQuestionAdminDashboard() {
       setError(e.message || "Failed to process question");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Auto-create True/False options for true_false questions
+  const createTrueFalseOptions = async (questionId: string) => {
+    try {
+      // Create True option
+      await fetch('/api/admin/question-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questionId,
+          content: 'True',
+          isCorrect: false, // Default to false, admin can change later
+          position: 1
+        }),
+      });
+
+      // Create False option
+      await fetch('/api/admin/question-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          questionId,
+          content: 'False',
+          isCorrect: true, // Default to false being correct
+          position: 2
+        }),
+      });
+      
+      console.log('True/False options created for question:', questionId);
+    } catch (error) {
+      console.error('Error creating true/false options:', error);
     }
   };
 
@@ -361,6 +400,14 @@ export default function QuizQuestionAdminDashboard() {
                     <option value="short_answer">Short Answer</option>
                     <option value="true_false">True/False</option>
                   </select>
+                  {formData.type === 'true_false' && (
+                    <p className="text-sm text-blue-600 mt-2 flex items-center">
+                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      </svg>
+                      True and False options will be automatically created
+                    </p>
+                  )}
                 </div>
                 <div className="flex justify-end space-x-3 pt-6">
                   <Button type="button" variant="outline" onClick={resetForm}>
@@ -373,8 +420,8 @@ export default function QuizQuestionAdminDashboard() {
                 {error && <div className="text-red-600">{error}</div>}
               </form>
 
-              {/* Create Option Button - shown after question is created */}
-              {currentQuestionId && (
+              {/* Create Option Button - shown after question is created (not for true_false) */}
+              {currentQuestionId && formData.type !== 'true_false' && (
                 <div className="mt-6 pt-6 border-t">
                   <Button 
                     onClick={() => setShowOptionForm(true)}
@@ -384,6 +431,23 @@ export default function QuizQuestionAdminDashboard() {
                     <Icons.Plus />
                     Create Options for this Question
                   </Button>
+                </div>
+              )}
+              
+              {/* Show message for true_false questions */}
+              {currentQuestionId && formData.type === 'true_false' && (
+                <div className="mt-6 pt-6 border-t">
+                  <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
+                    <div className="flex items-center">
+                      <svg className="w-5 h-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                      <div>
+                        <p className="text-green-800 font-medium">True/False Options Created!</p>
+                        <p className="text-green-700 text-sm">True and False options have been automatically created. You can edit which option is correct in the question list below.</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -603,11 +667,27 @@ export default function QuizQuestionAdminDashboard() {
                               <div className="font-medium text-black">{quizzes.find(q => q.id === question.quizId)?.title || question.quizId}</div>
                             </td>
                             <td className="p-4">
-                              <Badge className="bg-blue-100 text-blue-800 border-blue-300">
-                                {question.type === 'multiple_choice' && 'Multiple Choice'}
-                                {question.type === 'short_answer' && 'Short Answer'}
-                                {question.type === 'true_false' && 'True/False'}
-                              </Badge>
+                              <div className="flex flex-col space-y-1">
+                                <Badge className={`${
+                                  question.type === 'multiple_choice' 
+                                    ? 'bg-blue-100 text-blue-800 border-blue-300' 
+                                    : question.type === 'true_false' 
+                                      ? 'bg-green-100 text-green-800 border-green-300' 
+                                      : 'bg-purple-100 text-purple-800 border-purple-300'
+                                }`}>
+                                  {question.type === 'multiple_choice' && 'Multiple Choice'}
+                                  {question.type === 'short_answer' && 'Short Answer'}
+                                  {question.type === 'true_false' && 'True/False'}
+                                </Badge>
+                                {question.type === 'true_false' && (
+                                  <span className="text-xs text-green-600 flex items-center">
+                                    <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                    </svg>
+                                    Auto options
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="p-4">
                               <div className="flex space-x-2">

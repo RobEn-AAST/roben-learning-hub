@@ -76,19 +76,33 @@ function CourseCard({ course, isEnrolled, isAuthenticated }: {
 
 export default function CoursesClient({ initialData }: CoursesClientProps) {
   const [filter, setFilter] = useState<'all' | 'enrolled' | 'available'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const { isAuthenticated, courses, enrolledCourses } = initialData;
 
   // Memoize filtered courses for better performance
   const filteredCourses = useMemo(() => {
+    let coursesToFilter: Course[];
+    
     if (filter === 'enrolled') {
-      return enrolledCourses;
-    }
-    if (filter === 'available' && isAuthenticated) {
+      coursesToFilter = enrolledCourses;
+    } else if (filter === 'available' && isAuthenticated) {
       const enrolledIds = new Set(enrolledCourses.map(c => c.id));
-      return courses.filter(c => !enrolledIds.has(c.id));
+      coursesToFilter = courses.filter(c => !enrolledIds.has(c.id));
+    } else {
+      coursesToFilter = courses;
     }
-    return courses;
-  }, [filter, courses, enrolledCourses, isAuthenticated]);
+    
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      coursesToFilter = coursesToFilter.filter(course => 
+        course.title.toLowerCase().includes(query) || 
+        course.description.toLowerCase().includes(query)
+      );
+    }
+    
+    return coursesToFilter;
+  }, [filter, courses, enrolledCourses, isAuthenticated, searchQuery]);
 
   // Memoize enrolled course IDs for performance
   const enrolledIds = useMemo(() => 
@@ -98,6 +112,34 @@ export default function CoursesClient({ initialData }: CoursesClientProps) {
 
   return (
     <>
+      {/* Search Bar */}
+      <div className="mb-8 animate-in slide-in-from-top-4 duration-500">
+        <div className="relative max-w-md mx-auto">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <input
+            type="text"
+            placeholder="Search courses by title or description..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="block w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Filter buttons for authenticated users with enrolled courses */}
       {isAuthenticated && enrolledCourses.length > 0 && (
         <div className="flex flex-wrap gap-4 mb-8 animate-in slide-in-from-bottom-4 duration-500">

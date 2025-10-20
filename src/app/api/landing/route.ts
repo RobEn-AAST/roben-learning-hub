@@ -51,7 +51,8 @@ export async function GET() {
       }
 
       // Also fetch all published courses for browsing
-      const { data: allCourses, error: coursesError } = await supabase
+      // Use admin client to bypass RLS for public course data
+      const { data: allCourses, error: coursesError } = await supabaseAdmin
         .from('courses')
         .select('id, title, description, cover_image, created_at')
         .eq('status', 'published')

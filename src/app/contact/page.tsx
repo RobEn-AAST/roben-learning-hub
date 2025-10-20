@@ -196,7 +196,7 @@ export default function ContactPage() {
                     Facebook
                   </Button>
                   <Button variant="outline" size="sm">
-                    Twitter
+                    Instagram
                   </Button>
                   <Button variant="outline" size="sm">
                     LinkedIn

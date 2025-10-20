@@ -15,27 +15,45 @@ const supabaseAdmin = createClient(
 
 export async function GET() {
   try {
-    // Get all published courses using service role (bypasses RLS)
+    // Use the optimized function for public course listing
     const { data: courses, error, count } = await supabaseAdmin
-      .from('courses')
-      .select('id, title, description, cover_image, created_at, status', { count: 'exact' })
-      .eq('status', 'published')
-      .order('created_at', { ascending: false });
+      .rpc('get_courses_with_stats')
+      .single();
 
     if (error) {
+      console.error('Error with optimized function, falling back to direct query:', error);
+      // Fallback to original method
+      const { data: fallbackCourses, error: fallbackError, count: fallbackCount } = await supabaseAdmin
+        .from('courses')
+        .select('id, title, description, cover_image, created_at, status', { count: 'exact' })
+        .eq('status', 'published')
+        .order('created_at', { ascending: false });
+
+      if (fallbackError) {
+        return NextResponse.json({ 
+          success: false, 
+          error: fallbackError.message,
+          courses: [],
+          count: 0
+        });
+      }
+
       return NextResponse.json({ 
-        success: false, 
-        error: error.message,
-        courses: [],
-        count: 0
+        success: true, 
+        courses: fallbackCourses || [], 
+        count: fallbackCount || 0,
+        message: `Found ${fallbackCourses?.length || 0} published courses via fallback method`
       });
     }
 
+    // Convert array response to proper format
+    const coursesArray = Array.isArray(courses) ? courses : [courses];
+
     return NextResponse.json({ 
       success: true, 
-      courses: courses || [], 
-      count: count || 0,
-      message: `Found ${courses?.length || 0} published courses via service role`
+      courses: coursesArray, 
+      count: coursesArray.length,
+      message: `Found ${coursesArray.length} published courses via optimized function`
     });
     
   } catch (error) {

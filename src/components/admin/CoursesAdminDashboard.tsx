@@ -516,7 +516,7 @@ function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Load available instructors
+  // Load available instructors and existing course instructors
   useEffect(() => {
     const loadInstructors = async () => {
       try {
@@ -526,8 +526,24 @@ function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
         console.error('Failed to load available instructors:', error);
       }
     };
+
+    const loadExistingInstructors = async () => {
+      if (course && course.id) {
+        try {
+          console.log('Loading existing instructors for course:', course.id);
+          const existingInstructors = await courseInstructorService.getCourseInstructors(course.id);
+          const instructorIds = existingInstructors.map(ci => ci.instructor_id);
+          console.log('Found existing instructor IDs:', instructorIds);
+          setSelectedInstructorIds(instructorIds);
+        } catch (error) {
+          console.error('Failed to load existing course instructors:', error);
+        }
+      }
+    };
+
     loadInstructors();
-  }, []);
+    loadExistingInstructors();
+  }, [course]);
 
   const [formData, setFormData] = useState({
     title: course?.title || '',
@@ -546,6 +562,23 @@ function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
       setFormData(prev => ({ ...prev, created_by: currentUserId }));
     }
   }, [currentUserId, course]);
+
+  // Reset form data when course changes (switching between create/edit)
+  useEffect(() => {
+    setFormData({
+      title: course?.title || '',
+      slug: course?.slug || '',
+      description: course?.description || '',
+      cover_image: course?.cover_image || '',
+      status: course?.status || 'draft',
+      created_by: course?.created_by || currentUserId
+    });
+    
+    // Reset selected instructors when switching to create mode
+    if (!course) {
+      setSelectedInstructorIds([]);
+    }
+  }, [course, currentUserId]);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -1000,6 +1033,11 @@ export function CoursesAdminDashboard() {
         });
         
         alert('Course updated successfully!');
+        
+        // If instructor assignments were included, log the update
+        if (courseData.instructor_ids && courseData.instructor_ids.length > 0) {
+          console.log(`Updated course instructors: ${courseData.instructor_ids.length} instructors assigned`);
+        }
       } else {
         // Create new course
 

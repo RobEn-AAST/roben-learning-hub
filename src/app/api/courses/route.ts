@@ -1,6 +1,18 @@
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { courseCache } from '@/lib/cache';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+// Create admin client for public course data
+const supabaseAdmin = createServiceClient(supabaseUrl, serviceRoleKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
+});
 
 export async function GET() {
   try {
@@ -19,67 +31,85 @@ export async function GET() {
       return NextResponse.json(cachedData);
     }
 
-    let courses: any[] = [];
-    let enrolledCourses: any[] = [];
+    let coursesData: any[] = [];
 
     if (isAuthenticated) {
-      // Use Promise.all to run queries in parallel for faster response
-      const [enrollmentsResult, coursesResult] = await Promise.all([
-        // Get enrolled courses with optimized query
-        supabase
-          .from('course_enrollments')
-          .select(`
-            course_id,
-            courses!inner (
-              id,
-              title,
-              description,
-              cover_image,
-              created_at
-            )
-          `)
-          .eq('user_id', user.id)
-          .order('enrolled_at', { ascending: false }),
+      // Use the optimized function for authenticated users
+      const { data, error } = await supabase
+        .rpc('get_courses_with_stats', { 
+          user_uuid: user.id 
+        });
 
-        // Get all published courses with minimal fields
-        supabase
+      if (error) {
+        console.error('Error fetching courses with stats:', error);
+        // Fallback to old method if function fails
+        const [enrollmentsResult, coursesResult] = await Promise.all([
+          supabase
+            .from('course_enrollments')
+            .select(`
+              course_id,
+              courses!inner (
+                id,
+                title,
+                description,
+                cover_image,
+                created_at
+              )
+            `)
+            .eq('user_id', user.id)
+            .order('enrolled_at', { ascending: false }),
+
+          supabaseAdmin
+            .from('courses')
+            .select('id, title, description, cover_image, created_at')
+            .eq('status', 'published')
+            .order('created_at', { ascending: false })
+        ]);
+
+        const enrolledCourses = enrollmentsResult.data?.map((e: any) => e.courses).filter(Boolean) || [];
+        const allCourses = coursesResult.data || [];
+        
+        coursesData = allCourses.map((course: any) => ({
+          ...course,
+          is_enrolled: enrolledCourses.some((ec: any) => ec.id === course.id),
+          module_count: 0,
+          lesson_count: 0,
+          student_count: 0
+        }));
+      } else {
+        coursesData = data || [];
+      }
+    } else {
+      // Guest user - use optimized function without user context
+      const { data, error } = await supabase
+        .rpc('get_courses_with_stats');
+
+      if (error) {
+        console.error('Error fetching public courses:', error);
+        // Fallback to old method
+        const { data: publishedCourses } = await supabase
           .from('courses')
           .select('id, title, description, cover_image, created_at')
           .eq('status', 'published')
-          .order('created_at', { ascending: false })
-      ]);
-
-      if (enrollmentsResult.error) {
-        console.error('Error fetching enrolled courses:', enrollmentsResult.error);
+          .order('created_at', { ascending: false });
+        
+        coursesData = publishedCourses?.map((course: any) => ({
+          ...course,
+          is_enrolled: false,
+          module_count: 0,
+          lesson_count: 0,
+          student_count: 0
+        })) || [];
       } else {
-        enrolledCourses = enrollmentsResult.data?.map((e: any) => e.courses).filter(Boolean) || [];
-      }
-
-      if (coursesResult.error) {
-        console.error('Error fetching all courses:', coursesResult.error);
-      } else {
-        courses = coursesResult.data || [];
-      }
-    } else {
-      // Guest user - fetch only published courses (single optimized query)
-      const { data: publishedCourses, error: coursesError } = await supabase
-        .from('courses')
-        .select('id, title, description, cover_image, created_at')
-        .eq('status', 'published')
-        .order('created_at', { ascending: false });
-
-      if (coursesError) {
-        console.error('Error fetching courses:', coursesError);
-      } else {
-        courses = publishedCourses || [];
+        coursesData = data || [];
       }
     }
 
     // Prepare response data
     const responseData = {
       isAuthenticated,
-      courses: courses || [],
-      enrolledCourses: enrolledCourses || [],
+      courses: coursesData,
+      enrolledCourses: coursesData.filter((course: any) => course.is_enrolled),
     };
 
     // Cache the data for 3 minutes

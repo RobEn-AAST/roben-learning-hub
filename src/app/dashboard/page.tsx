@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { Navigation } from '@/components/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -62,14 +63,26 @@ async function getDashboardData(): Promise<DashboardData> {
       .order('enrolled_at', { ascending: false });
 
     // Get recent courses (all published courses for discovery)
-    const { data: recentCoursesData } = await supabase
+    // Use service client to bypass RLS issues for public course data
+    const supabaseAdmin = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    const { data: recentCoursesData } = await supabaseAdmin
       .from('courses')
       .select('id, title, description, cover_image, created_at')
       .eq('status', 'published')
-      .order('created_at', { ascending: false })
-      .limit(6);
+      .order('created_at', { ascending: false });
 
-    const recentCourses = recentCoursesData || [];
+    // Get enrolled course IDs for filtering
+    const enrolledCourseIds = enrolledCoursesData?.map((e: any) => e.courses.id) || [];
+    
+    // Filter out enrolled courses from discovery and limit to 6
+    const availableCourses = (recentCoursesData || [])
+      .filter((course: any) => !enrolledCourseIds.includes(course.id));
+    
+    // If no available courses (user enrolled in all), show recent courses with a note
+    const recentCourses = availableCourses.slice(0, 6);
 
     // If no enrolled courses, return early
     if (!enrolledCoursesData || enrolledCoursesData.length === 0) {
@@ -410,17 +423,25 @@ export default async function DashboardPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {data.recentCourses.slice(0, 3).map((course) => (
-                    <div key={course.id} className="border rounded-lg p-3 hover:shadow-md transition-shadow">
-                      <h4 className="font-semibold text-sm text-gray-900 mb-1">{course.title}</h4>
-                      <p className="text-xs text-gray-600 mb-3 line-clamp-2">{course.description}</p>
-                      <Button asChild size="sm" variant="outline" className="w-full">
-                        <Link href={`/courses/${course.id}`}>View Course</Link>
-                      </Button>
-                    </div>
-                  ))}
-                </div>
+                {data.recentCourses.length > 0 ? (
+                  <div className="space-y-4">
+                    {data.recentCourses.slice(0, 3).map((course) => (
+                      <div key={course.id} className="border rounded-lg p-3 hover:shadow-md transition-shadow">
+                        <h4 className="font-semibold text-sm text-gray-900 mb-1">{course.title}</h4>
+                        <p className="text-xs text-gray-600 mb-3 line-clamp-2">{course.description}</p>
+                        <Button asChild size="sm" variant="outline" className="w-full">
+                          <Link href={`/courses/${course.id}`}>View Course</Link>
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <BookOpen className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">No new courses available for discovery right now.</p>
+                    <p className="text-xs text-gray-400 mt-1">Check back later for new courses!</p>
+                  </div>
+                )}
                 
                 <div className="mt-4 pt-4 border-t">
                   <Button asChild variant="outline" className="w-full">

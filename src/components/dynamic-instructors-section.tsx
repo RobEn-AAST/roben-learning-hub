@@ -172,21 +172,7 @@ export function DynamicInstructorsSection() {
                     </p>
                   )}
 
-                  {/* Stats */}
-                  <div className="flex justify-center gap-6 mt-6 pt-6 border-t border-gray-200">
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-blue-600">10+</p>
-                      <p className="text-sm text-gray-600">Courses</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-blue-600">500+</p>
-                      <p className="text-sm text-gray-600">Students</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-blue-600">4.8</p>
-                      <p className="text-sm text-gray-600">Rating</p>
-                    </div>
-                  </div>
+
                 </div>
               </motion.div>
             ))}

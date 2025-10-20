@@ -199,36 +199,67 @@ export async function GET(
     // If enrolled, get progress (only for authenticated users)
     let progress = null;
     if (enrollment && isAuthenticated && user) {
-      // Get all lesson IDs for this course to validate progress records
-      const allLessonIds = sortedModules.flatMap(module => 
-        (module.lessons || []).map(lesson => lesson.id)
-      );
+      // Try to use the optimized function if we have the course slug
+      if (course.slug) {
+        try {
+          const { data: optimizedProgress, error } = await supabase
+            .rpc('get_course_progress', {
+              course_slug: course.slug,
+              user_uuid: user.id
+            });
 
-      // Get completed lessons - simplified logic
-      const { data: completedLessons } = await supabaseAdmin
-        .from('lesson_progress')
-        .select('lesson_id')
-        .eq('user_id', user.id)
-        .eq('status', 'completed');
+          if (!error && optimizedProgress && optimizedProgress.length > 0) {
+            // Calculate progress from optimized function results
+            const totalLessons = optimizedProgress.length;
+            const completedLessons = optimizedProgress.filter((lesson: any) => 
+              lesson.progress_status === 'completed'
+            ).length;
+            const percentage = totalLessons > 0 ? Math.min(100, Math.round((completedLessons / totalLessons) * 100)) : 0;
+            
+            progress = {
+              completedLessons,
+              totalLessons,
+              percentage
+            };
+          }
+        } catch (optimizedError) {
+          console.log('Optimized progress failed, falling back to original method:', optimizedError);
+        }
+      }
 
-      // Filter to only lessons in this course and deduplicate
-      const courseCompletedLessons = new Set(
-        (completedLessons || [])
-          .map(p => p.lesson_id)
-          .filter(lessonId => allLessonIds.includes(lessonId))
-      );
+      // Fallback to original method if optimized function failed or no slug
+      if (!progress) {
+        // Get all lesson IDs for this course to validate progress records
+        const allLessonIds = sortedModules.flatMap(module => 
+          (module.lessons || []).map(lesson => lesson.id)
+        );
 
-      const totalLessons = allLessonIds.length;
-      const completedCount = courseCompletedLessons.size;
-      
-      // Ensure percentage never exceeds 100%
-      const percentage = totalLessons > 0 ? Math.min(100, Math.round((completedCount / totalLessons) * 100)) : 0;
-      
-      progress = {
-        completedLessons: completedCount,
-        totalLessons,
-        percentage
-      };
+        // Get completed lessons - simplified logic
+        const { data: completedLessons } = await supabaseAdmin
+          .from('lesson_progress')
+          .select('lesson_id')
+          .eq('user_id', user.id)
+          .eq('status', 'completed');
+
+        // Filter to only lessons in this course and deduplicate
+        const courseCompletedLessons = new Set(
+          (completedLessons || [])
+            .map(p => p.lesson_id)
+            .filter(lessonId => allLessonIds.includes(lessonId))
+        );
+
+        const totalLessons = allLessonIds.length;
+        const completedCount = courseCompletedLessons.size;
+        
+        // Ensure percentage never exceeds 100%
+        const percentage = totalLessons > 0 ? Math.min(100, Math.round((completedCount / totalLessons) * 100)) : 0;
+        
+        progress = {
+          completedLessons: completedCount,
+          totalLessons,
+          percentage
+        };
+      }
     }
 
     return NextResponse.json({

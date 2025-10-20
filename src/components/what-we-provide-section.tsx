@@ -1,34 +1,8 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
-
-interface Stats {
-  totalCourses: number;
-  totalEnrollments: number;
-  totalLessons: number;
-}
 
 export function WhatWeProvideSection() {
-  const [stats, setStats] = useState<Stats>({
-    totalCourses: 0,
-    totalEnrollments: 0,
-    totalLessons: 0,
-  });
-
-  useEffect(() => {
-    async function fetchStats() {
-      try {
-        const response = await fetch('/api/landing');
-        const data = await response.json();
-        setStats(data.stats || { totalCourses: 0, totalEnrollments: 0, totalLessons: 0 });
-      } catch (error) {
-        console.error('Error fetching stats:', error);
-      }
-    }
-
-    fetchStats();
-  }, []);
 
   const features = [
     {
@@ -144,16 +118,7 @@ export function WhatWeProvideSection() {
     },
   };
 
-  const statsVariants = {
-    hidden: { scale: 0.98, opacity: 0 },
-    visible: {
-      scale: 1,
-      opacity: 1,
-      transition: {
-        duration: 0.3,
-      },
-    },
-  };
+
 
   return (
     <section className="w-full py-20 bg-gradient-to-b from-white via-blue-50 to-white">
@@ -173,56 +138,7 @@ export function WhatWeProvideSection() {
           </p>
         </motion.div>
 
-        {/* Stats */}
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          whileInView="visible"
-          viewport={{ once: true }}
-          className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-20"
-        >
-          <motion.div variants={statsVariants} className="text-center">
-            <div className="bg-gradient-to-br from-blue-400 to-blue-600 rounded-xl p-8 shadow-xl">
-              <motion.p
-                className="text-5xl font-bold text-white mb-2"
-                initial={{ opacity: 0 }}
-                whileInView={{ opacity: 1 }}
-                viewport={{ once: true }}
-              >
-                {stats.totalCourses}+
-              </motion.p>
-              <p className="text-xl text-blue-100">Courses Available</p>
-            </div>
-          </motion.div>
 
-          <motion.div variants={statsVariants} className="text-center">
-            <div className="bg-gradient-to-br from-blue-500 to-blue-700 rounded-xl p-8 shadow-xl">
-              <motion.p
-                className="text-5xl font-bold text-white mb-2"
-                initial={{ opacity: 0 }}
-                whileInView={{ opacity: 1 }}
-                viewport={{ once: true }}
-              >
-                {stats.totalEnrollments}+
-              </motion.p>
-              <p className="text-xl text-blue-100">Active Students</p>
-            </div>
-          </motion.div>
-
-          <motion.div variants={statsVariants} className="text-center">
-            <div className="bg-gradient-to-br from-blue-600 to-blue-800 rounded-xl p-8 shadow-xl">
-              <motion.p
-                className="text-5xl font-bold text-white mb-2"
-                initial={{ opacity: 0 }}
-                whileInView={{ opacity: 1 }}
-                viewport={{ once: true }}
-              >
-                {stats.totalLessons}+
-              </motion.p>
-              <p className="text-xl text-blue-100">Lessons Created</p>
-            </div>
-          </motion.div>
-        </motion.div>
 
         {/* Features Grid */}
         <motion.div

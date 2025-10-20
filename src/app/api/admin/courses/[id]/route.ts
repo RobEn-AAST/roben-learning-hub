@@ -112,6 +112,59 @@ export async function PUT(
     }
 
     console.log('Course updated successfully:', data);
+
+    // Handle instructor assignments if provided
+    if (instructor_ids !== undefined && Array.isArray(instructor_ids)) {
+      console.log('Processing instructor assignments:', instructor_ids);
+      
+      try {
+        // Get current user for assignment tracking
+        const { data: { user } } = await adminClient.auth.getUser();
+        const assignedBy = user?.id || data.created_by;
+
+        // First, remove all existing instructor assignments for this course
+        const { error: removeError } = await adminClient
+          .from('course_instructors')
+          .delete()
+          .eq('course_id', id);
+
+        if (removeError) {
+          console.error('Error removing existing instructors:', removeError);
+          // Don't fail the whole update for this, just log it
+        } else {
+          console.log('Removed existing instructor assignments');
+        }
+
+        // Add new instructor assignments if any instructors are selected
+        if (instructor_ids.length > 0) {
+          const instructorAssignments = instructor_ids.map((instructorId: string) => ({
+            course_id: id,
+            instructor_id: instructorId,
+            assigned_by: assignedBy,
+            assigned_at: new Date().toISOString()
+          }));
+
+          const { error: assignmentError } = await adminClient
+            .from('course_instructors')
+            .insert(instructorAssignments);
+
+          if (assignmentError) {
+            console.error('Error creating instructor assignments:', assignmentError);
+            // Don't fail the whole update, just log the error
+          } else {
+            console.log(`Successfully assigned ${instructor_ids.length} instructors to course`);
+          }
+        } else {
+          console.log('No instructors to assign (empty array provided)');
+        }
+      } catch (instructorError) {
+        console.error('Error handling instructor assignments:', instructorError);
+        // Don't fail the whole course update for instructor assignment errors
+      }
+    } else {
+      console.log('No instructor_ids provided, skipping instructor assignment updates');
+    }
+
     return NextResponse.json(data);
   } catch (error) {
     console.error('=== COURSE UPDATE ERROR ===');
