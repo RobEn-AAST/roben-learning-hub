@@ -553,25 +553,8 @@ export function ModulesAdminDashboard() {
   };
 
   if (showForm) {
-    // Debug logging
-    console.log('Render state:', { workflowStep, currentModuleId, currentLessonId, showForm });
-    
     return (
       <div className="space-y-6">
-        {/* Debug Panel - Remove this after testing */}
-        <Card className="bg-yellow-50 border-yellow-300">
-          <CardContent className="p-4">
-            <p className="text-xs font-mono">
-              <strong>Debug Info:</strong><br />
-              workflowStep: {workflowStep}<br />
-              currentModuleId: {currentModuleId || 'null'}<br />
-              currentLessonId: {currentLessonId || 'null'}<br />
-              showForm: {showForm ? 'true' : 'false'}<br />
-              editingModule: {editingModule ? 'yes' : 'no'}
-            </p>
-          </CardContent>
-        </Card>
-        
         {/* Step-by-step workflow header */}
         <div className="flex justify-between items-center">
           <div>
