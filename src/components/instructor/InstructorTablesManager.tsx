@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ModulesAdminDashboard } from '@/components/admin/ModulesAdminDashboard';
+import { InstructorModulesManager } from '@/components/instructor/InstructorModulesManager';
 import { LessonsAdminDashboard } from '@/components/admin/LessonsAdminDashboard';
 import VideoAdminDashboard from '@/components/admin/VideoAdminDashboard';
 import ArticleAdminDashboard from '@/components/admin/ArticleAdminDashboard';
@@ -229,7 +229,7 @@ export function InstructorTablesManager() {
             <span>Back to Tables</span>
           </Button>
         </div>
-        <ModulesAdminDashboard />
+        <InstructorModulesManager />
       </div>
     );
   }
