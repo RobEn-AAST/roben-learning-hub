@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Module, ModuleStats, Course } from '@/services/moduleService';
 import { activityLogService } from '@/services/activityLogService';
+import { Lesson } from '@/services/lessonService';
 
 // Icons
 const Icons = {
@@ -50,6 +51,26 @@ const Icons = {
     <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.707A1 1 0 013 7V4z" />
     </svg>
+  ),
+  Video: () => (
+    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+    </svg>
+  ),
+  Article: () => (
+    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    </svg>
+  ),
+  Project: () => (
+    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+    </svg>
+  ),
+  Quiz: () => (
+    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
   )
 };
 
@@ -61,26 +82,77 @@ interface ModuleFormData {
   metadata?: any;
 }
 
+interface LessonFormData {
+  module_id: string;
+  title: string;
+  lesson_type: 'video' | 'article' | 'project' | 'quiz';
+  position?: number;
+  status: 'visible' | 'hidden';
+  instructor_id: string;
+  metadata?: any;
+}
+
+interface ContentFormData {
+  // Video fields
+  provider?: string;
+  provider_video_id?: string;
+  url?: string;
+  duration_seconds?: number;
+  transcript?: string;
+  // Article fields
+  article_title?: string;
+  content?: string;
+  summary?: string;
+  reading_time_minutes?: number;
+  // Project fields
+  project_title?: string;
+  project_description?: string;
+  submission_instructions?: string;
+  external_link?: string;
+  // Quiz fields (quiz is created automatically with lesson)
+}
+
 interface Filters {
   course_id?: string;
   search?: string;
 }
 
+type WorkflowStep = 'module' | 'lesson' | 'content';
+
 export function ModulesAdminDashboard() {
   const [modules, setModules] = useState<Module[]>([]);
   const [stats, setStats] = useState<ModuleStats | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [instructors, setInstructors] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingModule, setEditingModule] = useState<Module | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [filters, setFilters] = useState<Filters>({});
+  const [error, setError] = useState('');
+  
+  // Workflow state management
+  const [workflowStep, setWorkflowStep] = useState<WorkflowStep>('module');
+  const [currentModuleId, setCurrentModuleId] = useState<string>('');
+  const [currentLessonId, setCurrentLessonId] = useState<string>('');
+  const [currentLessonType, setCurrentLessonType] = useState<'video' | 'article' | 'project' | 'quiz'>('video');
+  
   const [formData, setFormData] = useState<ModuleFormData>({
     course_id: '',
     title: '',
     description: ''
   });
+
+  const [lessonFormData, setLessonFormData] = useState<LessonFormData>({
+    module_id: '',
+    title: '',
+    lesson_type: 'video',
+    status: 'visible',
+    instructor_id: ''
+  });
+
+  const [contentFormData, setContentFormData] = useState<ContentFormData>({});
 
   useEffect(() => {
     loadInitialData();
@@ -92,9 +164,10 @@ export function ModulesAdminDashboard() {
 
   const loadInitialData = async () => {
     try {
-      const [statsResponse, coursesResponse] = await Promise.all([
+      const [statsResponse, coursesResponse, instructorsResponse] = await Promise.all([
         fetch('/api/admin/modules/stats'),
-        fetch('/api/admin/modules/courses')
+        fetch('/api/admin/modules/courses'),
+        fetch('/api/admin/lessons/instructors')
       ]);
 
       if (statsResponse.ok) {
@@ -105,6 +178,11 @@ export function ModulesAdminDashboard() {
       if (coursesResponse.ok) {
         const coursesData = await coursesResponse.json();
         setCourses(coursesData);
+      }
+
+      if (instructorsResponse.ok) {
+        const instructorsData = await instructorsResponse.json();
+        setInstructors(instructorsData);
       }
     } catch (error) {
       console.error('Error loading initial data:', error);
@@ -135,6 +213,8 @@ export function ModulesAdminDashboard() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+    setLoading(true);
     try {
       const url = editingModule 
         ? `/api/admin/modules/${editingModule.id}`
@@ -151,6 +231,8 @@ export function ModulesAdminDashboard() {
       });
 
       if (response.ok) {
+        const result = await response.json();
+        
         // Add activity logging
         if (editingModule) {
           // Log module update
@@ -159,28 +241,218 @@ export function ModulesAdminDashboard() {
             formData.title,
             editingModule.title // old title
           );
+          // Close form after successful update
+          await loadModules();
+          await loadInitialData();
+          resetForm();
         } else {
           // Log module creation
-          const result = await response.json();
+          const createdModule = result; // API returns module directly, not wrapped
+          
           await activityLogService.logActivity({
             action: 'CREATE',
             table_name: 'modules',
-            record_id: result.module?.id,
+            record_id: createdModule.id,
             record_name: formData.title,
             description: `Created new module: "${formData.title}"`
           });
+          
+          // Set the current module ID and automatically go to lesson step
+          const moduleId = createdModule.id;
+          console.log('Module created, advancing to lesson step. Module ID:', moduleId);
+          console.log('Full module response:', createdModule);
+          
+          // Update all states before re-rendering
+          setCurrentModuleId(moduleId);
+          setLessonFormData({
+            module_id: moduleId,
+            title: '',
+            lesson_type: 'video',
+            status: 'visible',
+            instructor_id: ''
+          });
+          setError('');
+          setWorkflowStep('lesson');
+          
+          // Load modules in background (don't await to prevent blocking)
+          loadModules();
+          loadInitialData();
         }
-
-        await loadModules();
-        await loadInitialData();
-        resetForm();
       } else {
         const error = await response.json();
-        alert(`Error: ${error.error}`);
+        setError(error.error || 'Failed to save module');
       }
     } catch (error) {
       console.error('Error saving module:', error);
-      alert('Error saving module');
+      setError('Error saving module');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLessonSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentModuleId) return;
+    
+    setError('');
+    setLoading(true);
+    try {
+      const response = await fetch('/api/admin/lessons', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...lessonFormData,
+          module_id: currentModuleId
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        const createdLesson = result; // API returns lesson directly, not wrapped
+        
+        setCurrentLessonId(createdLesson.id);
+        setCurrentLessonType(lessonFormData.lesson_type);
+        
+        console.log('Lesson created:', createdLesson);
+        
+        // Log activity
+        await activityLogService.logActivity({
+          action: 'CREATE',
+          table_name: 'lessons',
+          record_id: createdLesson.id,
+          record_name: lessonFormData.title,
+          description: `Created new lesson: "${lessonFormData.title}"`
+        });
+        
+        setError('');
+        // If lesson type is quiz, create quiz and show success message
+        if (lessonFormData.lesson_type === 'quiz') {
+          await createQuizForLesson(createdLesson.id, lessonFormData.title);
+          // Stay on lesson step to show the success message
+        } else {
+          // Automatically advance to content creation for non-quiz lessons
+          setWorkflowStep('content');
+        }
+      } else {
+        const errorData = await response.json();
+        setError(errorData.error || 'Failed to create lesson');
+      }
+    } catch (error) {
+      console.error('Error creating lesson:', error);
+      setError('Failed to create lesson');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const createQuizForLesson = async (lessonId: string, lessonTitle: string) => {
+    try {
+      const response = await fetch('/api/admin/quizzes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lessonId: lessonId,
+          title: `${lessonTitle} Quiz`,
+          description: `Quiz for ${lessonTitle}`
+        })
+      });
+
+      if (response.ok) {
+        setError('Lesson and quiz created successfully!');
+      }
+    } catch (error) {
+      console.error('Error creating quiz:', error);
+    }
+  };
+
+  const handleContentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentLessonId) return;
+    
+    setError('');
+    setLoading(true);
+    try {
+      let endpoint = '';
+      let bodyData: any = { lesson_id: currentLessonId };
+
+      switch (currentLessonType) {
+        case 'video':
+          endpoint = '/api/admin/videos';
+          bodyData = {
+            lesson_id: currentLessonId,
+            provider: contentFormData.provider || 'youtube',
+            provider_video_id: contentFormData.provider_video_id || '',
+            url: contentFormData.url || '',
+            duration_seconds: parseInt(String(contentFormData.duration_seconds || 0)),
+            transcript: contentFormData.transcript || '',
+            metadata: {}
+          };
+          console.log('Video data to submit:', bodyData);
+          break;
+        case 'article':
+          endpoint = '/api/admin/articles';
+          bodyData = {
+            lesson_id: currentLessonId,
+            title: contentFormData.article_title || '',
+            content: contentFormData.content || '',
+            summary: contentFormData.summary || '',
+            reading_time_minutes: parseInt(String(contentFormData.reading_time_minutes || 5)),
+            metadata: {}
+          };
+          console.log('Article data to submit:', bodyData);
+          break;
+        case 'project':
+          endpoint = '/api/admin/projects';
+          bodyData = {
+            lesson_id: currentLessonId,
+            title: contentFormData.project_title || '',
+            description: contentFormData.project_description || '',
+            submission_instructions: contentFormData.submission_instructions || null,
+            external_link: contentFormData.external_link || null
+          };
+          console.log('Project data to submit:', bodyData);
+          break;
+      }
+
+      console.log(`Submitting ${currentLessonType} to ${endpoint}`);
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(bodyData)
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Content created successfully:', result);
+        
+        // Log activity
+        await activityLogService.logActivity({
+          action: 'CREATE',
+          table_name: `${currentLessonType}s`,
+          record_id: result.id,
+          record_name: contentFormData.article_title || contentFormData.project_title || 'Content',
+          description: `Created new ${currentLessonType} content`
+        });
+        
+        setError(`${currentLessonType.charAt(0).toUpperCase() + currentLessonType.slice(1)} created successfully!`);
+        setContentFormData({});
+      } else {
+        console.error(`API Error - Status: ${response.status} ${response.statusText}`);
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          errorData = { error: `Server error: ${response.status} ${response.statusText}` };
+        }
+        console.error(`Failed to create ${currentLessonType}:`, errorData);
+        setError(errorData.error || errorData.message || `Failed to create ${currentLessonType} (Status: ${response.status})`);
+      }
+    } catch (error) {
+      console.error(`Error creating ${currentLessonType}:`, error);
+      setError(`Failed to create ${currentLessonType}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -234,8 +506,40 @@ export function ModulesAdminDashboard() {
       title: '',
       description: ''
     });
+    setLessonFormData({
+      module_id: '',
+      title: '',
+      lesson_type: 'video',
+      status: 'visible',
+      instructor_id: ''
+    });
+    setContentFormData({});
     setEditingModule(null);
     setShowForm(false);
+    setWorkflowStep('module');
+    setCurrentModuleId('');
+    setCurrentLessonId('');
+    setCurrentLessonType('video');
+    setError('');
+  };
+
+  // Workflow navigation functions
+  const goToLessonStep = () => {
+    setWorkflowStep('lesson');
+  };
+
+  const goToContentStep = (lessonType: 'video' | 'article' | 'project' | 'quiz') => {
+    setCurrentLessonType(lessonType);
+    setWorkflowStep('content');
+  };
+
+  const goBackToModuleStep = () => {
+    setWorkflowStep('module');
+  };
+
+  const goBackToLessonStep = () => {
+    setWorkflowStep('lesson');
+    setContentFormData({});
   };
 
   const getStatusBadge = (status: string) => {
@@ -249,98 +553,528 @@ export function ModulesAdminDashboard() {
   };
 
   if (showForm) {
+    // Debug logging
+    console.log('Render state:', { workflowStep, currentModuleId, currentLessonId, showForm });
+    
     return (
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-black">
-            {editingModule ? 'Edit Module' : 'Create New Module'}
-          </h2>
-          <Button variant="outline" onClick={resetForm}>
-            Cancel
-          </Button>
-        </div>
-
-        <Card className="bg-white">
-          <CardHeader>
-            <CardTitle className="text-black">Module Details</CardTitle>
-            <CardDescription className="text-gray-600">
-              {editingModule ? 'Update module information' : 'Enter module information'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="course_id" className="text-black">Course *</Label>
-                <select
-                  id="course_id"
-                  value={formData.course_id}
-                  onChange={(e) => setFormData({ ...formData, course_id: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  style={{ backgroundColor: 'white', color: 'black' }}
-                  required
-                >
-                  <option value="" style={{ backgroundColor: 'white', color: 'black' }}>Select a course</option>
-                  {courses.map((course) => (
-                    <option key={course.id} value={course.id} style={{ backgroundColor: 'white', color: 'black' }}>
-                      {course.title} ({course.status})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="title" className="text-black">Title *</Label>
-                <Input
-                  id="title"
-                  type="text"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  placeholder="Enter module title"
-                  style={{ backgroundColor: 'white', color: 'black' }}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="description" className="text-black">Description *</Label>
-                <textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Enter module description"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px]"
-                  style={{ backgroundColor: 'white', color: 'black' }}
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="position" className="text-black">Position</Label>
-                <Input
-                  id="position"
-                  type="number"
-                  value={formData.position || ''}
-                  onChange={(e) => setFormData({ ...formData, position: parseInt(e.target.value) })}
-                  placeholder="Auto-assigned if empty"
-                  style={{ backgroundColor: 'white', color: 'black' }}
-                  min="1"
-                />
-                <p className="text-sm text-gray-600">
-                  Position determines the order of modules in the course (1 = first)
-                </p>
-              </div>
-
-              <div className="flex justify-end space-x-2">
-                <Button type="button" variant="outline" onClick={resetForm}>
-                  Cancel
-                </Button>
-                <Button type="submit">
-                  {editingModule ? 'Update Module' : 'Create Module'}
-                </Button>
-              </div>
-            </form>
+        {/* Debug Panel - Remove this after testing */}
+        <Card className="bg-yellow-50 border-yellow-300">
+          <CardContent className="p-4">
+            <p className="text-xs font-mono">
+              <strong>Debug Info:</strong><br />
+              workflowStep: {workflowStep}<br />
+              currentModuleId: {currentModuleId || 'null'}<br />
+              currentLessonId: {currentLessonId || 'null'}<br />
+              showForm: {showForm ? 'true' : 'false'}<br />
+              editingModule: {editingModule ? 'yes' : 'no'}
+            </p>
           </CardContent>
         </Card>
+        
+        {/* Step-by-step workflow header */}
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-2xl font-bold text-black">
+              {workflowStep === 'module' && (editingModule ? 'Edit Module' : 'Create New Module')}
+              {workflowStep === 'lesson' && 'Create Lesson'}
+              {workflowStep === 'content' && `Create ${currentLessonType.charAt(0).toUpperCase() + currentLessonType.slice(1)}`}
+            </h2>
+            <div className="flex items-center space-x-2 mt-2">
+              <span className={`px-2 py-1 rounded text-xs ${workflowStep === 'module' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'}`}>
+                1. Module
+              </span>
+              <span className="text-gray-400">→</span>
+              <span className={`px-2 py-1 rounded text-xs ${workflowStep === 'lesson' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'}`}>
+                2. Lesson
+              </span>
+              <span className="text-gray-400">→</span>
+              <span className={`px-2 py-1 rounded text-xs ${workflowStep === 'content' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'}`}>
+                3. Content
+              </span>
+            </div>
+          </div>
+          <div className="flex space-x-2">
+            {workflowStep === 'lesson' && (
+              <Button variant="outline" onClick={goBackToModuleStep}>
+                ← Back to Module
+              </Button>
+            )}
+            {workflowStep === 'content' && (
+              <Button variant="outline" onClick={goBackToLessonStep}>
+                ← Back to Lesson
+              </Button>
+            )}
+            <Button variant="outline" onClick={resetForm}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+
+        {/* STEP 1: Module Creation/Editing */}
+        {workflowStep === 'module' && (
+          <Card className="bg-white">
+            <CardHeader>
+              <CardTitle className="text-black">Module Details</CardTitle>
+              <CardDescription className="text-gray-600">
+                {editingModule ? 'Update module information' : 'Enter module information'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="course_id" className="text-black">Course *</Label>
+                  <select
+                    id="course_id"
+                    value={formData.course_id}
+                    onChange={(e) => setFormData({ ...formData, course_id: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    style={{ backgroundColor: 'white', color: 'black' }}
+                    required
+                    disabled={editingModule ? true : false}
+                  >
+                    <option value="" style={{ backgroundColor: 'white', color: 'black' }}>Select a course</option>
+                    {courses.map((course) => (
+                      <option key={course.id} value={course.id} style={{ backgroundColor: 'white', color: 'black' }}>
+                        {course.title} ({course.status})
+                      </option>
+                    ))}
+                  </select>
+                  {editingModule && (
+                    <p className="text-sm text-gray-500 mt-1">
+                      Course cannot be changed when editing a module
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="title" className="text-black">Title *</Label>
+                  <Input
+                    id="title"
+                    type="text"
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    placeholder="Enter module title"
+                    style={{ backgroundColor: 'white', color: 'black' }}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="description" className="text-black">Description *</Label>
+                  <textarea
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Enter module description"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px]"
+                    style={{ backgroundColor: 'white', color: 'black' }}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="position" className="text-black">Position</Label>
+                  <Input
+                    id="position"
+                    type="number"
+                    value={formData.position || ''}
+                    onChange={(e) => setFormData({ ...formData, position: parseInt(e.target.value) })}
+                    placeholder="Auto-assigned if empty"
+                    style={{ backgroundColor: 'white', color: 'black' }}
+                    min="1"
+                  />
+                  <p className="text-sm text-gray-600">
+                    Position determines the order of modules in the course (1 = first)
+                  </p>
+                </div>
+
+                <div className="flex justify-end space-x-2">
+                  <Button type="button" variant="outline" onClick={resetForm}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={loading}>
+                    {editingModule ? 'Update Module' : 'Create Module'}
+                  </Button>
+                </div>
+                {error && <div className="text-red-600 text-sm mt-2">{error}</div>}
+              </form>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* STEP 2: Lesson Creation */}
+        {workflowStep === 'lesson' && currentModuleId ? (
+          <Card className="bg-white">
+            <CardHeader>
+              <CardTitle className="text-black">Lesson Details</CardTitle>
+              <CardDescription className="text-gray-600">
+                Add a lesson to your module: <strong>{formData.title}</strong>
+                <br />
+                <span className="text-xs text-gray-500">This lesson will be automatically assigned to this module</span>
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleLessonSubmit} className="space-y-6">
+                {/* Hidden field showing module assignment */}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-blue-800">
+                    <strong>📚 Module:</strong> {formData.title}
+                    <br />
+                    <span className="text-xs text-blue-600">Lesson will be auto-assigned to this module</span>
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="lessonTitle" className="text-black font-semibold text-sm mb-2 block">Lesson Title *</Label>
+                  <Input
+                    id="lessonTitle"
+                    type="text"
+                    value={lessonFormData.title}
+                    onChange={(e) => setLessonFormData({ ...lessonFormData, title: e.target.value })}
+                    placeholder="Enter lesson title"
+                    className="mt-2"
+                    style={{ backgroundColor: 'white', color: 'black' }}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="lessonType" className="text-black font-semibold text-sm mb-2 block">Lesson Type *</Label>
+                  <select
+                    id="lessonType"
+                    value={lessonFormData.lesson_type}
+                    onChange={(e) => setLessonFormData({ ...lessonFormData, lesson_type: e.target.value as any })}
+                    className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
+                    required
+                  >
+                    <option value="video">Video</option>
+                    <option value="article">Article</option>
+                    <option value="project">Project</option>
+                    <option value="quiz">Quiz</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="instructor" className="text-black font-semibold text-sm mb-2 block">Instructor *</Label>
+                  <select
+                    id="instructor"
+                    value={lessonFormData.instructor_id}
+                    onChange={(e) => setLessonFormData({ ...lessonFormData, instructor_id: e.target.value })}
+                    className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
+                    required
+                  >
+                    <option value="">Select an instructor</option>
+                    {instructors.map((instructor) => (
+                      <option key={instructor.id} value={instructor.id}>
+                        {instructor.full_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="status" className="text-black font-semibold text-sm mb-2 block">Status</Label>
+                  <select
+                    id="status"
+                    value={lessonFormData.status}
+                    onChange={(e) => setLessonFormData({ ...lessonFormData, status: e.target.value as any })}
+                    className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
+                  >
+                    <option value="visible">Visible</option>
+                    <option value="hidden">Hidden</option>
+                  </select>
+                </div>
+
+                <div className="flex justify-end space-x-3 pt-6">
+                  <Button type="button" variant="outline" onClick={goBackToModuleStep}>
+                    Back to Module
+                  </Button>
+                  <Button type="submit" disabled={loading}>
+                    {loading ? 'Creating...' : 'Create Lesson'}
+                  </Button>
+                </div>
+                {error && <div className="text-red-600 text-sm mt-2">{error}</div>}
+              </form>
+            </CardContent>
+          </Card>
+        ) : workflowStep === 'lesson' ? (
+          <Card className="bg-red-50 border-red-300">
+            <CardContent className="p-4">
+              <p className="text-red-800">
+                <strong>Error:</strong> Lesson form cannot display. currentModuleId is missing!<br />
+                currentModuleId: {currentModuleId || 'NULL'}
+              </p>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {/* STEP 3: Content Creation */}
+        {workflowStep === 'content' && currentLessonId && currentLessonType !== 'quiz' && (
+          <Card className="bg-white">
+            <CardHeader>
+              <CardTitle className="text-black">{currentLessonType.charAt(0).toUpperCase() + currentLessonType.slice(1)} Details</CardTitle>
+              <CardDescription className="text-gray-600">
+                Add {currentLessonType} content to your lesson
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleContentSubmit} className="space-y-6">
+                {/* Video Fields */}
+                {currentLessonType === 'video' && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="provider" className="text-black font-semibold text-sm mb-2 block">Provider *</Label>
+                      <select
+                        id="provider"
+                        value={contentFormData.provider || 'youtube'}
+                        onChange={(e) => setContentFormData({ ...contentFormData, provider: e.target.value })}
+                        className="w-full mt-2 p-3 border rounded-lg bg-white text-black"
+                        required
+                      >
+                        <option value="youtube">YouTube</option>
+                        <option value="vimeo">Vimeo</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="url" className="text-black font-semibold text-sm mb-2 block">Video URL *</Label>
+                      <Input
+                        id="url"
+                        type="url"
+                        value={contentFormData.url || ''}
+                        onChange={(e) => setContentFormData({ ...contentFormData, url: e.target.value })}
+                        placeholder="https://youtube.com/watch?v=..."
+                        className="mt-2"
+                        style={{ backgroundColor: 'white', color: 'black' }}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="provider_video_id" className="text-black font-semibold text-sm mb-2 block">Video ID *</Label>
+                      <Input
+                        id="provider_video_id"
+                        type="text"
+                        value={contentFormData.provider_video_id || ''}
+                        onChange={(e) => setContentFormData({ ...contentFormData, provider_video_id: e.target.value })}
+                        placeholder="Enter video ID"
+                        className="mt-2"
+                        style={{ backgroundColor: 'white', color: 'black' }}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="duration_seconds" className="text-black font-semibold text-sm mb-2 block">Duration (seconds) *</Label>
+                      <Input
+                        id="duration_seconds"
+                        type="number"
+                        value={contentFormData.duration_seconds || 0}
+                        onChange={(e) => setContentFormData({ ...contentFormData, duration_seconds: parseInt(e.target.value) })}
+                        placeholder="0"
+                        className="mt-2"
+                        style={{ backgroundColor: 'white', color: 'black' }}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="transcript" className="text-black font-semibold text-sm mb-2 block">Transcript (optional)</Label>
+                      <textarea
+                        id="transcript"
+                        value={contentFormData.transcript || ''}
+                        onChange={(e) => setContentFormData({ ...contentFormData, transcript: e.target.value })}
+                        className="w-full mt-2 p-3 border rounded-lg bg-white text-black"
+                        rows={4}
+                        placeholder="Enter video transcript"
+                      />
+                    </div>
+                  </>
+                )}
+
+                {/* Article Fields */}
+                {currentLessonType === 'article' && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="article_title" className="text-black font-semibold text-sm mb-2 block">Article Title *</Label>
+                      <Input
+                        id="article_title"
+                        type="text"
+                        value={contentFormData.article_title || ''}
+                        onChange={(e) => setContentFormData({ ...contentFormData, article_title: e.target.value })}
+                        placeholder="Enter article title"
+                        className="mt-2"
+                        style={{ backgroundColor: 'white', color: 'black' }}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="content" className="text-black font-semibold text-sm mb-2 block">Content *</Label>
+                      <textarea
+                        id="content"
+                        value={contentFormData.content || ''}
+                        onChange={(e) => setContentFormData({ ...contentFormData, content: e.target.value })}
+                        className="w-full mt-2 p-3 border rounded-lg bg-white text-black"
+                        rows={10}
+                        placeholder="Enter article content"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="summary" className="text-black font-semibold text-sm mb-2 block">Summary (optional)</Label>
+                      <textarea
+                        id="summary"
+                        value={contentFormData.summary || ''}
+                        onChange={(e) => setContentFormData({ ...contentFormData, summary: e.target.value })}
+                        className="w-full mt-2 p-3 border rounded-lg bg-white text-black"
+                        rows={3}
+                        placeholder="Enter article summary"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="reading_time_minutes" className="text-black font-semibold text-sm mb-2 block">Reading Time (minutes) *</Label>
+                      <Input
+                        id="reading_time_minutes"
+                        type="number"
+                        value={contentFormData.reading_time_minutes || 5}
+                        onChange={(e) => setContentFormData({ ...contentFormData, reading_time_minutes: parseInt(e.target.value) })}
+                        placeholder="5"
+                        className="mt-2"
+                        style={{ backgroundColor: 'white', color: 'black' }}
+                        required
+                      />
+                    </div>
+                  </>
+                )}
+
+                {/* Project Fields */}
+                {currentLessonType === 'project' && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="project_title" className="text-black font-semibold text-sm mb-2 block">Project Title *</Label>
+                      <Input
+                        id="project_title"
+                        type="text"
+                        value={contentFormData.project_title || ''}
+                        onChange={(e) => setContentFormData({ ...contentFormData, project_title: e.target.value })}
+                        placeholder="Enter project title"
+                        className="mt-2"
+                        style={{ backgroundColor: 'white', color: 'black' }}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="project_description" className="text-black font-semibold text-sm mb-2 block">Description *</Label>
+                      <textarea
+                        id="project_description"
+                        value={contentFormData.project_description || ''}
+                        onChange={(e) => setContentFormData({ ...contentFormData, project_description: e.target.value })}
+                        className="w-full mt-2 p-3 border rounded-lg bg-white text-black"
+                        rows={6}
+                        placeholder="Enter project description"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="submission_instructions" className="text-black font-semibold text-sm mb-2 block">Submission Instructions (optional)</Label>
+                      <textarea
+                        id="submission_instructions"
+                        value={contentFormData.submission_instructions || ''}
+                        onChange={(e) => setContentFormData({ ...contentFormData, submission_instructions: e.target.value })}
+                        className="w-full mt-2 p-3 border rounded-lg bg-white text-black"
+                        rows={4}
+                        placeholder="Enter submission instructions"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="external_link" className="text-black font-semibold text-sm mb-2 block">External Link (optional)</Label>
+                      <Input
+                        id="external_link"
+                        type="url"
+                        value={contentFormData.external_link || ''}
+                        onChange={(e) => setContentFormData({ ...contentFormData, external_link: e.target.value })}
+                        placeholder="https://..."
+                        className="mt-2"
+                        style={{ backgroundColor: 'white', color: 'black' }}
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div className="flex justify-end space-x-3 pt-6">
+                  <Button type="button" variant="outline" onClick={goBackToLessonStep}>
+                    Back to Lesson
+                  </Button>
+                  <Button type="submit" disabled={loading}>
+                    {loading ? 'Creating...' : `Create ${currentLessonType.charAt(0).toUpperCase() + currentLessonType.slice(1)}`}
+                  </Button>
+                </div>
+                {error && <div className={`${error.includes('successfully') ? 'text-green-600' : 'text-red-600'} text-sm mt-2`}>{error}</div>}
+              </form>
+
+              {/* Add more content or finish */}
+              <div className="mt-6 pt-6 border-t flex justify-center space-x-4">
+                <Button 
+                  onClick={() => {
+                    setContentFormData({});
+                    setError('');
+                  }}
+                  variant="outline"
+                >
+                  Add Another {currentLessonType.charAt(0).toUpperCase() + currentLessonType.slice(1)}
+                </Button>
+                <Button 
+                  onClick={goBackToLessonStep}
+                  variant="default"
+                >
+                  Finish & Create Another Lesson
+                </Button>
+                <Button 
+                  onClick={resetForm}
+                  variant="default"
+                >
+                  Complete & Return to List
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Quiz Message - shown when quiz lesson is created */}
+        {workflowStep === 'lesson' && currentLessonId && lessonFormData.lesson_type === 'quiz' && (
+          <Card className="bg-green-50 border-green-200">
+            <CardContent className="p-6">
+              <div className="flex items-center space-x-3">
+                <Icons.Quiz />
+                <div>
+                  <h3 className="text-lg font-semibold text-green-800">Quiz Lesson Created!</h3>
+                  <p className="text-sm text-green-700 mt-1">
+                    The quiz has been automatically created. You can now add questions to it from the Quizzes management page.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 flex space-x-3">
+                <Button onClick={resetForm} variant="default">
+                  Complete & Return to List
+                </Button>
+                <Button 
+                  onClick={() => {
+                    setLessonFormData({
+                      module_id: currentModuleId,
+                      title: '',
+                      lesson_type: 'video',
+                      status: 'visible',
+                      instructor_id: lessonFormData.instructor_id
+                    });
+                    setCurrentLessonId('');
+                    setError('');
+                  }}
+                  variant="outline"
+                >
+                  Create Another Lesson
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     );
   }
