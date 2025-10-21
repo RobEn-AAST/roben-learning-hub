@@ -9,6 +9,7 @@ import { UserAdminDashboard } from '@/components/admin/UserAdminDashboard';
 import VideoAdminDashboard from '@/components/admin/VideoAdminDashboard';
 import ArticleAdminDashboard from '@/components/admin/ArticleAdminDashboard';
 import ProjectAdminDashboard from '@/components/admin/ProjectAdminDashboard';
+import ProjectSubmissionsAdminDashboard from '@/components/admin/ProjectSubmissionsAdminDashboard';
 import { LessonsAdminDashboard } from '@/components/admin/LessonsAdminDashboard';
 import { ModulesAdminDashboard } from '@/components/admin/ModulesAdminDashboard';
 import { activityLogService } from '@/services/activityLogService';
@@ -124,6 +125,14 @@ const databaseTables: DatabaseTable[] = [
     icon: <Icons.Code />,
     status: 'available',
     category: 'content'
+  },
+  {
+    name: 'project_submissions',
+    displayName: 'Project Submissions',
+    description: 'Student project submissions, reviews, and grades',
+    icon: <Icons.Code />,
+    status: 'available',
+    category: 'analytics'
   },
   {
     name: 'quizzes',
@@ -456,6 +465,29 @@ export default function TablesPage() {
           </Button>
         </div>
         <QuestionOptionAdminDashboard />
+      </div>
+    );
+  }
+
+  // If a table is selected and it's project_submissions, show the ProjectSubmissionsAdminDashboard
+  if (selectedTable === 'project_submissions') {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Project Submissions Management</h1>
+            <p className="text-gray-600">Review, grade, and manage student project submissions</p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={handleBackToTables}
+            className="flex items-center space-x-2"
+          >
+            <span>←</span>
+            <span>Back to Tables</span>
+          </Button>
+        </div>
+        <ProjectSubmissionsAdminDashboard />
       </div>
     );
   }

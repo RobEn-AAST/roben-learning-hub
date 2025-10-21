@@ -22,6 +22,8 @@ interface EnrolledCourse extends Course {
   progress?: number;
   last_accessed?: string;
   completed?: boolean;
+  first_incomplete_lesson_id?: string;
+  course_slug?: string;
 }
 
 interface DashboardData {
@@ -232,6 +234,12 @@ async function getDashboardData(): Promise<DashboardData> {
       const progress = lessonIds.length > 0 ? Math.round((completedLessons / lessonIds.length) * 100) : 0;
       const completed = completedLessons === lessonIds.length && lessonIds.length > 0;
 
+      // Find first incomplete lesson
+      const firstIncompleteLessonId = lessonIds.find(lessonId => {
+        const lessonProgress = progressByLesson.get(lessonId);
+        return !lessonProgress || lessonProgress.status !== 'completed';
+      });
+
       // Get last accessed time
       let lastAccessed = enrollment.enrolled_at;
       lessonIds.forEach(lessonId => {
@@ -250,6 +258,7 @@ async function getDashboardData(): Promise<DashboardData> {
         progress,
         last_accessed: lastAccessed,
         completed,
+        first_incomplete_lesson_id: firstIncompleteLessonId,
       };
     });
 
@@ -390,7 +399,11 @@ export default async function DashboardPage() {
                         
                         <div className="ml-4">
                           <Button asChild size="sm">
-                            <Link href={`/courses/${course.id}`}>
+                            <Link href={
+                              course.completed 
+                                ? `/courses/${course.id}` 
+                                : `/courses/${course.id}/learn`
+                            }>
                               {course.completed ? 'Review' : 'Continue'}
                               <Play className="h-4 w-4 ml-2" />
                             </Link>

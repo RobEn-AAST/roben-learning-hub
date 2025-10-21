@@ -5,6 +5,7 @@ export interface Quiz {
   lessonId: string;
   title: string;
   description?: string;
+  timeLimitMinutes?: number | null;
   createdAt?: string;
 }
 

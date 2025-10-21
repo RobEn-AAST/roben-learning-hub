@@ -32,9 +32,9 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     }
 
     const body = await request.json();
-    const { title, description } = body;
+    const { title, description, timeLimitMinutes } = body;
 
-    console.log('📝 Updating quiz:', { id: params.id, title, description });
+    console.log('📝 Updating quiz:', { id: params.id, title, description, timeLimitMinutes });
 
     if (!title) {
       return NextResponse.json({ error: 'Missing required field: title' }, { status: 400 });
@@ -45,10 +45,11 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       .from('quizzes')
       .update({
         title,
-        description: description || null
+        description: description || null,
+        time_limit_minutes: timeLimitMinutes !== undefined ? (timeLimitMinutes || null) : undefined
       })
       .eq('id', params.id)
-      .select('id, lesson_id, title, description, created_at')
+      .select('id, lesson_id, title, description, time_limit_minutes, created_at')
       .single();
 
     if (error) {
@@ -66,6 +67,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const mappedQuiz = {
       ...quiz,
       lessonId: quiz.lesson_id,
+      timeLimitMinutes: quiz.time_limit_minutes,
       createdAt: quiz.created_at,
     };
 

@@ -1,50 +1,25 @@
 import { createClient } from '@/lib/supabase/client';
 import { createClient as createServerClient } from '@/lib/supabase/server';
+import type {
+  SubmissionPlatform,
+  PLATFORM_NAMES,
+  Project,
+  ProjectStats,
+  Lesson,
+  CreateProjectData,
+  UpdateProjectData,
+} from '@/types/project';
 
-export interface Project {
-  id: string;
-  lesson_id: string;
-  title: string;
-  description: string;
-  submission_instructions: string | null;
-  external_link: string | null;
-  created_at: string;
-  updated_at: string;
-  // Joined fields
-  lesson_title?: string;
-  course_title?: string;
-  module_title?: string;
-}
-
-export interface ProjectStats {
-  total_projects: number;
-  projects_with_external_links: number;
-  projects_with_instructions: number;
-  average_projects_per_lesson: number;
-}
-
-export interface Lesson {
-  id: string;
-  title: string;
-  module_title: string;
-  course_title: string;
-}
-
-export interface CreateProjectData {
-  lesson_id: string;
-  title: string;
-  description: string;
-  submission_instructions?: string;
-  external_link?: string;
-}
-
-export interface UpdateProjectData {
-  lesson_id?: string;
-  title?: string;
-  description?: string;
-  submission_instructions?: string;
-  external_link?: string;
-}
+// Re-export types for backward compatibility
+export type {
+  SubmissionPlatform,
+  Project,
+  ProjectStats,
+  Lesson,
+  CreateProjectData,
+  UpdateProjectData,
+};
+export { PLATFORM_NAMES } from '@/types/project';
 
 class ProjectService {
   private supabase = createClient();
@@ -227,11 +202,11 @@ class ProjectService {
         .from('projects')
         .select('*', { count: 'exact', head: true });
 
-      // Get projects with external links
-      const { count: projectsWithExternalLinks } = await supabaseClient
+      // Get projects with submission platforms
+      const { count: projectsWithPlatforms } = await supabaseClient
         .from('projects')
         .select('*', { count: 'exact', head: true })
-        .not('external_link', 'is', null);
+        .not('submission_platform', 'is', null);
 
       // Get projects with instructions
       const { count: projectsWithInstructions } = await supabaseClient
@@ -250,7 +225,7 @@ class ProjectService {
       console.log('✅ ProjectService.getProjectStats - Stats retrieved for', totalProjects || 0, 'projects');
       return {
         total_projects: totalProjects || 0,
-        projects_with_external_links: projectsWithExternalLinks || 0,
+        projects_with_platforms: projectsWithPlatforms || 0,
         projects_with_instructions: projectsWithInstructions || 0,
         average_projects_per_lesson: averageProjectsPerLesson
       };

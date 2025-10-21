@@ -79,13 +79,21 @@ export async function PUT(
     }
 
     const body = await request.json();
-    console.log('✏️ PUT /api/admin/projects/[id] - Updating project:', id, 'with data:', Object.keys(body));
+    const { lesson_id, title, description, submission_instructions, submission_platform } = body;
+    console.log('✏️ PUT /api/admin/projects/[id] - Updating project:', id);
+
+    const updateData: any = {};
+    if (lesson_id !== undefined) updateData.lesson_id = lesson_id;
+    if (title !== undefined) updateData.title = title;
+    if (description !== undefined) updateData.description = description;
+    if (submission_instructions !== undefined) updateData.submission_instructions = submission_instructions;
+    if (submission_platform !== undefined) updateData.submission_platform = submission_platform;
 
     // Role-based client selection
     const clientToUse = profile?.role === 'admin' ? 'admin' : 'regular';
     console.log('🎯 PUT /api/admin/projects/[id] - Using client type:', clientToUse);
     
-    const project = await projectService.updateProject(id, body, clientToUse);
+    const project = await projectService.updateProject(id, updateData, clientToUse);
     console.log('✅ PUT /api/admin/projects/[id] - Project updated successfully:', project.title);
     return NextResponse.json(project);
   } catch (error) {

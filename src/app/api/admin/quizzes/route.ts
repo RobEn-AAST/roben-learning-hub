@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     // Use server client directly for admin operations
     const { data: quizzes, error } = await supabase
       .from('quizzes')
-      .select('id, lesson_id, title, description, created_at');
+      .select('id, lesson_id, title, description, time_limit_minutes, created_at');
     
     if (error) {
       console.error('❌ Database error:', error);
@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
     const mappedQuizzes = (quizzes || []).map((q: any) => ({
       ...q,
       lessonId: q.lesson_id,
+      timeLimitMinutes: q.time_limit_minutes,
       createdAt: q.created_at,
     }));
 
@@ -85,9 +86,9 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { lessonId, title, description } = body;
+    const { lessonId, title, description, timeLimitMinutes } = body;
 
-    console.log('📝 Creating quiz:', { lessonId, title, description });
+    console.log('📝 Creating quiz:', { lessonId, title, description, timeLimitMinutes });
 
     if (!lessonId || !title) {
       return NextResponse.json({ error: 'Missing required fields: lessonId, title' }, { status: 400 });
@@ -109,9 +110,10 @@ export async function POST(request: NextRequest) {
       .insert([{
         lesson_id: lessonId,
         title,
-        description: description || null
+        description: description || null,
+        time_limit_minutes: timeLimitMinutes || null
       }])
-      .select('id, lesson_id, title, description, created_at')
+      .select('id, lesson_id, title, description, time_limit_minutes, created_at')
       .single();
 
     if (error) {
@@ -128,6 +130,7 @@ export async function POST(request: NextRequest) {
     const mappedQuiz = {
       ...quiz,
       lessonId: quiz.lesson_id,
+      timeLimitMinutes: quiz.time_limit_minutes,
       createdAt: quiz.created_at,
     };
 

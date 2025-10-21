@@ -46,7 +46,8 @@ export default function QuizAdminDashboard() {
   const [formData, setFormData] = useState({
     lessonId: '',
     title: '',
-    description: ''
+    description: '',
+    timeLimitMinutes: ''
   });
   const [filterLesson, setFilterLesson] = useState('');
   const [search, setSearch] = useState('');
@@ -126,7 +127,8 @@ export default function QuizAdminDashboard() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             title: formData.title,
-            description: formData.description
+            description: formData.description,
+            timeLimitMinutes: formData.timeLimitMinutes ? parseInt(formData.timeLimitMinutes) : null
           })
         });
         
@@ -149,7 +151,8 @@ export default function QuizAdminDashboard() {
           body: JSON.stringify({
             lessonId: formData.lessonId,
             title: formData.title,
-            description: formData.description
+            description: formData.description,
+            timeLimitMinutes: formData.timeLimitMinutes ? parseInt(formData.timeLimitMinutes) : null
           })
         });
         
@@ -184,7 +187,8 @@ export default function QuizAdminDashboard() {
     setFormData({
       lessonId: quiz.lessonId,
       title: quiz.title,
-      description: quiz.description || ''
+      description: quiz.description || '',
+      timeLimitMinutes: quiz.timeLimitMinutes ? quiz.timeLimitMinutes.toString() : ''
     });
     setShowForm(true);
   };
@@ -220,7 +224,7 @@ export default function QuizAdminDashboard() {
   };
 
   const resetForm = () => {
-    setFormData({ lessonId: '', title: '', description: '' });
+    setFormData({ lessonId: '', title: '', description: '', timeLimitMinutes: '' });
     setEditingQuiz(null);
     setShowForm(false);
     setWorkflowStep('quiz');
@@ -474,7 +478,24 @@ export default function QuizAdminDashboard() {
                   onChange={handleFormChange}
                   className="w-full border rounded p-2"
                   style={{ backgroundColor: 'white', color: 'black' }}
+                  rows={3}
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="timeLimitMinutes" className="text-black">Time Limit (minutes) - Optional</Label>
+                <Input
+                  id="timeLimitMinutes"
+                  name="timeLimitMinutes"
+                  type="number"
+                  min="0"
+                  value={formData.timeLimitMinutes}
+                  onChange={handleFormChange}
+                  placeholder="Leave empty for no time limit"
+                  style={{ backgroundColor: 'white', color: 'black' }}
+                />
+                <p className="text-sm text-gray-500">
+                  Set a time limit in minutes. Leave empty for unlimited time. Common values: 15, 30, 60 minutes.
+                </p>
               </div>
               <div className="flex justify-end space-x-2">
                 <Button type="button" variant="outline" onClick={resetForm}>

@@ -73,8 +73,10 @@ export async function GET(
           ),
           projects (
             id,
+            title,
+            description,
             submission_instructions,
-            external_link
+            submission_platform
           )
         )
       `)
@@ -151,8 +153,10 @@ export async function GET(
           base.quizId = quiz?.id || quizzesByLesson[lesson.id] || null;
         }
         if (lesson.lesson_type === 'project') {
+          base.projectTitle = project?.title || null;
+          base.projectDescription = project?.description || null;
           base.projectInstructions = project?.submission_instructions || null;
-          base.projectExternalLink = project?.external_link || null;
+          base.projectPlatform = project?.submission_platform || null;
         }
 
         return base;

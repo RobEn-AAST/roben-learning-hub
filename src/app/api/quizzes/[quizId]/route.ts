@@ -33,7 +33,7 @@ export async function GET(
     // Fetch quiz using service role to bypass RLS
     const { data: quiz, error: quizError } = await supabaseAdmin
       .from('quizzes')
-      .select('id, lesson_id, title, description, created_at')
+      .select('id, lesson_id, title, description, time_limit_minutes, created_at')
       .eq('id', quizId)
       .single();
 
@@ -99,7 +99,8 @@ export async function GET(
         id: quiz.id,
         lessonId: quiz.lesson_id,
         title: quiz.title,
-        description: quiz.description
+        description: quiz.description,
+        timeLimitMinutes: quiz.time_limit_minutes
       },
       questions: (questions || []).map((q: any) => ({
         id: q.id,

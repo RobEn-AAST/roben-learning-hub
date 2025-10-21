@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { lesson_id, title, description, submission_instructions, external_link } = body;
+    const { lesson_id, title, description, submission_instructions, submission_platform } = body;
 
     console.log('📝 POST /api/admin/projects - Creating project:', { lesson_id, title: title?.substring(0, 50) + '...' });
 
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
       title,
       description,
       submission_instructions,
-      external_link
+      submission_platform
     }, clientToUse);
 
     console.log('✅ POST /api/admin/projects - Project created successfully:', project.id);

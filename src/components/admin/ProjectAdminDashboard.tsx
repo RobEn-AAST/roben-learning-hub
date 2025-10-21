@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { projectService, Project, ProjectStats, Lesson, CreateProjectData, UpdateProjectData } from '@/services/projectService';
+import type { Project, ProjectStats, Lesson, CreateProjectData, UpdateProjectData, SubmissionPlatform } from '@/types/project';
+import { PLATFORM_NAMES } from '@/types/project';
 import { activityLogService } from '@/services/activityLogService';
 
 type ViewMode = 'list' | 'create' | 'edit';
@@ -81,7 +82,7 @@ interface FormData {
   title: string;
   description: string;
   submission_instructions: string;
-  external_link: string;
+  submission_platform: SubmissionPlatform | '';
 }
 
 export default function ProjectAdminDashboard() {
@@ -99,7 +100,7 @@ export default function ProjectAdminDashboard() {
     title: '',
     description: '',
     submission_instructions: '',
-    external_link: ''
+    submission_platform: ''
   });
 
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof FormData, string>>>({});
@@ -109,8 +110,8 @@ export default function ProjectAdminDashboard() {
     // Log dashboard access
     activityLogService.logActivity({
       action: 'VIEW',
-      resource_type: 'projects',
-      details: 'Accessed project management dashboard'
+      table_name: 'projects',
+      description: 'Accessed project management dashboard'
     });
   }, []);
 
@@ -162,7 +163,7 @@ export default function ProjectAdminDashboard() {
         title: formData.title,
         description: formData.description,
         submission_instructions: formData.submission_instructions || undefined,
-        external_link: formData.external_link || undefined
+        submission_platform: formData.submission_platform as SubmissionPlatform || undefined
       };
 
       if (editingProject) {
@@ -191,7 +192,7 @@ export default function ProjectAdminDashboard() {
         title: '',
         description: '',
         submission_instructions: '',
-        external_link: ''
+        submission_platform: ''
       });
       setViewMode('list');
       setEditingProject(null);
@@ -210,7 +211,7 @@ export default function ProjectAdminDashboard() {
       title: project.title,
       description: project.description,
       submission_instructions: project.submission_instructions || '',
-      external_link: project.external_link || ''
+      submission_platform: project.submission_platform || ''
     });
     setViewMode('edit');
   };
@@ -240,7 +241,7 @@ export default function ProjectAdminDashboard() {
       title: '',
       description: '',
       submission_instructions: '',
-      external_link: ''
+      submission_platform: ''
     });
     setFormErrors({});
   };
@@ -297,41 +298,29 @@ export default function ProjectAdminDashboard() {
         <Card className="bg-white">
           <CardContent className="p-6">
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid gap-6 md:grid-cols-2">
-                <div>
-                  <Label htmlFor="lesson_id">Lesson *</Label>
-                  <select
-                    id="lesson_id"
-                    value={formData.lesson_id}
-                    onChange={(e) => setFormData({ ...formData, lesson_id: e.target.value })}
-                    className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
-                    required
-                  >
-                    <option value="">Select a lesson</option>
-                    {lessons.map((lesson) => (
-                      <option key={lesson.id} value={lesson.id}>
-                        {lesson.course_title} → {lesson.module_title} → {lesson.title}
-                      </option>
-                    ))}
-                  </select>
-                  {formErrors.lesson_id && (
-                    <p className="text-red-500 text-sm mt-1">{formErrors.lesson_id}</p>
-                  )}
-                </div>
-
-                <div>
-                  <Label htmlFor="external_link">External Link</Label>
-                  <Input
-                    id="external_link"
-                    type="url"
-                    value={formData.external_link}
-                    onChange={(e) => setFormData({ ...formData, external_link: e.target.value })}
-                    placeholder="https://example.com (optional)"
-                    className="mt-2"
-                  />
-                </div>
+              {/* Lesson Selection */}
+              <div>
+                <Label htmlFor="lesson_id">Lesson *</Label>
+                <select
+                  id="lesson_id"
+                  value={formData.lesson_id}
+                  onChange={(e) => setFormData({ ...formData, lesson_id: e.target.value })}
+                  className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
+                  required
+                >
+                  <option value="">Select a lesson</option>
+                  {lessons.map((lesson) => (
+                    <option key={lesson.id} value={lesson.id}>
+                      {lesson.course_title} → {lesson.module_title} → {lesson.title}
+                    </option>
+                  ))}
+                </select>
+                {formErrors.lesson_id && (
+                  <p className="text-red-500 text-sm mt-1">{formErrors.lesson_id}</p>
+                )}
               </div>
 
+              {/* Title */}
               <div>
                 <Label htmlFor="title">Title *</Label>
                 <Input
@@ -347,22 +336,27 @@ export default function ProjectAdminDashboard() {
                 )}
               </div>
 
+              {/* Description */}
               <div>
                 <Label htmlFor="description">Description *</Label>
                 <textarea
                   id="description"
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Project description and requirements"
+                  placeholder="Project description and requirements. You can include links in the description."
                   className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
                   rows={4}
                   required
                 />
+                <p className="text-sm text-gray-500 mt-1">
+                  💡 Tip: You can include links and formatting in the description
+                </p>
                 {formErrors.description && (
                   <p className="text-red-500 text-sm mt-1">{formErrors.description}</p>
                 )}
               </div>
 
+              {/* Submission Instructions */}
               <div>
                 <Label htmlFor="submission_instructions">Submission Instructions</Label>
                 <textarea
@@ -373,6 +367,27 @@ export default function ProjectAdminDashboard() {
                   className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
                   rows={3}
                 />
+              </div>
+
+              {/* Submission Platform */}
+              <div>
+                <Label htmlFor="submission_platform">Submission Platform</Label>
+                <select
+                  id="submission_platform"
+                  value={formData.submission_platform}
+                  onChange={(e) => setFormData({ ...formData, submission_platform: e.target.value as SubmissionPlatform })}
+                  className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
+                >
+                  <option value="">Select submission platform (optional)</option>
+                  {Object.entries(PLATFORM_NAMES).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-sm text-gray-500 mt-1">
+                  ℹ️ This determines what link format students must provide when submitting
+                </p>
               </div>
 
               <div className="flex justify-end space-x-3 pt-6">
@@ -426,8 +441,8 @@ export default function ProjectAdminDashboard() {
           />
           <StatsCard
             icon={Icons.Link}
-            title="With External Links"
-            value={stats.projects_with_external_links}
+            title="With Platforms"
+            value={stats.projects_with_platforms}
             bgColor="bg-blue-100"
           />
           <StatsCard
@@ -527,10 +542,10 @@ export default function ProjectAdminDashboard() {
                       </td>
                       <td className="p-4">
                         <div className="flex flex-col space-y-1">
-                          {project.external_link && (
+                          {project.submission_platform && (
                             <Badge variant="outline" className="w-fit">
                               <Icons.Link />
-                              <span className="ml-1">External Link</span>
+                              <span className="ml-1">{PLATFORM_NAMES[project.submission_platform]}</span>
                             </Badge>
                           )}
                           {project.submission_instructions && (

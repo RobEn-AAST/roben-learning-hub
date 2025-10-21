@@ -9,6 +9,7 @@ import { LessonsAdminDashboard } from '@/components/admin/LessonsAdminDashboard'
 import VideoAdminDashboard from '@/components/admin/VideoAdminDashboard';
 import ArticleAdminDashboard from '@/components/admin/ArticleAdminDashboard';
 import ProjectAdminDashboard from '@/components/admin/ProjectAdminDashboard';
+import ProjectSubmissionsAdminDashboard from '@/components/admin/ProjectSubmissionsAdminDashboard';
 import QuizAdminDashboard from '@/components/admin/QuizAdminDashboard';
 import QuizQuestionAdminDashboard from '@/components/admin/QuizQuestionAdminDashboard';
 import QuestionOptionAdminDashboard from '@/components/admin/QuestionOptionAdminDashboard';
@@ -116,6 +117,14 @@ const databaseTables: DatabaseTable[] = [
     category: 'content'
   },
   {
+    name: 'project_submissions',
+    displayName: 'Project Submissions',
+    description: 'Review and grade student project submissions',
+    icon: <Icons.Code />,
+    status: 'available',
+    category: 'analytics'
+  },
+  {
     name: 'quizzes',
     displayName: 'Quizzes',
     description: 'Quiz content and assessment tools',
@@ -172,7 +181,7 @@ export function InstructorTablesManager() {
     ? databaseTables 
     : databaseTables.filter(table => table.category === selectedCategory);
 
-  const categories = ['all', 'content'];
+  const categories = ['all', 'content', 'analytics'];
 
   const handleTableClick = (tableName: string, status: string) => {
     if (status === 'available') {
@@ -362,6 +371,28 @@ export function InstructorTablesManager() {
           </Button>
         </div>
         <QuestionOptionAdminDashboard />
+      </div>
+    );
+  }
+
+  if (selectedTable === 'project_submissions') {
+    return (
+      <div className="space-y-6 bg-gray-50 min-h-screen p-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Project Submissions</h1>
+            <p className="text-gray-600">Review, grade, and manage student project submissions</p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={handleBackToTables}
+            className="flex items-center space-x-2"
+          >
+            <span>←</span>
+            <span>Back to Tables</span>
+          </Button>
+        </div>
+        <ProjectSubmissionsAdminDashboard />
       </div>
     );
   }

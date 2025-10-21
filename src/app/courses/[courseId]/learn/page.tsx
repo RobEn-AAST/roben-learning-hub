@@ -11,6 +11,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeRaw from 'rehype-raw';
 import rehypeSanitize from 'rehype-sanitize';
+import ProjectSubmissionForm from '@/components/project/ProjectSubmissionForm';
 import '@/styles/highlight.css';
 
 interface Lesson {
@@ -24,7 +25,10 @@ interface Lesson {
   is_preview: boolean;
   quizId?: string | null;
   articleContent?: string | null;
+  projectTitle?: string | null;
+  projectDescription?: string | null;
   projectInstructions?: string | null;
+  projectPlatform?: string | null;
   projectExternalLink?: string | null;
 }
 
@@ -72,6 +76,7 @@ interface Quiz {
   lessonId: string;
   title: string;
   description?: string;
+  timeLimitMinutes?: number | null;
 }
 
 function ArticleRenderer({ content }: { content?: string | null }) {
@@ -330,7 +335,11 @@ function ArticleRenderer({ content }: { content?: string | null }) {
   );
 }
 
-function QuizRenderer({ lesson }: { lesson: Lesson }) {
+function QuizRenderer({ lesson, onComplete, onNavigateNext }: { 
+  lesson: Lesson;
+  onComplete: () => Promise<void>;
+  onNavigateNext: () => void;
+}) {
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
@@ -338,9 +347,16 @@ function QuizRenderer({ lesson }: { lesson: Lesson }) {
   const [score, setScore] = useState(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [completing, setCompleting] = useState(false);
+  const [quizStarted, setQuizStarted] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState<number | null>(null); // in seconds
+  const [currentAttemptId, setCurrentAttemptId] = useState<string | null>(null);
+  const [previousAttempts, setPreviousAttempts] = useState<any[]>([]);
+  const [latestAttempt, setLatestAttempt] = useState<any | null>(null);
+  const [startTime, setStartTime] = useState<number | null>(null);
 
   useEffect(() => {
-    const loadQuiz = async () => {
+    const loadQuizAndAttempts = async () => {
       console.log('🧩 QuizRenderer - Loading quiz:', {
         lessonId: lesson.id,
         lessonTitle: lesson.title,
@@ -362,6 +378,59 @@ function QuizRenderer({ lesson }: { lesson: Lesson }) {
         if (response.ok) {
           setQuiz(data.quiz);
           setQuestions(data.questions);
+
+          // Check for existing attempts
+          const attemptsResponse = await fetch(`/api/quiz-attempts?quizId=${lesson.quizId}&latest=true`);
+          if (attemptsResponse.ok) {
+            const attemptsData = await attemptsResponse.json();
+            const latest = attemptsData.attempts;
+            
+            if (latest) {
+              setLatestAttempt(latest);
+              
+              // If there's a completed attempt, show results
+              if (latest.completed_at) {
+                setScore(latest.score || 0);
+                setShowResults(true);
+                
+                // Restore answers for review
+                const answersMap: Record<string, string> = {};
+                if (latest.user_answers && Array.isArray(latest.user_answers)) {
+                  latest.user_answers.forEach((answer: any) => {
+                    if (answer.selected_option_id) {
+                      answersMap[answer.question_id] = answer.selected_option_id;
+                    }
+                  });
+                }
+                setUserAnswers(answersMap);
+              } else {
+                // Resume incomplete attempt
+                setCurrentAttemptId(latest.id);
+                setQuizStarted(true);
+                
+                // Restore saved answers
+                const answersMap: Record<string, string> = {};
+                if (latest.user_answers && Array.isArray(latest.user_answers)) {
+                  latest.user_answers.forEach((answer: any) => {
+                    if (answer.selected_option_id) {
+                      answersMap[answer.question_id] = answer.selected_option_id;
+                    }
+                  });
+                }
+                setUserAnswers(answersMap);
+                
+                // Calculate remaining time if timer exists
+                if (data.quiz.timeLimitMinutes) {
+                  const elapsedSeconds = Math.floor(
+                    (Date.now() - new Date(latest.started_at).getTime()) / 1000
+                  );
+                  const totalSeconds = data.quiz.timeLimitMinutes * 60;
+                  const remaining = Math.max(0, totalSeconds - elapsedSeconds);
+                  setTimeRemaining(remaining);
+                }
+              }
+            }
+          }
         } else {
           console.error('Failed to load quiz:', data.error);
         }
@@ -372,41 +441,147 @@ function QuizRenderer({ lesson }: { lesson: Lesson }) {
       }
     };
 
-    loadQuiz();
+    loadQuizAndAttempts();
   }, [lesson.quizId]);
 
-  const handleAnswerChange = (questionId: string, answer: string) => {
+  // Timer effect - starts when quiz is started
+  useEffect(() => {
+    if (!quizStarted || !quiz?.timeLimitMinutes || showResults) {
+      return;
+    }
+
+    // Set initial time when quiz starts
+    if (timeRemaining === null) {
+      setTimeRemaining(quiz.timeLimitMinutes * 60);
+    }
+
+    const timer = setInterval(() => {
+      setTimeRemaining(prev => {
+        if (prev === null || prev <= 0) {
+          clearInterval(timer);
+          // Auto-submit when time runs out
+          if (prev === 0) {
+            handleSubmitQuiz();
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [quizStarted, quiz?.timeLimitMinutes, showResults, timeRemaining]);
+
+  const handleStartQuiz = async () => {
+    try {
+      // Create new attempt in database
+      const response = await fetch('/api/quiz-attempts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quizId: quiz?.id }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentAttemptId(data.attempt.id);
+        setQuizStarted(true);
+        setStartTime(Date.now());
+        
+        if (quiz?.timeLimitMinutes) {
+          setTimeRemaining(quiz.timeLimitMinutes * 60);
+        }
+      } else {
+        console.error('Failed to create quiz attempt');
+      }
+    } catch (error) {
+      console.error('Error starting quiz:', error);
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleAnswerChange = async (questionId: string, answer: string) => {
     setUserAnswers(prev => ({
       ...prev,
       [questionId]: answer
     }));
+
+    // Save answer to database if we have an attempt
+    if (currentAttemptId) {
+      try {
+        await fetch(`/api/quiz-attempts/${currentAttemptId}/answers`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            questionId,
+            selectedOptionId: answer,
+          }),
+        });
+      } catch (error) {
+        console.error('Error saving answer:', error);
+      }
+    }
   };
 
   const handleSubmitQuiz = async () => {
+    if (!currentAttemptId) return;
+    
     setSubmitting(true);
     
-    // Calculate score
-    let correctAnswers = 0;
-    questions.forEach(question => {
-      if (question.type === 'multiple_choice' || question.type === 'true_false') {
-        const userAnswer = userAnswers[question.id];
-        const correctOption = question.options.find(opt => opt.isCorrect);
-        if (userAnswer && correctOption && userAnswer === correctOption.id) {
-          correctAnswers++;
+    try {
+      // Calculate time taken
+      const timeTakenSeconds = startTime ? Math.floor((Date.now() - startTime) / 1000) : null;
+
+      // Complete the attempt - this calculates score and marks as complete
+      const response = await fetch(`/api/quiz-attempts/${currentAttemptId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timeTakenSeconds }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const finalScore = data.attempt.score || 0;
+        const passed = data.attempt.passed || false;
+        
+        console.log('✅ Quiz submitted successfully:', { finalScore, passed });
+        
+        setScore(finalScore);
+        setShowResults(true);
+        
+        // Auto-complete lesson if passed
+        if (passed) {
+          try {
+            await onComplete();
+          } catch (error) {
+            console.error('Error auto-completing lesson:', error);
+          }
         }
+      } else {
+        const errorData = await response.json();
+        console.error('❌ Failed to submit quiz:', response.status, errorData);
+        alert(`Failed to submit quiz: ${errorData.error || 'Unknown error'}`);
       }
-    });
-    
-    const finalScore = Math.round((correctAnswers / questions.length) * 100);
-    setScore(finalScore);
-    setShowResults(true);
-    setSubmitting(false);
+    } catch (error) {
+      console.error('Error submitting quiz:', error);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const resetQuiz = () => {
     setUserAnswers({});
     setShowResults(false);
     setScore(0);
+    setQuizStarted(false);
+    setTimeRemaining(null);
+    setCurrentAttemptId(null);
+    setStartTime(null);
+    setLatestAttempt(null);
   };
 
   if (loading) {
@@ -447,7 +622,7 @@ function QuizRenderer({ lesson }: { lesson: Lesson }) {
                   cy="50"
                 />
                 <circle 
-                  className={`${score >= 70 ? 'text-green-500' : 'text-orange-500'}`}
+                  className={`${score === 100 ? 'text-green-500' : 'text-orange-500'}`}
                   strokeWidth="10" 
                   strokeDasharray={`${(score / 100) * 251.2} 251.2`}
                   strokeLinecap="round" 
@@ -465,7 +640,7 @@ function QuizRenderer({ lesson }: { lesson: Lesson }) {
               </svg>
               <div className="absolute inset-0 flex items-center justify-center">
                 <div>
-                  <div className={`text-4xl font-bold ${score >= 70 ? 'text-green-600' : 'text-orange-600'}`}>
+                  <div className={`text-4xl font-bold ${score === 100 ? 'text-green-600' : 'text-orange-600'}`}>
                     {score}%
                   </div>
                   <div className="text-sm text-gray-500">Score</div>
@@ -475,9 +650,12 @@ function QuizRenderer({ lesson }: { lesson: Lesson }) {
           </div>
 
           {/* Result title */}
-          <h3 className={`text-2xl font-bold mb-4 ${score >= 70 ? 'text-green-600' : 'text-orange-600'}`}>
-            {score >= 70 ? 'Congratulations! 🎉' : 'Almost There! �'}
+          <h3 className={`text-2xl font-bold mb-4 ${score === 100 ? 'text-green-600' : 'text-orange-600'}`}>
+            {score === 100 ? 'Perfect Score! 🎉' : 'Try Again! 💪'}
           </h3>
+          {score < 100 && (
+            <p className="text-gray-600 mb-4">You need to answer all questions correctly to proceed to the next lesson.</p>
+          )}
 
           {/* Stats grid */}
           <div className="grid grid-cols-3 gap-4 max-w-2xl mx-auto mb-8">
@@ -507,8 +685,11 @@ function QuizRenderer({ lesson }: { lesson: Lesson }) {
               </svg>
               Retake Quiz
             </Button>
-            {score >= 70 && (
-              <Button className="bg-green-600 hover:bg-green-700 text-white">
+            {score === 100 && (
+              <Button 
+                onClick={onNavigateNext}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
                 Continue to Next Lesson
                 <svg className="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
@@ -518,23 +699,19 @@ function QuizRenderer({ lesson }: { lesson: Lesson }) {
           </div>
         </div>
 
-        {/* Review section */}
+        {/* Review section - only show correct/incorrect without revealing answers */}
         <div className="space-y-6">
           <h4 className="text-xl font-bold text-gray-800 mb-4">Question Review:</h4>
           {questions.map((question, index) => {
             const userAnswer = userAnswers[question.id];
             const correctOption = question.options.find(opt => opt.isCorrect);
-            const userOption = question.options.find(opt => opt.id === userAnswer);
             const isCorrect = userAnswer === correctOption?.id;
             
             return (
               <div key={question.id} className={`rounded-lg border ${
-                isCorrect ? 'border-green-200' : 'border-red-200'
+                isCorrect ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
               }`}>
-                {/* Question header */}
-                <div className={`px-6 py-4 flex items-center justify-between ${
-                  isCorrect ? 'bg-green-50' : 'bg-red-50'
-                }`}>
+                <div className="px-6 py-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                       isCorrect 
@@ -543,7 +720,7 @@ function QuizRenderer({ lesson }: { lesson: Lesson }) {
                     }`}>
                       {index + 1}
                     </span>
-                    <h5 className="font-medium text-gray-900">Question {index + 1}</h5>
+                    <h5 className="font-medium text-gray-900">{question.text}</h5>
                   </div>
                   {isCorrect ? (
                     <div className="flex items-center text-green-700">
@@ -561,84 +738,101 @@ function QuizRenderer({ lesson }: { lesson: Lesson }) {
                     </div>
                   )}
                 </div>
-
-                {/* Question content */}
-                <div className="px-6 py-4">
-                  <p className="text-gray-800 mb-4">{question.text}</p>
-                  
-                  <div className="space-y-3">
-                    {question.options.map(option => {
-                      const isUserAnswer = option.id === userAnswer;
-                      const isCorrectAnswer = option.isCorrect;
-                      
-                      return (
-                        <div 
-                          key={option.id}
-                          className={`p-3 rounded-lg flex items-center ${
-                            isUserAnswer && isCorrectAnswer
-                              ? 'bg-green-100 border border-green-200'
-                              : isUserAnswer && !isCorrectAnswer
-                                ? 'bg-red-100 border border-red-200'
-                                : isCorrectAnswer
-                                  ? 'bg-green-50 border border-green-100'
-                                  : 'bg-gray-50 border border-gray-200'
-                          }`}
-                        >
-                          {/* Answer indicator */}
-                          {isUserAnswer && isCorrectAnswer && (
-                            <svg className="w-5 h-5 text-green-600 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
-                          )}
-                          {isUserAnswer && !isCorrectAnswer && (
-                            <svg className="w-5 h-5 text-red-600 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                            </svg>
-                          )}
-                          {!isUserAnswer && isCorrectAnswer && (
-                            <svg className="w-5 h-5 text-green-600 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                            </svg>
-                          )}
-                          {!isUserAnswer && !isCorrectAnswer && (
-                            <div className="w-5 mr-3" />
-                          )}
-                          
-                          <span className={`flex-1 ${
-                            isUserAnswer
-                              ? isCorrectAnswer
-                                ? 'text-green-800 font-medium'
-                                : 'text-red-800 font-medium'
-                              : isCorrectAnswer
-                                ? 'text-green-800 font-medium'
-                                : 'text-gray-800'
-                          }`}>
-                            {option.text}
-                          </span>
-
-                          {/* Status labels */}
-                          {isUserAnswer && (
-                            <span className={`text-sm px-2 py-1 rounded ${
-                              isCorrectAnswer 
-                                ? 'bg-green-200 text-green-800' 
-                                : 'bg-red-200 text-red-800'
-                            }`}>
-                              Your Answer
-                            </span>
-                          )}
-                          {!isUserAnswer && isCorrectAnswer && (
-                            <span className="text-sm px-2 py-1 rounded bg-green-200 text-green-800">
-                              Correct Answer
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
               </div>
             );
           })}
+        </div>
+      </div>
+    );
+  }
+
+  // Start Quiz screen - show before quiz begins
+  if (!quizStarted) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl shadow-lg p-8 border border-blue-100">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-blue-100 mb-4">
+              <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+              </svg>
+            </div>
+            <h3 className="text-3xl font-bold text-gray-900 mb-2">{quiz.title}</h3>
+            {quiz.description && (
+              <p className="text-gray-600 mb-6">{quiz.description}</p>
+            )}
+          </div>
+
+          <div className="space-y-4 mb-8">
+            <div className="flex items-center gap-3 px-4 py-3 bg-white rounded-lg shadow-sm">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
+                <svg className="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                  <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-900">Total Questions</p>
+                <p className="text-2xl font-bold text-purple-600">{questions.length}</p>
+              </div>
+            </div>
+
+            {quiz.timeLimitMinutes && (
+              <div className="flex items-center gap-3 px-4 py-3 bg-white rounded-lg shadow-sm">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Time Limit</p>
+                  <p className="text-2xl font-bold text-orange-600">{quiz.timeLimitMinutes} minutes</p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 px-4 py-3 bg-white rounded-lg shadow-sm">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-green-100 flex items-center justify-center">
+                <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-900">Passing Score</p>
+                <p className="text-2xl font-bold text-green-600">100%</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+            <div className="flex gap-3">
+              <div className="flex-shrink-0">
+                <svg className="w-5 h-5 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-amber-900 mb-1">Important Instructions</h4>
+                <ul className="text-sm text-amber-800 space-y-1 list-disc list-inside">
+                  <li>You must answer all questions correctly to pass</li>
+                  {quiz.timeLimitMinutes && <li>Once started, the timer cannot be paused</li>}
+                  <li>You can retake the quiz if you don&apos;t pass</li>
+                  <li>Your answers are automatically saved - you can close and resume anytime</li>
+                  <li>Your progress is preserved even if you reload the page</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <Button 
+            onClick={handleStartQuiz}
+            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white py-4 text-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200"
+          >
+            <svg className="w-6 h-6 mr-2 inline-block" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+            </svg>
+            Start Quiz
+          </Button>
         </div>
       </div>
     );
@@ -656,6 +850,43 @@ function QuizRenderer({ lesson }: { lesson: Lesson }) {
             {questions.length} {questions.length === 1 ? 'question' : 'questions'}
           </p>
         </div>
+
+        {/* Timer display - show if quiz has time limit */}
+        {quiz.timeLimitMinutes && timeRemaining !== null && (
+          <div className={`mb-6 p-4 rounded-lg border-2 ${
+            timeRemaining < 60 
+              ? 'bg-red-50 border-red-300' 
+              : timeRemaining < 300 
+                ? 'bg-orange-50 border-orange-300' 
+                : 'bg-blue-50 border-blue-300'
+          }`}>
+            <div className="flex items-center justify-center gap-3">
+              <svg className={`w-6 h-6 ${
+                timeRemaining < 60 
+                  ? 'text-red-600 animate-pulse' 
+                  : timeRemaining < 300 
+                    ? 'text-orange-600' 
+                    : 'text-blue-600'
+              }`} fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+              </svg>
+              <span className={`text-2xl font-bold ${
+                timeRemaining < 60 
+                  ? 'text-red-700' 
+                  : timeRemaining < 300 
+                    ? 'text-orange-700' 
+                    : 'text-blue-700'
+              }`}>
+                Time Remaining: {formatTime(timeRemaining)}
+              </span>
+            </div>
+            {timeRemaining < 60 && (
+              <p className="text-center text-sm text-red-600 mt-2 font-medium">
+                ⚠️ Less than 1 minute remaining!
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Progress bar */}
         <div className="mb-8 bg-gray-100 rounded-full h-2.5">
@@ -1135,26 +1366,32 @@ export default function CourseLearnPage() {
         )}
         
         {currentLesson.content_type === 'project' && (
-          <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Project Instructions</h3>
-            <div className="prose max-w-none">
-              <div dangerouslySetInnerHTML={{ __html: currentLesson.projectInstructions || 'No project instructions available.' }} />
-            </div>
-            {currentLesson.projectExternalLink && (
-              <div className="mt-4">
-                <Button asChild className="bg-blue-600 hover:bg-blue-700 text-white">
-                  <a href={currentLesson.projectExternalLink} target="_blank" rel="noopener noreferrer">
-                    Open Project
-                  </a>
-                </Button>
-              </div>
-            )}
+          <div className="max-w-4xl mx-auto">
+            <ProjectSubmissionForm
+              lessonId={currentLesson.id}
+              lessonTitle={currentLesson.title}
+              projectTitle={currentLesson.projectTitle}
+              projectDescription={currentLesson.projectDescription}
+              projectInstructions={currentLesson.projectInstructions}
+              projectPlatform={currentLesson.projectPlatform}
+              onSubmitSuccess={handleMarkComplete}
+            />
           </div>
         )}
         
         {currentLesson.content_type === 'quiz' && (
           <div className="p-6">
-            <QuizRenderer lesson={currentLesson} />
+            <QuizRenderer 
+              lesson={currentLesson} 
+              onComplete={handleMarkComplete}
+              onNavigateNext={() => {
+                const next = getNextLesson();
+                if (next) {
+                  setCurrentLesson(next.lesson);
+                  setCurrentModule(next.module);
+                }
+              }}
+            />
           </div>
         )}
       </div>
@@ -1300,7 +1537,8 @@ export default function CourseLearnPage() {
                 </Button>
 
                 <div className="flex gap-2">
-                  {!isLessonComplete && (
+                  {/* Only show Mark as Complete for video and article lessons */}
+                  {!isLessonComplete && currentLesson.content_type !== 'quiz' && currentLesson.content_type !== 'project' && (
                     <Button
                       onClick={handleMarkComplete}
                       disabled={markingComplete}
@@ -1309,12 +1547,37 @@ export default function CourseLearnPage() {
                       {markingComplete ? (
                         <span className="flex items-center">
                           <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
-                          Marking...
+                          Marking Complete...
                         </span>
                       ) : (
-                        'Mark as Complete'
+                        <span className="flex items-center">
+                          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          Mark as Complete
+                        </span>
                       )}
                     </Button>
+                  )}
+                  
+                  {/* Message for quiz lessons - only show if not completed */}
+                  {!isLessonComplete && currentLesson.content_type === 'quiz' && (
+                    <div className="px-4 py-2 bg-blue-50 text-blue-700 rounded-md text-sm flex items-center">
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Complete the quiz to proceed
+                    </div>
+                  )}
+                  
+                  {/* Message for project lessons - only show if not completed */}
+                  {!isLessonComplete && currentLesson.content_type === 'project' && (
+                    <div className="px-4 py-2 bg-orange-50 text-orange-700 rounded-md text-sm flex items-center">
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      Submit your project and wait for instructor approval
+                    </div>
                   )}
                   
                   {nextLesson && (
