@@ -8,7 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { quizService, Quiz, QuestionOption, QuizQuestion } from "@/services/quizService";
+import { useQuizQuestions, useQuestionQuizzes, useQuestionStats } from '@/hooks/useQueryCache';
+import { toast } from 'sonner';
 
 // Icons (copied from QuizAdminDashboard for visual match)
 const Icons = {
@@ -42,9 +45,13 @@ const Icons = {
 
 
 export default function QuizQuestionAdminDashboard() {
-  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
-  const [quizzes, setQuizzes] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  // PERFORMANCE: React Query hooks - instant revisits from cache
+  const { data: questions = [], isLoading: questionsLoading } = useQuizQuestions();
+  const { data: quizzes = [], isLoading: quizzesLoading } = useQuestionQuizzes();
+  const { data: stats, isLoading: statsLoading } = useQuestionStats();
+  
+  const loading = questionsLoading || quizzesLoading || statsLoading;
+  
   const [filterQuiz, setFilterQuiz] = useState("");
   const [search, setSearch] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -63,36 +70,6 @@ export default function QuizQuestionAdminDashboard() {
   });
   const [options, setOptions] = useState<any[]>([]);
 
-  useEffect(() => {
-    loadInitialData();
-  }, []);
-
-  const loadInitialData = async () => {
-    setLoading(true);
-    try {
-      const [questionsResponse, quizzesResponse] = await Promise.all([
-        fetch('/api/admin/quiz-questions'),
-        fetch('/api/admin/quizzes')
-      ]);
-      
-      if (!questionsResponse.ok || !quizzesResponse.ok) {
-        throw new Error('Failed to fetch data');
-      }
-      
-      const [questionsData, quizzesData] = await Promise.all([
-        questionsResponse.json(),
-        quizzesResponse.json()
-      ]);
-      
-      setQuestions(questionsData);
-      setQuizzes(quizzesData);
-    } catch (e) {
-      setError("Failed to load data");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -101,7 +78,7 @@ export default function QuizQuestionAdminDashboard() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    setLoading(true);
+    
     try {
       let question;
       if (editingQuestion) {
@@ -163,14 +140,14 @@ export default function QuizQuestionAdminDashboard() {
       
       if (question) {
         setError('');
-        await loadInitialData();
+        toast.success(editingQuestion ? 'Question updated successfully!' : 'Question created successfully!');
+        // PERFORMANCE: React Query auto-refetches - no manual reload needed
       } else {
         setError('Failed to process question - check console for details');
+        toast.error('Failed to process question');
       }
     } catch (e: any) {
       setError(e.message || "Failed to process question");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -268,7 +245,6 @@ export default function QuizQuestionAdminDashboard() {
       return;
     }
 
-    setLoading(true);
     setError('');
     
     try {
@@ -279,17 +255,18 @@ export default function QuizQuestionAdminDashboard() {
       
       if (response.ok) {
         console.log('Question deleted successfully');
-        await loadInitialData(); // Refresh the list
+        toast.success('Question deleted successfully!');
+        // PERFORMANCE: React Query auto-refetches - no manual reload needed
       } else {
         const errorData = await response.json();
         console.error('Question deletion failed:', errorData);
-        setError(errorData.error || 'Failed to delete question');
+        const errorMsg = errorData.error || 'Failed to delete question';
+        setError(errorMsg);
+        toast.error(errorMsg);
       }
     } catch (error) {
       console.error('Error deleting question:', error);
       setError('Failed to delete question');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -304,7 +281,7 @@ export default function QuizQuestionAdminDashboard() {
   };
 
   // Filtered and searched questions
-  const filteredQuestions = questions.filter(q => {
+  const filteredQuestions = questions.filter((q: QuizQuestion) => {
     const matchesQuiz = filterQuiz ? q.quizId === filterQuiz : true;
     const matchesSearch = search ? q.text.toLowerCase().includes(search.toLowerCase()) : true;
     return matchesQuiz && matchesSearch;
@@ -317,11 +294,35 @@ export default function QuizQuestionAdminDashboard() {
     if (currentPage > Math.ceil(filteredQuestions.length / pageSize)) setCurrentPage(1);
   }, [filteredQuestions.length]);
 
-  // Stats
-  const stats = {
+  // Calculate local stats from data
+  const localStats = stats || {
     totalQuestions: questions.length,
-    quizzesWithQuestions: quizzes.filter(qz => questions.some(q => q.quizId === qz.id)).length
+    quizzesWithQuestions: quizzes.filter((qz: any) => questions.some((q: QuizQuestion) => q.quizId === qz.id)).length
   };
+
+  // PERFORMANCE: Elegant loading skeleton while React Query fetches data
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <Skeleton className="h-10 w-64" />
+          <Skeleton className="h-10 w-32" />
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+        </div>
+
+        <div className="space-y-4">
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+      </div>
+    );
+  }
 
 
   return (
@@ -360,7 +361,7 @@ export default function QuizQuestionAdminDashboard() {
                       disabled={editingQuestion ? true : false}
                     >
                       <option value="" style={{ backgroundColor: 'white', color: 'black' }}>Select a quiz</option>
-                      {quizzes.map((quiz) => (
+                      {quizzes.map((quiz: any) => (
                         <option key={quiz.id} value={quiz.id} style={{ backgroundColor: 'white', color: 'black' }}>
                           {quiz.title}
                         </option>
@@ -534,7 +535,7 @@ export default function QuizQuestionAdminDashboard() {
                   <Icons.Quiz />
                   <div>
                     <p className="text-sm font-medium text-gray-600">Total Questions</p>
-                    <p className="text-2xl font-bold text-black">{stats.totalQuestions}</p>
+                    <p className="text-2xl font-bold text-black">{localStats.totalQuestions}</p>
                   </div>
                 </div>
               </CardContent>
@@ -545,7 +546,7 @@ export default function QuizQuestionAdminDashboard() {
                   <Icons.Quiz />
                   <div>
                     <p className="text-sm font-medium text-gray-600">Quizzes with Questions</p>
-                    <p className="text-2xl font-bold text-black">{stats.quizzesWithQuestions}</p>
+                    <p className="text-2xl font-bold text-black">{localStats.quizzesWithQuestions}</p>
                   </div>
                 </div>
               </CardContent>
@@ -567,7 +568,7 @@ export default function QuizQuestionAdminDashboard() {
                   <Icons.Quiz />
                   <div>
                     <p className="text-sm font-medium text-gray-600">Avg Questions/Quiz</p>
-                    <p className="text-2xl font-bold text-black">{quizzes.length ? (stats.totalQuestions / quizzes.length).toFixed(2) : 0}</p>
+                    <p className="text-2xl font-bold text-black">{quizzes.length ? (localStats.totalQuestions / quizzes.length).toFixed(2) : 0}</p>
                   </div>
                 </div>
               </CardContent>
@@ -653,7 +654,7 @@ export default function QuizQuestionAdminDashboard() {
                           </td>
                         </tr>
                       ) : (
-                        paginatedQuestions.map((question) => (
+                        paginatedQuestions.map((question: QuizQuestion) => (
                           <tr key={question.id} className="border-b hover:bg-gray-50">
                             <td className="p-4">
                               <div>
@@ -664,7 +665,7 @@ export default function QuizQuestionAdminDashboard() {
                               </div>
                             </td>
                             <td className="p-4">
-                              <div className="font-medium text-black">{quizzes.find(q => q.id === question.quizId)?.title || question.quizId}</div>
+                              <div className="font-medium text-black">{quizzes.find((q: any) => q.id === question.quizId)?.title || question.quizId}</div>
                             </td>
                             <td className="p-4">
                               <div className="flex flex-col space-y-1">

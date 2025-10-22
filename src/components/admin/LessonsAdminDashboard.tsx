@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Lesson, LessonStats, Module } from '@/services/lessonService';
 import { createClient } from '@/lib/supabase/client';
+import { useLessonsAdmin, useLessonStats } from '@/hooks/useQueryCache';
 
 // Icons
 const Icons = {
@@ -76,16 +77,13 @@ interface Filters {
 }
 
 export function LessonsAdminDashboard() {
-  const [lessons, setLessons] = useState<Lesson[]>([]);
-  const [stats, setStats] = useState<LessonStats | null>(null);
+  // PERFORMANCE: Use cached queries
+  const [currentPage, setCurrentPage] = useState(1);
+  const [filters, setFilters] = useState<Filters>({});
   const [modules, setModules] = useState<Module[]>([]);
   const [instructors, setInstructors] = useState<{ id: string; full_name: string }[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [filters, setFilters] = useState<Filters>({});
   const [currentUser, setCurrentUser] = useState<{ id: string; role: string; full_name?: string } | null>(null);
   const [formData, setFormData] = useState<LessonFormData>({
     module_id: '',
@@ -95,14 +93,21 @@ export function LessonsAdminDashboard() {
     instructor_id: ''
   });
 
-  useEffect(() => {
-    loadCurrentUser();
-    loadInitialData();
-  }, []);
+  // PERFORMANCE: Cached queries
+  const { data: lessonsData, isLoading: lessonsLoading } = useLessonsAdmin(currentPage, 10, filters);
+  const { data: stats } = useLessonStats();
+
+  // Extract data
+  const lessons = lessonsData?.lessons || [];
+  const totalPages = Math.ceil((lessonsData?.total || 0) / 10);
+  const loading = lessonsLoading;
 
   useEffect(() => {
-    loadLessons();
-  }, [currentPage, filters]);
+    loadCurrentUser();
+    // PERFORMANCE: loadInitialData removed - React Query handles data fetching
+  }, []);
+
+  // PERFORMANCE: loadLessons removed - React Query auto-fetches via useLessonsAdmin hook
 
   const loadCurrentUser = async () => {
     try {
@@ -130,66 +135,9 @@ export function LessonsAdminDashboard() {
     }
   };
 
-  const loadInitialData = async () => {
-    try {
-      const [statsResponse, modulesResponse, instructorsResponse] = await Promise.all([
-        fetch('/api/admin/lessons/stats'),
-        fetch('/api/admin/lessons/modules'),
-        fetch('/api/admin/lessons/instructors')
-      ]);
+  // PERFORMANCE: Removed loadInitialData - React Query handles via useLessonStats, useModulesAdmin hooks
 
-      if (statsResponse.ok) {
-        const statsData = await statsResponse.json();
-        setStats(statsData);
-      }
-
-      if (modulesResponse.ok) {
-        const modulesData = await modulesResponse.json();
-        setModules(modulesData);
-      }
-
-      if (instructorsResponse.ok) {
-        const instructorsData = await instructorsResponse.json();
-        setInstructors(instructorsData);
-      }
-    } catch (error) {
-      console.error('Error loading initial data:', error);
-    }
-  };
-
-  const loadLessons = async () => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams({
-        page: currentPage.toString(),
-        limit: '10',
-        ...filters
-      });
-
-      const response = await fetch(`/api/admin/lessons?${params}`);
-      if (response.ok) {
-        const data = await response.json();
-        
-        // Debug: Log the first lesson to see frontend data structure
-        if (data.lessons && data.lessons.length > 0) {
-          console.log('Frontend received lesson data:', {
-            id: data.lessons[0].id,
-            title: data.lessons[0].title,
-            instructor_id: data.lessons[0].instructor_id,
-            instructor: data.lessons[0].instructor,
-            fullLesson: data.lessons[0]
-          });
-        }
-        
-        setLessons(data.lessons);
-        setTotalPages(Math.ceil(data.total / 10));
-      }
-    } catch (error) {
-      console.error('Error loading lessons:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // PERFORMANCE: Removed manual loadLessons - React Query handles data fetching via useLessonsAdmin hook
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -217,8 +165,7 @@ export function LessonsAdminDashboard() {
       });
 
       if (response.ok) {
-        await loadLessons();
-        await loadInitialData();
+        // PERFORMANCE: Cache will auto-refresh
         resetForm();
       } else {
         const error = await response.json();
@@ -255,8 +202,7 @@ export function LessonsAdminDashboard() {
       });
 
       if (response.ok) {
-        await loadLessons();
-        await loadInitialData();
+        // PERFORMANCE: Cache will auto-refresh
       } else {
         alert('Error deleting lesson');
       }

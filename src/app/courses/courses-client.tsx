@@ -3,6 +3,9 @@
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import Image from 'next/image';
+import { usePublicCourses } from '@/hooks/useQueryCache';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardContent } from '@/components/ui/card';
 
 interface Course {
   id: string;
@@ -77,7 +80,13 @@ function CourseCard({ course, isEnrolled, isAuthenticated }: {
 export default function CoursesClient({ initialData }: CoursesClientProps) {
   const [filter, setFilter] = useState<'all' | 'enrolled' | 'available'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const { isAuthenticated, courses, enrolledCourses } = initialData;
+  
+  // PERFORMANCE: Use React Query for caching - instant revisits
+  const { data, isLoading } = usePublicCourses({ search: searchQuery });
+  
+  // Use cached data if available, fallback to initial data
+  const courses = data?.courses || initialData.courses;
+  const { isAuthenticated, enrolledCourses } = initialData;
 
   // Memoize filtered courses for better performance
   const filteredCourses = useMemo(() => {
@@ -86,8 +95,8 @@ export default function CoursesClient({ initialData }: CoursesClientProps) {
     if (filter === 'enrolled') {
       coursesToFilter = enrolledCourses;
     } else if (filter === 'available' && isAuthenticated) {
-      const enrolledIds = new Set(enrolledCourses.map(c => c.id));
-      coursesToFilter = courses.filter(c => !enrolledIds.has(c.id));
+      const enrolledIds = new Set(enrolledCourses.map((c: Course) => c.id));
+      coursesToFilter = courses.filter((c: Course) => !enrolledIds.has(c.id));
     } else {
       coursesToFilter = courses;
     }
@@ -106,9 +115,28 @@ export default function CoursesClient({ initialData }: CoursesClientProps) {
 
   // Memoize enrolled course IDs for performance
   const enrolledIds = useMemo(() => 
-    new Set(enrolledCourses.map(c => c.id)), 
+    new Set(enrolledCourses.map((c: Course) => c.id)), 
     [enrolledCourses]
   );
+
+  // Loading skeleton
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        {[1, 2, 3, 4, 5, 6].map((i) => (
+          <Card key={i} className="overflow-hidden">
+            <Skeleton className="h-48 w-full" />
+            <CardContent className="p-6 space-y-3">
+              <Skeleton className="h-6 w-full" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-10 w-full mt-4" />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <>

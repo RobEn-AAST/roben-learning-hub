@@ -1,12 +1,16 @@
 'use client';
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useParams, useRouter } from "next/navigation";
 import { ProgressCleanupButton } from "@/components/progress-cleanup";
+import { useCourseDetail, useEnrollCourse } from '@/hooks/useQueryCache';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { toast } from 'sonner';
 
 interface Lesson {
   id: string;
@@ -64,58 +68,31 @@ export default function CourseDetailPage() {
   const router = useRouter();
   const courseId = params?.courseId as string;
   
-  const [courseData, setCourseData] = useState<CourseData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [enrolling, setEnrolling] = useState(false);
+  // PERFORMANCE: Use React Query for caching - instant revisits
+  const { data: courseData, isLoading: loading, refetch } = useCourseDetail(courseId);
+  const enrollMutation = useEnrollCourse();
+  
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-  useEffect(() => {
-    if (courseId) {
-      fetchCourseData();
+  
+  // Expand first module by default when data loads
+  React.useEffect(() => {
+    if (courseData?.modules && Array.isArray(courseData.modules) && courseData.modules.length > 0) {
+      setExpandedModules(new Set([courseData.modules[0].id]));
     }
-  }, [courseId]);
+  }, [courseData]);
 
-  const fetchCourseData = async () => {
-    try {
-      const response = await fetch(`/api/courses/${courseId}`);
-      const data = await response.json();
-      
-      setCourseData(data);
-      setIsAuthenticated(data.isAuthenticated || false);
-      
-      // Expand first module by default - with null checks
-      if (data.modules && Array.isArray(data.modules) && data.modules.length > 0) {
-        setExpandedModules(new Set([data.modules[0].id]));
-      }
-    } catch (error) {
-      console.error('Error fetching course:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const isAuthenticated = courseData?.isAuthenticated || false;
 
   const handleEnroll = async () => {
-    setEnrolling(true);
     try {
-      const response = await fetch(`/api/courses/${courseId}/enroll`, {
-        method: 'POST',
-      });
-      const data = await response.json();
-      
-      if (response.ok) {
-        // Refresh course data to show enrolled state
-        await fetchCourseData();
-        // Redirect to learning page
-        router.push(`/courses/${courseId}/learn`);
-      } else {
-        alert(data.error || 'Failed to enroll');
-      }
+      // PERFORMANCE: Optimistic update - shows enrolled instantly
+      await enrollMutation.mutateAsync(courseId);
+      toast.success('Successfully enrolled in course!');
+      // Redirect to learning page
+      router.push(`/courses/${courseId}/learn`);
     } catch (error) {
       console.error('Error enrolling:', error);
-      alert('Failed to enroll in course');
-    } finally {
-      setEnrolling(false);
+      toast.error('Failed to enroll in course. Please try again.');
     }
   };
 
@@ -138,16 +115,28 @@ export default function CourseDetailPage() {
     return `${mins}m`;
   };
 
+  // PERFORMANCE: Elegant loading skeleton while React Query fetches
   if (loading) {
     return (
       <main className="min-h-screen bg-white">
         <div className="w-full max-w-7xl mx-auto px-6 py-12">
-          <div className="animate-pulse">
-            <div className="h-64 bg-gray-200 rounded-xl mb-8" />
-            <div className="h-8 bg-gray-200 rounded w-3/4 mb-4" />
-            <div className="h-4 bg-gray-200 rounded w-full mb-2" />
-            <div className="h-4 bg-gray-200 rounded w-5/6" />
-          </div>
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-64 w-full rounded-xl mb-8" />
+              <Skeleton className="h-8 w-3/4 mb-4" />
+              <Skeleton className="h-4 w-full mb-2" />
+              <Skeleton className="h-4 w-5/6 mb-6" />
+              <div className="flex gap-4">
+                <Skeleton className="h-10 w-32" />
+                <Skeleton className="h-10 w-32" />
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Skeleton className="h-32 w-full" />
+              <Skeleton className="h-32 w-full" />
+              <Skeleton className="h-32 w-full" />
+            </CardContent>
+          </Card>
         </div>
       </main>
     );
@@ -167,8 +156,8 @@ export default function CourseDetailPage() {
   }
 
   const { course, modules, isEnrolled, instructor, stats, progress } = courseData;
-  const totalDuration = modules.reduce((acc, module) => 
-    acc + module.lessons.reduce((sum, lesson) => sum + lesson.duration, 0), 0
+  const totalDuration = modules.reduce((acc: number, module: Module) => 
+    acc + module.lessons.reduce((sum: number, lesson: Lesson) => sum + lesson.duration, 0), 0
   );
 
   return (
@@ -285,10 +274,10 @@ export default function CourseDetailPage() {
                   ) : (
                     <Button 
                       onClick={handleEnroll} 
-                      disabled={enrolling}
+                      disabled={enrollMutation.isPending}
                       className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                     >
-                      {enrolling ? 'Enrolling...' : 'Enroll Now'}
+                      {enrollMutation.isPending ? 'Enrolling...' : 'Enroll Now'}
                     </Button>
                   )
                 ) : (
@@ -315,7 +304,7 @@ export default function CourseDetailPage() {
         <h2 className="text-3xl font-bold text-gray-900 mb-6">Course Content</h2>
         
         <div className="space-y-4">
-          {modules.map((module, index) => (
+          {modules.map((module: Module, index: number) => (
             <motion.div
               key={module.id}
               initial={{ opacity: 0, y: 20 }}
@@ -337,7 +326,7 @@ export default function CourseDetailPage() {
                       <p className="text-sm text-gray-600">{module.description}</p>
                     )}
                     <p className="text-xs text-gray-500 mt-1">
-                      {module.lessons.length} lessons • {formatDuration(module.lessons.reduce((sum, l) => sum + l.duration, 0))}
+                      {module.lessons.length} lessons • {formatDuration(module.lessons.reduce((sum: number, l: Lesson) => sum + l.duration, 0))}
                     </p>
                   </div>
                 </div>
@@ -353,7 +342,7 @@ export default function CourseDetailPage() {
 
               {expandedModules.has(module.id) && (
                 <div className="border-t border-gray-200">
-                  {module.lessons.map((lesson, lessonIndex) => (
+                  {module.lessons.map((lesson: Lesson, lessonIndex: number) => (
                     <div
                       key={lesson.id}
                       className="px-6 py-3 hover:bg-gray-50 flex items-center justify-between"

@@ -82,9 +82,28 @@ export async function GET(request: NextRequest) {
     } else if (type === 'course' && courseId) {
       const instructors = await getCourseInstructorsServerAction(courseId);
       return NextResponse.json({ instructors });
+    } else if (type === 'all') {
+      // Fetch ALL course instructors for all courses
+      const { createClient } = await import('@/lib/supabase/server');
+      const supabase = await createClient();
+      
+      const { data, error } = await supabase
+        .from('course_instructors')
+        .select(`
+          *,
+          instructor:instructor_id (
+            id,
+            full_name,
+            email
+          )
+        `)
+        .eq('is_active', true);
+      
+      if (error) throw error;
+      return NextResponse.json(data || []);
     } else {
       return NextResponse.json(
-        { error: 'Missing required parameters. Use ?type=available or ?type=course&courseId=xxx' },
+        { error: 'Missing required parameters. Use ?type=available or ?type=course&courseId=xxx or ?type=all' },
         { status: 400 }
       );
     }

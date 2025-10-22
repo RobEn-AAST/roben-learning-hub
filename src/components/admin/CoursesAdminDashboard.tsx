@@ -7,10 +7,24 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
 import { coursesService, Course, CourseStats, CourseCreateData } from '@/services/coursesService';
 import { courseInstructorService, CourseInstructor } from '../../services/courseInstructorService';
 import { activityLogService } from '@/services/activityLogService';
 import { createClient } from '@/lib/supabase/client';
+import { 
+  useCourses, 
+  useCourseStats, 
+  useCourseInstructors,
+  useAllCourseInstructors,
+  useAvailableInstructors,
+  useCreateCourse,
+  useUpdateCourse,
+  useDeleteCourse,
+  useAssignInstructor,
+  useRemoveInstructor
+} from '@/hooks/useQueryCache';
 
 interface CourseFormData {
   title: string;
@@ -73,77 +87,43 @@ interface InstructorsListProps {
 
 function InstructorsList({ courseId, instructors, currentUserId, onUpdate }: InstructorsListProps) {
   const [showDropdown, setShowDropdown] = useState(false);
-  const [availableInstructors, setAvailableInstructors] = useState<{ id: string; full_name: string; email: string }[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  // Load available instructors when dropdown opens
-  useEffect(() => {
-    if (showDropdown) {
-      loadAvailableInstructors();
-    }
-  }, [showDropdown]);
-
-  const loadAvailableInstructors = async () => {
-    try {
-      const available = await courseInstructorService.getAvailableInstructors();
-      setAvailableInstructors(available);
-    } catch (error) {
-      console.error('Failed to load available instructors:', error);
-    }
-  };
+  
+  // PERFORMANCE: Use cached query instead of manual fetching
+  const { data: availableInstructors = [], isLoading: loading } = useAvailableInstructors();
+  const assignInstructor = useAssignInstructor();
+  const removeInstructor = useRemoveInstructor();
 
   const handleAssignInstructor = async (instructorId: string) => {
-    setLoading(true);
     try {
-      await courseInstructorService.assignInstructor({
+      await assignInstructor.mutateAsync({
         course_id: courseId,
-        instructor_id: instructorId,
-        role: 'instructor',
-        assigned_by: currentUserId
+        instructor_id: instructorId
       });
       onUpdate();
       setShowDropdown(false);
-      loadAvailableInstructors();
+      toast.success('Instructor assigned successfully!');
+      // PERFORMANCE: Cache will auto-refresh
     } catch (error) {
-      alert(`Failed to assign instructor: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setLoading(false);
+      toast.error(`Failed to assign instructor: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
   const handleRemoveInstructor = async (instructorId: string, instructorName: string) => {
     if (!confirm(`Remove ${instructorName} as instructor?`)) return;
     
-    setLoading(true);
-    console.log('🎯 UI: Starting instructor removal...');
-    console.log('🎯 UI: Parameters:', { courseId, instructorId, currentUserId, instructorName });
-    
     try {
-      const result = await courseInstructorService.removeInstructor(courseId, instructorId, currentUserId);
-      console.log('🎯 UI: Service call result:', result);
+      await removeInstructor.mutateAsync({
+        course_id: courseId,
+        instructor_id: instructorId
+      });
       
-      if (result) {
-        console.log('🎯 UI: Removal successful, refreshing data...');
-        
-        // Force refresh the instructor data
-        await onUpdate(); // This should refresh the parent component's instructor list
-        await loadAvailableInstructors(); // Refresh dropdown options
-        
-        // Close the dropdown to show the change immediately
-        setShowDropdown(false);
-        
-        alert(`✅ ${instructorName} has been removed as instructor.`);
-        console.log('🎯 UI: UI update completed');
-      } else {
-        console.log('🎯 UI: Service returned false');
-        alert(`❌ Failed to remove ${instructorName}. No active assignment found.`);
-      }
+      onUpdate();
+      setShowDropdown(false);
+      toast.success(`${instructorName} has been removed as instructor.`);
+      // PERFORMANCE: Cache will auto-refresh
     } catch (error) {
-      console.error('🎯 UI: Error during removal:', error);
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      alert(`❌ Failed to remove instructor: ${errorMessage}`);
-    } finally {
-      setLoading(false);
+      toast.error(`Failed to remove instructor: ${errorMessage}`);
     }
   };
 
@@ -866,95 +846,71 @@ function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
 }
 
 export function CoursesAdminDashboard() {
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [stats, setStats] = useState<CourseStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalCourses, setTotalCourses] = useState(0);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'view' | 'edit' | 'create'>('list');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
-  const [courseInstructors, setCourseInstructors] = useState<{ [courseId: string]: CourseInstructor[] }>({});
   const [currentUserId, setCurrentUserId] = useState<string>('');
 
   const coursesPerPage = 10;
 
-  // Load course instructors for all courses
-  const loadCourseInstructors = async (courseIds: string[]) => {
-    try {
-      const instructorPromises = courseIds.map(courseId => 
-        courseInstructorService.getCourseInstructors(courseId)
-      );
-      const instructorResults = await Promise.all(instructorPromises);
-      
-      const instructorMap: { [courseId: string]: CourseInstructor[] } = {};
-      courseIds.forEach((courseId, index) => {
-        instructorMap[courseId] = instructorResults[index];
-      });
-      
-      setCourseInstructors(instructorMap);
-    } catch (error) {
-      console.error('Failed to load course instructors:', error);
-    }
-  };
+  // PERFORMANCE: Use cached queries instead of manual state management
+  const { 
+    data: coursesData, 
+    isLoading: coursesLoading, 
+    error: coursesError 
+  } = useCourses(currentPage, coursesPerPage, {
+    status: selectedStatus || undefined,
+    search: searchTerm || undefined
+  });
+
+  const { 
+    data: stats, 
+    isLoading: statsLoading 
+  } = useCourseStats();
+
+  // Extract data from response
+  const courses = coursesData?.courses || [];
+  const totalCourses = coursesData?.total || 0;
+  const loading = coursesLoading || statsLoading;
+  const error = coursesError ? (coursesError as Error).message : null;
+
+  // Load ALL course instructors at once (not in a loop!)
+  const { data: allCourseInstructors = [] } = useAllCourseInstructors();
+
+  // Build instructor map from the fetched data
+  const courseInstructors = courses.reduce((acc: { [courseId: string]: CourseInstructor[] }, course: Course) => {
+    acc[course.id] = allCourseInstructors.filter((ci: any) => ci.course_id === course.id);
+    return acc;
+  }, {} as { [courseId: string]: CourseInstructor[] });
 
   // Get current user ID
-  const getCurrentUserId = async () => {
-    try {
-      const supabase = createClient();
-      const { data: { user }, error } = await supabase.auth.getUser();
-      
-      if (error) {
-        console.error('Auth error:', error);
-        return;
-      }
-      
-      if (user && user.id) {
-        setCurrentUserId(user.id);
-      }
-    } catch (err) {
-      console.error('Error getting user:', err);
-    }
-  };
-
-  // Handle instructor updates
-  const handleInstructorUpdate = async () => {
-    const courseIds = courses.map(course => course.id);
-    await loadCourseInstructors(courseIds);
-  };
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Load courses and stats in parallel
-      const [coursesResponse, statsResponse] = await Promise.all([
-        coursesService.getCourses(currentPage, coursesPerPage),
-        coursesService.getCourseStats()
-      ]);
-
-      setCourses(coursesResponse.courses);
-      setTotalCourses(coursesResponse.total);
-      setStats(statsResponse);
-      
-      // Load instructors for all courses
-      const courseIds = coursesResponse.courses.map((course: Course) => course.id);
-      await loadCourseInstructors(courseIds);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    const getCurrentUserId = async () => {
+      try {
+        const supabase = createClient();
+        const { data: { user }, error } = await supabase.auth.getUser();
+        
+        if (error) {
+          console.error('Auth error:', error);
+          return;
+        }
+        
+        if (user && user.id) {
+          setCurrentUserId(user.id);
+        }
+      } catch (err) {
+        console.error('Error getting user:', err);
+      }
+    };
     getCurrentUserId();
-    loadData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage]);
+  }, []);
+
+  // Handle instructor updates (cache will auto-refresh)
+  const handleInstructorUpdate = () => {
+    // Cache automatically refreshes via mutations
+  };
 
   const handleEdit = (course: Course) => {
     setSelectedCourse(course);
@@ -972,15 +928,15 @@ export function CoursesAdminDashboard() {
     }
 
     try {
-      const course = courses.find(c => c.id === courseId);
+      const course = courses.find((c: Course) => c.id === courseId);
       const courseTitle = course?.title || 'Unknown Course';
       
       await coursesService.deleteCourse(courseId);
       await activityLogService.logCourseDeleted(courseId, courseTitle);
-      await loadData(); // Reload data
-      alert('Course deleted successfully!');
+      // PERFORMANCE: Cache will auto-refresh
+      toast.success('Course deleted successfully!');
     } catch (err) {
-      alert('Failed to delete course: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      toast.error('Failed to delete course: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
   };
 
@@ -992,12 +948,11 @@ export function CoursesAdminDashboard() {
   const handleBackToList = () => {
     setViewMode('list');
     setSelectedCourse(null);
-    loadData(); // Refresh data
+    // PERFORMANCE: Cache will auto-refresh
   };
 
   const handleSaveCourse = async (courseData: CourseFormData) => {
     try {
-      setLoading(true);
       
       console.log('Saving course data:', courseData); // Debug log
       
@@ -1032,7 +987,7 @@ export function CoursesAdminDashboard() {
           description: changeDescription
         });
         
-        alert('Course updated successfully!');
+        toast.success('Course updated successfully!');
         
         // If instructor assignments were included, log the update
         if (courseData.instructor_ids && courseData.instructor_ids.length > 0) {
@@ -1050,7 +1005,7 @@ export function CoursesAdminDashboard() {
           await activityLogService.logCourseCreated(result.id, courseData.title);
           // Note: Instructor assignments are now handled by the API automatically
         }
-        alert('Course created successfully!');
+        toast.success('Course created successfully!');
       }
       
       handleBackToList();
@@ -1072,16 +1027,48 @@ export function CoursesAdminDashboard() {
         }
       }
       
-      alert('Failed to save course: ' + errorMessage);
-    } finally {
-      setLoading(false);
+      toast.error('Failed to save course: ' + errorMessage);
     }
   };
 
   if (loading && viewMode === 'list') {
     return (
-      <div className="flex items-center justify-center min-h-96">
-        <div className="text-lg text-black">Loading courses...</div>
+      <div className="container mx-auto p-6 space-y-6">
+        {/* Stats Skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="pb-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-8 w-16 mt-2" />
+              </CardHeader>
+            </Card>
+          ))}
+        </div>
+        
+        {/* Table Skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-4 w-64 mt-2" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="flex items-center justify-between p-4 border rounded">
+                  <div className="space-y-2 flex-1">
+                    <Skeleton className="h-5 w-1/3" />
+                    <Skeleton className="h-4 w-2/3" />
+                  </div>
+                  <div className="flex gap-2">
+                    <Skeleton className="h-8 w-20" />
+                    <Skeleton className="h-8 w-20" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -1149,7 +1136,7 @@ export function CoursesAdminDashboard() {
                 <h3 className="font-medium text-black mb-3">Course Instructors</h3>
                 {courseInstructors[selectedCourse.id] && courseInstructors[selectedCourse.id].length > 0 ? (
                   <div className="space-y-3">
-                    {courseInstructors[selectedCourse.id].map((instructor) => (
+                    {courseInstructors[selectedCourse.id].map((instructor: CourseInstructor) => (
                       <div key={instructor.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
                         <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
                           <span className="text-sm font-medium text-blue-600">

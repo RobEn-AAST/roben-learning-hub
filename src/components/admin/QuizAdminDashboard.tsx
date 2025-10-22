@@ -6,7 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { quizService , Quiz } from "@/services/quizService";
+import { useQuizzes, useQuizLessons, useQuizStats } from '@/hooks/useQueryCache';
+import { toast } from 'sonner';
 
 // Icons (copied from LessonsAdminDashboard for visual match)
 const Icons = {
@@ -38,9 +41,13 @@ const Icons = {
 };
 
 export default function QuizAdminDashboard() {
-  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
-  const [lessons, setLessons] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  // PERFORMANCE: React Query hooks - instant revisits from cache
+  const { data: quizzes = [], isLoading: quizzesLoading } = useQuizzes();
+  const { data: lessons = [], isLoading: lessonsLoading } = useQuizLessons();
+  const { data: stats, isLoading: statsLoading } = useQuizStats();
+  
+  const loading = quizzesLoading || lessonsLoading || statsLoading;
+  
   const [showForm, setShowForm] = useState(false);
   const [editingQuiz, setEditingQuiz] = useState<Quiz | null>(null);
   const [formData, setFormData] = useState({
@@ -71,41 +78,10 @@ export default function QuizAdminDashboard() {
   const [options, setOptions] = useState<any[]>([]);
 
 
-  useEffect(() => {
-    loadInitialData();
-  }, []);
-
-  const loadInitialData = async () => {
-    setLoading(true);
-    try {
-      const [quizzesResponse, lessonsResponse] = await Promise.all([
-        fetch('/api/admin/quizzes'),
-        // Use quiz service for lessons since there's no lessons API endpoint yet
-        quizService.getLessons()
-      ]);
-      
-      if (!quizzesResponse.ok) {
-        throw new Error('Failed to fetch quizzes');
-      }
-      
-      const [quizzesData, lessonsData] = await Promise.all([
-        quizzesResponse.json(),
-        lessonsResponse
-      ]);
-      
-      setQuizzes(quizzesData);
-      setLessons(lessonsData);
-    } catch (e) {
-      setError('Failed to load data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Get lessons that don't have quizzes yet (for creating new quiz)
   // When editing, include the current lesson
-  const availableLessons = lessons.filter(lesson => 
-    !quizzes.some(quiz => quiz.lessonId === lesson.id) ||
+  const availableLessons = lessons.filter((lesson: any) => 
+    !quizzes.some((quiz: Quiz) => quiz.lessonId === lesson.id) ||
     (editingQuiz && lesson.id === editingQuiz.lessonId)
   );
 
@@ -116,7 +92,7 @@ export default function QuizAdminDashboard() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setLoading(true);
+    
     try {
       let quiz;
       if (editingQuiz) {
@@ -170,15 +146,17 @@ export default function QuizAdminDashboard() {
       
       if (quiz) {
         setError('');
-        await loadInitialData();
+        toast.success(editingQuiz ? 'Quiz updated successfully!' : 'Quiz created successfully!');
+        // PERFORMANCE: React Query auto-refetches - no manual reload needed
       } else {
         setError('Failed to process quiz - check console for details');
+        toast.error('Failed to process quiz');
       }
     } catch (e) {
       console.error('Quiz creation error:', e);
-      setError(`Failed to create quiz: ${e instanceof Error ? e.message : 'Unknown error'}`);
-    } finally {
-      setLoading(false);
+      const errorMsg = `Failed to ${editingQuiz ? 'update' : 'create'} quiz: ${e instanceof Error ? e.message : 'Unknown error'}`;
+      setError(errorMsg);
+      toast.error(errorMsg);
     }
   };
 
@@ -198,7 +176,6 @@ export default function QuizAdminDashboard() {
       return;
     }
 
-    setLoading(true);
     setError('');
     
     try {
@@ -209,17 +186,17 @@ export default function QuizAdminDashboard() {
       
       if (response.ok) {
         console.log('Quiz deleted successfully');
-        await loadInitialData(); // Refresh the list
+        toast.success('Quiz deleted successfully!');
+        // PERFORMANCE: React Query auto-refetches - no manual reload needed
       } else {
         const errorData = await response.json();
         console.error('Quiz deletion failed:', errorData);
+        toast.error(errorData.error || 'Failed to delete quiz');
         setError(errorData.error || 'Failed to delete quiz');
       }
     } catch (error) {
       console.error('Error deleting quiz:', error);
       setError('Failed to delete quiz');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -338,7 +315,7 @@ export default function QuizAdminDashboard() {
 
 
   // Filtered and searched quizzes
-  const filteredQuizzes = quizzes.filter(q => {
+  const filteredQuizzes = quizzes.filter((q: Quiz) => {
     const matchesLesson = filterLesson ? q.lessonId === filterLesson : true;
     const matchesSearch = search ? q.title.toLowerCase().includes(search.toLowerCase()) : true;
     return matchesLesson && matchesSearch;
@@ -351,10 +328,10 @@ export default function QuizAdminDashboard() {
     if (currentPage > Math.ceil(filteredQuizzes.length / pageSize)) setCurrentPage(1);
   }, [filteredQuizzes.length]);
 
-  // Stats (mocked for now)
-  const stats = {
+  // Calculate local stats from data
+  const localStats = stats || {
     totalQuizzes: quizzes.length,
-    lessonsWithQuizzes: lessons.filter(l => quizzes.some(q => q.lessonId === l.id)).length
+    lessonsWithQuizzes: lessons.filter((l: any) => quizzes.some((q: Quiz) => q.lessonId === l.id)).length
   };
 
   if (showForm) {
@@ -664,6 +641,31 @@ export default function QuizAdminDashboard() {
     );
   }
 
+  // PERFORMANCE: Elegant loading skeleton while React Query fetches data
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <Skeleton className="h-10 w-64" />
+          <Skeleton className="h-10 w-32" />
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+        </div>
+
+        <div className="space-y-4">
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -688,7 +690,7 @@ export default function QuizAdminDashboard() {
               <Icons.Quiz />
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Quizzes</p>
-                <p className="text-2xl font-bold text-black">{stats.totalQuizzes}</p>
+                <p className="text-2xl font-bold text-black">{localStats.totalQuizzes}</p>
               </div>
             </div>
           </CardContent>
@@ -699,7 +701,7 @@ export default function QuizAdminDashboard() {
               <Icons.Quiz />
               <div>
                 <p className="text-sm font-medium text-gray-600">Lessons with Quizzes</p>
-                <p className="text-2xl font-bold text-black">{stats.lessonsWithQuizzes}</p>
+                <p className="text-2xl font-bold text-black">{localStats.lessonsWithQuizzes}</p>
               </div>
             </div>
           </CardContent>
@@ -721,7 +723,7 @@ export default function QuizAdminDashboard() {
               <Icons.Quiz />
               <div>
                 <p className="text-sm font-medium text-gray-600">Avg Quizzes/Lesson</p>
-                <p className="text-2xl font-bold text-black">{lessons.length ? (stats.totalQuizzes / lessons.length).toFixed(2) : 0}</p>
+                <p className="text-2xl font-bold text-black">{lessons.length ? (localStats.totalQuizzes / lessons.length).toFixed(2) : 0}</p>
               </div>
             </div>
           </CardContent>
@@ -807,7 +809,7 @@ export default function QuizAdminDashboard() {
                       </td>
                     </tr>
                   ) : (
-                    paginatedQuizzes.map((quiz) => (
+                    paginatedQuizzes.map((quiz: Quiz) => (
                       <tr key={quiz.id} className="border-b hover:bg-gray-50">
                         <td className="p-4">
                           <div>
@@ -821,7 +823,7 @@ export default function QuizAdminDashboard() {
                           </div>
                         </td>
                         <td className="p-4">
-                          <div className="font-medium text-black">{lessons.find(l => l.id === quiz.lessonId)?.title || quiz.lessonId}</div>
+                          <div className="font-medium text-black">{lessons.find((l: any) => l.id === quiz.lessonId)?.title || quiz.lessonId}</div>
                         </td>
                         <td className="p-4">
                           <div className="text-sm text-gray-600">

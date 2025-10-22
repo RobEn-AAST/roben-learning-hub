@@ -6,9 +6,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { Project, ProjectStats, Lesson, CreateProjectData, UpdateProjectData, SubmissionPlatform } from '@/types/project';
 import { PLATFORM_NAMES } from '@/types/project';
 import { activityLogService } from '@/services/activityLogService';
+import { useProjects, useProjectLessons, useProjectStats } from '@/hooks/useQueryCache';
+import { toast } from 'sonner';
 
 type ViewMode = 'list' | 'create' | 'edit';
 
@@ -86,10 +89,13 @@ interface FormData {
 }
 
 export default function ProjectAdminDashboard() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [lessons, setLessons] = useState<Lesson[]>([]);
-  const [stats, setStats] = useState<ProjectStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  // PERFORMANCE: React Query hooks - instant revisits from cache
+  const { data: projects = [], isLoading: projectsLoading } = useProjects();
+  const { data: lessons = [], isLoading: lessonsLoading } = useProjectLessons();
+  const { data: stats = null, isLoading: statsLoading } = useProjectStats();
+  
+  const loading = projectsLoading || lessonsLoading || statsLoading;
+  
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -106,7 +112,6 @@ export default function ProjectAdminDashboard() {
   const [formErrors, setFormErrors] = useState<Partial<Record<keyof FormData, string>>>({});
 
   useEffect(() => {
-    loadData();
     // Log dashboard access
     activityLogService.logActivity({
       action: 'VIEW',
@@ -114,25 +119,6 @@ export default function ProjectAdminDashboard() {
       description: 'Accessed project management dashboard'
     });
   }, []);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const [projectsData, lessonsData, statsData] = await Promise.all([
-        fetch('/api/admin/projects').then(res => res.json()),
-        fetch('/api/admin/projects/lessons').then(res => res.json()),
-        fetch('/api/admin/projects/stats').then(res => res.json())
-      ]);
-
-      setProjects(projectsData);
-      setLessons(lessonsData);
-      setStats(statsData);
-    } catch (error) {
-      console.error('Error loading data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const validateForm = (): boolean => {
     const errors: Partial<Record<keyof FormData, string>> = {};
@@ -186,7 +172,7 @@ export default function ProjectAdminDashboard() {
         if (!response.ok) throw new Error('Failed to create project');
       }
 
-      // Reset form and reload data
+      // Reset form
       setFormData({
         lesson_id: '',
         title: '',
@@ -197,10 +183,12 @@ export default function ProjectAdminDashboard() {
       setViewMode('list');
       setEditingProject(null);
       setFormErrors({});
-      await loadData();
+      
+      // PERFORMANCE: React Query auto-refetches - no manual reload needed
+      toast.success(editingProject ? 'Project updated successfully!' : 'Project created successfully!');
     } catch (error) {
       console.error('Error saving project:', error);
-      alert('Failed to save project. Please try again.');
+      toast.error('Failed to save project. Please try again.');
     }
   };
 
@@ -226,10 +214,11 @@ export default function ProjectAdminDashboard() {
 
       if (!response.ok) throw new Error('Failed to delete project');
 
-      await loadData();
+      // PERFORMANCE: React Query auto-refetches - no manual reload needed
+      toast.success('Project deleted successfully!');
     } catch (error) {
       console.error('Error deleting project:', error);
-      alert('Failed to delete project. Please try again.');
+      toast.error('Failed to delete project. Please try again.');
     }
   };
 
@@ -246,7 +235,7 @@ export default function ProjectAdminDashboard() {
     setFormErrors({});
   };
 
-  const filteredProjects = projects.filter(project => {
+  const filteredProjects = projects.filter((project: Project) => {
     const matchesSearch = project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          project.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          project.lesson_title?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -275,11 +264,26 @@ export default function ProjectAdminDashboard() {
     </Card>
   );
 
+  // PERFORMANCE: Elegant loading skeleton while React Query fetches data
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="flex items-center justify-center h-64">
-          <div>Loading project management...</div>
+      <div className="p-6 space-y-6">
+        <div className="flex justify-between items-center mb-6">
+          <Skeleton className="h-8 w-64" />
+          <Skeleton className="h-10 w-32" />
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+          <Skeleton className="h-32 w-full" />
+        </div>
+
+        <div className="space-y-4">
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-16 w-full" />
         </div>
       </div>
     );
@@ -309,7 +313,7 @@ export default function ProjectAdminDashboard() {
                   required
                 >
                   <option value="">Select a lesson</option>
-                  {lessons.map((lesson) => (
+                  {lessons.map((lesson: Lesson) => (
                     <option key={lesson.id} value={lesson.id}>
                       {lesson.course_title} → {lesson.module_title} → {lesson.title}
                     </option>
@@ -486,7 +490,7 @@ export default function ProjectAdminDashboard() {
                 className="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
               >
                 <option value="">All Lessons</option>
-                {lessons.map((lesson) => (
+                {lessons.map((lesson: Lesson) => (
                   <option key={lesson.id} value={lesson.id}>
                     {lesson.course_title} → {lesson.module_title} → {lesson.title}
                   </option>
@@ -524,7 +528,7 @@ export default function ProjectAdminDashboard() {
                     </td>
                   </tr>
                 ) : (
-                  filteredProjects.map((project) => (
+                  filteredProjects.map((project: Project) => (
                     <tr key={project.id} className="border-b hover:bg-gray-50">
                       <td className="p-4">
                         <div>
@@ -545,7 +549,7 @@ export default function ProjectAdminDashboard() {
                           {project.submission_platform && (
                             <Badge variant="outline" className="w-fit">
                               <Icons.Link />
-                              <span className="ml-1">{PLATFORM_NAMES[project.submission_platform]}</span>
+                              <span className="ml-1">{PLATFORM_NAMES[project.submission_platform as SubmissionPlatform]}</span>
                             </Badge>
                           )}
                           {project.submission_instructions && (

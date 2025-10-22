@@ -6,8 +6,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
 import { userService, CreateUserData, UpdateUserData, UserStats } from '@/services/userService';
 import { activityLogService } from '@/services/activityLogService';
+import { useUsersAdmin } from '@/hooks/useQueryCache';
 
 // Define CombinedUser interface for this component
 interface CombinedUser {
@@ -415,48 +418,45 @@ function UserTable({ users, onEdit, onView, onDelete, onResetPassword }: UserTab
 }
 
 export function UserAdminDashboard() {
-  const [users, setUsers] = useState<CombinedUser[]>([]);
-  const [stats, setStats] = useState<UserStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  // PERFORMANCE: Use cached queries
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedUser, setSelectedUser] = useState<CombinedUser | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState<'all' | 'student' | 'instructor' | 'admin'>('all');
+  const [stats, setStats] = useState<UserStats | null>(null);
+
+  // PERFORMANCE: Cached query for users
+  const { data: usersData, isLoading: loading } = useUsersAdmin(1, 100, {
+    role: filterRole === 'all' ? undefined : filterRole
+  });
+
+  const users = (usersData?.users || []) as CombinedUser[];
 
   useEffect(() => {
-    loadData();
     // Log that user management was accessed
     activityLogService.logSystemAction('USER_MANAGEMENT_VIEW', 'User management dashboard accessed');
+    
+    // Load stats separately (not in query yet)
+    const loadStats = async () => {
+      try {
+        const statsData = await userService.getUserStats();
+        setStats(statsData);
+      } catch (error) {
+        console.error('Failed to load stats:', error);
+      }
+    };
+    loadStats();
   }, []);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      
-      // Use the userService which handles the API calls properly
-      const [usersData, statsData] = await Promise.all([
-        userService.getAllUsers(),
-        userService.getUserStats()
-      ]);
-      setUsers(usersData);
-      setStats(statsData);
-    } catch (error) {
-      console.error('Failed to load user data:', error);
-      alert('Failed to load user data: ' + (error instanceof Error ? error.message : 'Unknown error'));
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSaveUser = async (userData: CreateUserData | UpdateUserData) => {
     try {
-      setLoading(true);
+      // PERFORMANCE: Loading state managed by React Query
       
       if (selectedUser) {
         // Check if updateUser method exists
         if ('updateUser' in userService) {
           await userService.updateUser(selectedUser.id, userData as UpdateUserData);
-          alert('User updated successfully!');
+          toast.success('User updated successfully!');
         } else {
           throw new Error('Update user functionality not available');
         }
@@ -464,19 +464,17 @@ export function UserAdminDashboard() {
         // Check if createUser method exists
         if ('createUser' in userService) {
           await userService.createUser(userData as CreateUserData);
-          alert('User created successfully!');
+          toast.success('User created successfully!');
         } else {
           throw new Error('Create user functionality not available');
         }
       }
       
-      await loadData();
+      // PERFORMANCE: Cache will auto-refresh
       setViewMode('list');
       setSelectedUser(null);
     } catch (error) {
-      alert('Failed to save user: ' + (error instanceof Error ? error.message : 'Unknown error'));
-    } finally {
-      setLoading(false);
+      toast.error('Failed to save user: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
@@ -488,32 +486,32 @@ export function UserAdminDashboard() {
     try {
       if ('deleteUser' in userService) {
         await userService.deleteUser(userId);
-        await loadData();
-        alert('User deleted successfully!');
+        // PERFORMANCE: Cache will auto-refresh
+        toast.success('User deleted successfully!');
       } else {
         throw new Error('Delete user functionality not available');
       }
     } catch (error) {
-      alert('Failed to delete user: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      toast.error('Failed to delete user: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
   const handleResetPassword = async (userId: string) => {
     const newPassword = prompt('Enter new password (minimum 6 characters):');
     if (!newPassword || newPassword.length < 6) {
-      alert('Password must be at least 6 characters long');
+      toast.error('Password must be at least 6 characters long');
       return;
     }
 
     try {
       if ('resetUserPassword' in userService) {
         await userService.resetUserPassword(userId, newPassword);
-        alert('Password has been reset successfully!');
+        toast.success('Password has been reset successfully!');
       } else {
         throw new Error('Reset password functionality not available');
       }
     } catch (error) {
-      alert('Failed to reset password: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      toast.error('Failed to reset password: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
@@ -700,6 +698,64 @@ export function UserAdminDashboard() {
                 <Icons.Delete />
                 <span>Delete User</span>
               </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Loading skeleton for list view
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex justify-between items-start">
+          <div className="space-y-2">
+            <Skeleton className="h-10 w-64" />
+            <Skeleton className="h-5 w-96" />
+          </div>
+          <Skeleton className="h-10 w-32" />
+        </div>
+        
+        {/* Stats Skeleton */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i} className="bg-white">
+              <CardContent className="p-4">
+                <div className="flex items-center space-x-3">
+                  <Skeleton className="h-10 w-10 rounded-lg" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-6 w-16" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Table Skeleton */}
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-8 w-48" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {[...Array(10)].map((_, i) => (
+                <div key={i} className="flex items-center justify-between p-4 border rounded">
+                  <div className="flex items-center space-x-4">
+                    <Skeleton className="h-12 w-12 rounded-full" />
+                    <div className="space-y-2">
+                      <Skeleton className="h-5 w-32" />
+                      <Skeleton className="h-4 w-48" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Skeleton className="h-8 w-20" />
+                    <Skeleton className="h-8 w-20" />
+                  </div>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>

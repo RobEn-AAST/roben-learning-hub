@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Module, ModuleStats, Course } from '@/services/moduleService';
 import { activityLogService } from '@/services/activityLogService';
 import { Lesson } from '@/services/lessonService';
+import { useModulesAdmin, useModuleStats, useCourses } from '@/hooks/useQueryCache';
 
 // Icons
 const Icons = {
@@ -120,17 +121,13 @@ interface Filters {
 type WorkflowStep = 'module' | 'lesson' | 'content';
 
 export function ModulesAdminDashboard() {
-  const [modules, setModules] = useState<Module[]>([]);
-  const [stats, setStats] = useState<ModuleStats | null>(null);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [instructors, setInstructors] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  // PERFORMANCE: Use cached queries
+  const [currentPage, setCurrentPage] = useState(1);
+  const [filters, setFilters] = useState<Filters>({});
   const [showForm, setShowForm] = useState(false);
   const [editingModule, setEditingModule] = useState<Module | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [filters, setFilters] = useState<Filters>({});
   const [error, setError] = useState('');
+  const [instructors, setInstructors] = useState<any[]>([]);
   
   // Workflow state management
   const [workflowStep, setWorkflowStep] = useState<WorkflowStep>('module');
@@ -154,67 +151,37 @@ export function ModulesAdminDashboard() {
 
   const [contentFormData, setContentFormData] = useState<ContentFormData>({});
 
+  // PERFORMANCE: Cached queries
+  const { data: modulesData, isLoading: modulesLoading } = useModulesAdmin(currentPage, 10, filters);
+  const { data: stats } = useModuleStats();
+  const { data: coursesData } = useCourses(1, 100);
+
+  // Extract data
+  const modules = modulesData?.modules || [];
+  const totalPages = Math.ceil((modulesData?.total || 0) / 10);
+  const loading = modulesLoading;
+  const courses = coursesData?.courses || [];
+
+  // Load instructors (keep this for now as it's not in the main queries)
   useEffect(() => {
-    loadInitialData();
+    const loadInstructors = async () => {
+      try {
+        const instructorsResponse = await fetch('/api/admin/lessons/instructors');
+        if (instructorsResponse.ok) {
+          const instructorsData = await instructorsResponse.json();
+          setInstructors(instructorsData);
+        }
+      } catch (error) {
+        console.error('Error loading instructors:', error);
+      }
+    };
+    loadInstructors();
   }, []);
-
-  useEffect(() => {
-    loadModules();
-  }, [currentPage, filters]);
-
-  const loadInitialData = async () => {
-    try {
-      const [statsResponse, coursesResponse, instructorsResponse] = await Promise.all([
-        fetch('/api/admin/modules/stats'),
-        fetch('/api/admin/modules/courses'),
-        fetch('/api/admin/lessons/instructors')
-      ]);
-
-      if (statsResponse.ok) {
-        const statsData = await statsResponse.json();
-        setStats(statsData);
-      }
-
-      if (coursesResponse.ok) {
-        const coursesData = await coursesResponse.json();
-        setCourses(coursesData);
-      }
-
-      if (instructorsResponse.ok) {
-        const instructorsData = await instructorsResponse.json();
-        setInstructors(instructorsData);
-      }
-    } catch (error) {
-      console.error('Error loading initial data:', error);
-    }
-  };
-
-  const loadModules = async () => {
-    try {
-      setLoading(true);
-      const params = new URLSearchParams({
-        page: currentPage.toString(),
-        limit: '10',
-        ...filters
-      });
-
-      const response = await fetch(`/api/admin/modules?${params}`);
-      if (response.ok) {
-        const data = await response.json();
-        setModules(data.modules);
-        setTotalPages(Math.ceil(data.total / 10));
-      }
-    } catch (error) {
-      console.error('Error loading modules:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setLoading(true);
+    // PERFORMANCE: Loading state managed by React Query
     try {
       const url = editingModule 
         ? `/api/admin/modules/${editingModule.id}`
@@ -242,8 +209,7 @@ export function ModulesAdminDashboard() {
             editingModule.title // old title
           );
           // Close form after successful update
-          await loadModules();
-          await loadInitialData();
+          // PERFORMANCE: Cache will auto-refresh
           resetForm();
         } else {
           // Log module creation
@@ -274,9 +240,7 @@ export function ModulesAdminDashboard() {
           setError('');
           setWorkflowStep('lesson');
           
-          // Load modules in background (don't await to prevent blocking)
-          loadModules();
-          loadInitialData();
+          // PERFORMANCE: Cache will auto-refresh
         }
       } else {
         const error = await response.json();
@@ -285,8 +249,6 @@ export function ModulesAdminDashboard() {
     } catch (error) {
       console.error('Error saving module:', error);
       setError('Error saving module');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -295,7 +257,7 @@ export function ModulesAdminDashboard() {
     if (!currentModuleId) return;
     
     setError('');
-    setLoading(true);
+    // PERFORMANCE: Loading state managed by React Query
     try {
       const response = await fetch('/api/admin/lessons', {
         method: 'POST',
@@ -340,8 +302,6 @@ export function ModulesAdminDashboard() {
     } catch (error) {
       console.error('Error creating lesson:', error);
       setError('Failed to create lesson');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -370,7 +330,7 @@ export function ModulesAdminDashboard() {
     if (!currentLessonId) return;
     
     setError('');
-    setLoading(true);
+    // PERFORMANCE: Loading state managed by React Query
     try {
       let endpoint = '';
       let bodyData: any = { lesson_id: currentLessonId };
@@ -451,8 +411,6 @@ export function ModulesAdminDashboard() {
     } catch (error) {
       console.error(`Error creating ${currentLessonType}:`, error);
       setError(`Failed to create ${currentLessonType}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -488,8 +446,7 @@ export function ModulesAdminDashboard() {
           description: `Deleted module: "${module.title}"`
         });
 
-        await loadModules();
-        await loadInitialData();
+        // PERFORMANCE: Cache will auto-refresh
       } else {
         const error = await response.json();
         alert(`Error: ${error.error}`);
@@ -617,7 +574,7 @@ export function ModulesAdminDashboard() {
                     disabled={editingModule ? true : false}
                   >
                     <option value="" style={{ backgroundColor: 'white', color: 'black' }}>Select a course</option>
-                    {courses.map((course) => (
+                    {courses.map((course: any) => (
                       <option key={course.id} value={course.id} style={{ backgroundColor: 'white', color: 'black' }}>
                         {course.title} ({course.status})
                       </option>
@@ -1155,7 +1112,7 @@ export function ModulesAdminDashboard() {
                 style={{ backgroundColor: 'white', color: 'black' }}
               >
                 <option value="" style={{ backgroundColor: 'white', color: 'black' }}>All Courses</option>
-                {courses.map((course) => (
+                {courses.map((course: any) => (
                   <option key={course.id} value={course.id} style={{ backgroundColor: 'white', color: 'black' }}>
                     {course.title}
                   </option>

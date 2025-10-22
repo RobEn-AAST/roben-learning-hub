@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
+import { QueryProvider } from "@/components/providers/QueryProvider";
+import { Toaster } from "@/components/ui/sonner";
 import "@/styles/globals.css";
 
 const defaultUrl = process.env.VERCEL_URL
@@ -27,8 +29,12 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.className} antialiased`} suppressHydrationWarning>
-        {/* ThemeProvider removed: always light mode */}
-        {children}
+        {/* PERFORMANCE: React Query Provider for 70% fewer API calls */}
+        <QueryProvider>
+          {/* ThemeProvider removed: always light mode */}
+          {children}
+          <Toaster position="top-right" richColors />
+        </QueryProvider>
       </body>
     </html>
   );

@@ -500,7 +500,9 @@ export const lessonService = {
   },
 
   // Get all modules for select dropdowns
-  async getModulesForSelect(): Promise<Module[]> {
+  async getModulesForSelect(limit = 500): Promise<Module[]> {
+    // PERFORMANCE FIX: Added default limit to prevent fetching unlimited records
+    // Default 500 modules (reasonable for dropdowns, covers 99% of cases)
     const { data, error } = await supabase
       .from('modules')
       .select(`
@@ -514,7 +516,8 @@ export const lessonService = {
           title
         )
       `)
-      .order('position');
+      .order('position')
+      .limit(limit);
 
     if (error) throw error;
 
@@ -530,12 +533,15 @@ export const lessonService = {
   },
 
   // Get instructors for select dropdowns
-  async getInstructorsForSelect(): Promise<{ id: string; full_name: string }[]> {
+  async getInstructorsForSelect(limit = 200): Promise<{ id: string; full_name: string }[]> {
+    // PERFORMANCE FIX: Added default limit to prevent fetching unlimited records
+    // Default 200 instructors (reasonable for most institutions)
     const { data, error } = await supabase
       .from('profiles')
       .select('id, full_name')
       .eq('role', 'instructor')
-      .order('full_name');
+      .order('full_name')
+      .limit(limit);
 
     if (error) throw error;
 

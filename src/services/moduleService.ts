@@ -317,7 +317,9 @@ export const moduleService = {
   },
 
   // Get modules with their lessons for a specific course
-  async getModulesWithLessons(courseId: string) {
+  async getModulesWithLessons(courseId: string, limit = 100) {
+    // PERFORMANCE FIX: Added default limit to prevent fetching unlimited records
+    // Default 100 modules per course (reasonable for most courses)
     const { data, error } = await supabase
       .from('modules')
       .select(`
@@ -331,7 +333,9 @@ export const moduleService = {
         )
       `)
       .eq('course_id', courseId)
-      .order('position');
+      .order('position')
+      .limit(limit)
+      .limit(50, { foreignTable: 'lessons' }); // Also limit lessons per module
 
     if (error) throw error;
 
