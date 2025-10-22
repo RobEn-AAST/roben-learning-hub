@@ -6,8 +6,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
 import { videoService, Video, VideoStats, VideoQuestion, Lesson, CreateVideoData, UpdateVideoData } from '@/services/videoService';
 import { activityLogService } from '@/services/activityLogService';
+import { useVideos, useVideoLessons, useVideoStats } from '@/hooks/useQueryCache';
 
 // Icons
 const Icons = {
@@ -324,7 +327,7 @@ function VideoForm({ video, onSave, onCancel, loading, lessons }: VideoFormProps
                 required
               >
                 <option value="">Select a lesson</option>
-                {lessons.map((lesson) => (
+                {lessons.map((lesson: Lesson) => (
                   <option key={lesson.id} value={lesson.id}>
                     {lesson.course_title} → {lesson.module_title} → {lesson.title}
                   </option>
@@ -772,22 +775,20 @@ function VideoQuestionsManager({ video, onClose }: VideoQuestionsManagerProps) {
 }
 
 export default function VideoAdminDashboard() {
-  const [videos, setVideos] = useState<Video[]>([]);
+  // React Query hooks - no manual fetching needed!
+  const { data: videos = [], isLoading: videosLoading } = useVideos();
+  const { data: lessons = [], isLoading: lessonsLoading } = useVideoLessons();
+  const { data: stats, isLoading: statsLoading } = useVideoStats();
+  
   const [filteredVideos, setFilteredVideos] = useState<Video[]>([]);
-  const [stats, setStats] = useState<VideoStats | null>(null);
-  const [lessons, setLessons] = useState<Lesson[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false); // For mutations only
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLesson, setSelectedLesson] = useState<string>('');
   const [selectedProvider, setSelectedProvider] = useState<string>('');
 
-  useEffect(() => {
-    loadVideos();
-    loadStats();
-    loadLessons();
-  }, []);
+  // PERFORMANCE: React Query handles fetching automatically - no useEffect needed!
 
   useEffect(() => {
     // Filter videos based on search term, lesson, and provider
@@ -795,7 +796,7 @@ export default function VideoAdminDashboard() {
 
     // Filter by search term
     if (searchTerm.trim() !== '') {
-      filtered = filtered.filter(video =>
+      filtered = filtered.filter((video: Video) =>
         video.url.toLowerCase().includes(searchTerm.toLowerCase()) ||
         video.provider_video_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
         video.lesson_title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -806,65 +807,41 @@ export default function VideoAdminDashboard() {
 
     // Filter by lesson
     if (selectedLesson) {
-      filtered = filtered.filter(video => video.lesson_id === selectedLesson);
+      filtered = filtered.filter((video: Video) => video.lesson_id === selectedLesson);
     }
 
     // Filter by provider
     if (selectedProvider) {
-      filtered = filtered.filter(video => video.provider === selectedProvider);
+      filtered = filtered.filter((video: Video) => video.provider === selectedProvider);
     }
 
     setFilteredVideos(filtered);
   }, [searchTerm, selectedLesson, selectedProvider, videos]);
 
-  const loadVideos = async () => {
-    try {
-      setLoading(true);
-      const data = await videoService.getAllVideos();
-      setVideos(data);
-      setFilteredVideos(data);
-    } catch (error) {
-      console.error('Error loading videos:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadStats = async () => {
-    try {
-      const data = await videoService.getVideoStats();
-      setStats(data);
-    } catch (error) {
-      console.error('Error loading stats:', error);
-    }
-  };
-
-  const loadLessons = async () => {
-    try {
-      const data = await videoService.getLessonsForSelect();
-      setLessons(data);
-    } catch (error) {
-      console.error('Error loading lessons:', error);
-    }
-  };
+  // ✅ REMOVED: loadVideos(), loadStats(), loadLessons()
+  // React Query hooks handle all data fetching automatically with intelligent caching!
 
   const handleCreateVideo = async (videoData: VideoFormData) => {
     try {
       setLoading(true);
       await videoService.createVideo(videoData as CreateVideoData);
-      await loadVideos();
-      await loadStats();
+      
+      // React Query will auto-refresh the cache
+      window.location.reload(); // Force refresh to invalidate all caches
+      
       setViewMode('list');
+      toast.success('Video created successfully!');
       
       // Log activity
       await activityLogService.logActivity({
-        action: 'create_video',
-        resource_type: 'video',
-        details: `Created video: ${videoData.url}`,
-        metadata: videoData
+        action: 'CREATE',
+        table_name: 'videos',
+        description: `Created video: ${videoData.url}`,
+        new_values: JSON.stringify(videoData)
       });
     } catch (error) {
       console.error('Error creating video:', error);
+      toast.error('Failed to create video');
     } finally {
       setLoading(false);
     }
@@ -876,21 +853,26 @@ export default function VideoAdminDashboard() {
     try {
       setLoading(true);
       await videoService.updateVideo(selectedVideo.id, videoData as UpdateVideoData);
-      await loadVideos();
-      await loadStats();
+      
+      // React Query will auto-refresh the cache
+      window.location.reload(); // Force refresh to invalidate all caches
+      
       setViewMode('list');
       setSelectedVideo(null);
+      toast.success('Video updated successfully!');
       
       // Log activity
       await activityLogService.logActivity({
-        action: 'update_video',
-        resource_type: 'video',
-        resource_id: selectedVideo.id,
-        details: `Updated video: ${videoData.url}`,
-        metadata: { old_data: selectedVideo, new_data: videoData }
+        action: 'UPDATE',
+        table_name: 'videos',
+        record_id: selectedVideo.id,
+        description: `Updated video: ${videoData.url}`,
+        old_values: JSON.stringify(selectedVideo),
+        new_values: JSON.stringify(videoData)
       });
     } catch (error) {
       console.error('Error updating video:', error);
+      toast.error('Failed to update video');
     } finally {
       setLoading(false);
     }
@@ -903,21 +885,25 @@ export default function VideoAdminDashboard() {
 
     try {
       setLoading(true);
-      const video = videos.find(v => v.id === videoId);
+      const video = videos.find((v: Video) => v.id === videoId);
       await videoService.deleteVideo(videoId);
-      await loadVideos();
-      await loadStats();
+      
+      // React Query will auto-refresh the cache
+      window.location.reload(); // Force refresh to invalidate all caches
+      
+      toast.success('Video deleted successfully');
       
       // Log activity
       await activityLogService.logActivity({
-        action: 'delete_video',
-        resource_type: 'video',
-        resource_id: videoId,
-        details: `Deleted video: ${video?.url || 'Unknown'}`,
-        metadata: { deleted_video: video }
+        action: 'DELETE',
+        table_name: 'videos',
+        record_id: videoId,
+        description: `Deleted video: ${video?.url || 'Unknown'}`,
+        old_values: JSON.stringify(video)
       });
     } catch (error) {
       console.error('Error deleting video:', error);
+      toast.error('Failed to delete video');
     } finally {
       setLoading(false);
     }
@@ -1015,10 +1001,55 @@ export default function VideoAdminDashboard() {
     );
   }
 
-  if (loading) {
+  // Skeleton loading for initial data fetch
+  if (videosLoading || statsLoading || lessonsLoading) {
     return (
-      <div className="flex items-center justify-center min-h-96">
-        <div className="text-lg text-black">Loading videos...</div>
+      <div className="space-y-6">
+        <div className="flex justify-between items-start">
+          <div className="space-y-2">
+            <Skeleton className="h-9 w-64" />
+            <Skeleton className="h-5 w-96" />
+          </div>
+          <Skeleton className="h-10 w-32" />
+        </div>
+
+        {/* Stats Cards Skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-4 rounded-full" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-16 mb-2" />
+                <Skeleton className="h-3 w-32" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Filters Skeleton */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-full" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Table Skeleton */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -1086,7 +1117,7 @@ export default function VideoAdminDashboard() {
                 className="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
               >
                 <option value="">All Lessons</option>
-                {lessons.map((lesson) => (
+                {lessons.map((lesson: Lesson) => (
                   <option key={lesson.id} value={lesson.id}>
                     {lesson.course_title} → {lesson.module_title} → {lesson.title}
                   </option>

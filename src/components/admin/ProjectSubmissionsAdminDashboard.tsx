@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 import type { ProjectSubmission } from '@/types/submission';
 import { PLATFORM_NAMES } from '@/types/submission';
 import { activityLogService } from '@/services/activityLogService';
@@ -156,9 +157,10 @@ export default function ProjectSubmissionsAdminDashboard() {
 
       await loadData();
       handleCancelEdit();
+      toast.success('Submission updated successfully!');
     } catch (error) {
       console.error('Error updating submission:', error);
-      alert('Failed to update submission. Please try again.');
+      toast.error('Failed to update submission. Please try again.');
     }
   };
 
@@ -173,9 +175,10 @@ export default function ProjectSubmissionsAdminDashboard() {
       if (!response.ok) throw new Error('Failed to delete submission');
 
       await loadData();
+      toast.success('Submission deleted successfully!');
     } catch (error) {
       console.error('Error deleting submission:', error);
-      alert('Failed to delete submission. Please try again.');
+      toast.error('Failed to delete submission. Please try again.');
     }
   };
 

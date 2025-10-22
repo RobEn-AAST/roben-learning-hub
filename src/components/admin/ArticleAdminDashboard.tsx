@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 
 import { articleService, Article, ArticleStats, Lesson, CreateArticleData, UpdateArticleData } from '@/services/articleService';
 import { activityLogService } from '@/services/activityLogService';
@@ -262,8 +263,8 @@ export default function ArticleAdminDashboard() {
     // Log dashboard access
     activityLogService.logActivity({
       action: 'VIEW',
-      resource_type: 'articles',
-      details: 'Accessed article management dashboard'
+      table_name: 'articles',
+      description: 'Accessed article management dashboard'
     });
   }, []);
 
@@ -307,10 +308,10 @@ export default function ArticleAdminDashboard() {
       if (!response.ok) throw new Error('Failed to delete article');
 
       await loadData();
-      alert('Article deleted successfully!');
+      toast.success('Article deleted successfully!');
     } catch (error) {
       console.error('Error deleting article:', error);
-      alert('Failed to delete article. Please try again.');
+      toast.error('Failed to delete article. Please try again.');
     }
   };
 
@@ -338,7 +339,7 @@ export default function ArticleAdminDashboard() {
         });
 
         if (!response.ok) throw new Error('Failed to update article');
-        alert('Article updated successfully!');
+        toast.success('Article updated successfully!');
       } else {
         // Create new article
         const response = await fetch('/api/admin/articles', {
@@ -348,12 +349,12 @@ export default function ArticleAdminDashboard() {
         });
 
         if (!response.ok) throw new Error('Failed to create article');
-        alert('Article created successfully!');
+        toast.success('Article created successfully!');
       }
       
       handleBackToList();
     } catch (error) {
-      alert('Failed to save article: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      toast.error('Failed to save article: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }

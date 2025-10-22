@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { toast } from 'sonner';
 import { QuestionOption } from "@/services/quizService";
 
 const Icons = {
@@ -190,10 +191,12 @@ export default function QuestionOptionAdminDashboard() {
         setEditingOption(null);
         setViewMode('list');
         await loadInitialData();
+        toast.success(editingOption ? 'Option updated successfully!' : 'Option created successfully!');
       }
     } catch (error: any) {
       console.error('Error processing option:', error);
       setError(error.message || "Failed to save option");
+      toast.error(error.message || "Failed to save option");
     } finally {
       setLoading(false);
     }
@@ -226,14 +229,17 @@ export default function QuestionOptionAdminDashboard() {
       if (response.ok) {
         console.log('Option deleted successfully');
         await loadInitialData(); // Refresh the list
+        toast.success('Option deleted successfully!');
       } else {
         const errorData = await response.json();
         console.error('Option deletion failed:', errorData);
         setError(errorData.error || 'Failed to delete option');
+        toast.error(errorData.error || 'Failed to delete option');
       }
     } catch (error) {
       console.error('Error deleting option:', error);
       setError('Failed to delete option');
+      toast.error('Failed to delete option');
     } finally {
       setLoading(false);
     }

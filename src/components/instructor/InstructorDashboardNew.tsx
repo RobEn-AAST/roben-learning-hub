@@ -1,9 +1,12 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
+import { useInstructorDashboard } from '@/hooks/useQueryCache';
 
 // Icons
 const Icons = {
@@ -75,40 +78,50 @@ interface DashboardData {
 }
 
 export function InstructorDashboardNew() {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // PERFORMANCE: React Query hook - automatic caching and refetching!
+  const { data, isLoading, error, refetch } = useInstructorDashboard();
   const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
-
-  const loadDashboardData = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch('/api/instructor/dashboard');
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to load dashboard data');
-      }
-
-      const dashboardData = await response.json();
-      setData(dashboardData);
-      setError(null);
-    } catch (err) {
-      console.error('Dashboard load error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load dashboard');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) {
+  // Skeleton loading for initial fetch
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-96 bg-gray-50">
-        <div className="text-lg text-gray-900">Loading your courses...</div>
+      <div className="space-y-6 p-6 bg-gray-50 min-h-screen">
+        <div className="space-y-2">
+          <Skeleton className="h-10 w-96" />
+          <Skeleton className="h-5 w-full max-w-2xl" />
+        </div>
+
+        {/* Stats Skeleton */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i} className="bg-white">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-2 flex-1">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-8 w-16" />
+                  </div>
+                  <Skeleton className="h-10 w-10 rounded-full" />
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Courses Skeleton */}
+        <Card className="bg-white">
+          <CardHeader>
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-4 w-64" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {[...Array(3)].map((_, i) => (
+                <Skeleton key={i} className="h-24 w-full" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -116,8 +129,8 @@ export function InstructorDashboardNew() {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center min-h-96 space-y-4 bg-gray-50 p-8">
-        <div className="text-red-600 text-lg">⚠️ {error}</div>
-        <Button onClick={loadDashboardData}>Try Again</Button>
+        <div className="text-red-600 text-lg">⚠️ {error.message || 'Failed to load dashboard'}</div>
+        <Button onClick={() => refetch()}>Try Again</Button>
         <div className="text-sm text-gray-600 max-w-md text-center">
           If you're seeing this error, you might not be assigned to any courses yet. 
           Please contact an administrator or use the debug page to check your assignments.
@@ -218,7 +231,7 @@ export function InstructorDashboardNew() {
             <div className="flex flex-wrap gap-2">
               {Object.entries(data.stats.coursesByStatus).map(([status, count]) => (
                 <Badge key={status} className={getStatusBadgeColor(status)}>
-                  {status}: {count}
+                  {status}: {String(count)}
                 </Badge>
               ))}
             </div>
@@ -239,7 +252,7 @@ export function InstructorDashboardNew() {
         </CardHeader>
         <CardContent>
           <div className="grid gap-4">
-              {data.courses.map((course) => (
+              {data.courses.map((course: Course) => (
                 <div key={course.id} className="bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 shadow-sm">
                   <div className="flex items-start justify-between mb-2">
                     <div>
@@ -275,7 +288,7 @@ export function InstructorDashboardNew() {
                   <div className="mt-4 border-t pt-4">
                     <h4 className="font-medium mb-3 text-gray-900">Course Modules:</h4>
                     <div className="grid gap-2">
-                      {data.modulesByCourse[course.id].map((module) => (
+                      {data.modulesByCourse[course.id].map((module: Module) => (
                         <div key={module.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded shadow-sm">
                           <div>
                             <span className="font-medium text-gray-900">{module.position}. {module.title}</span>

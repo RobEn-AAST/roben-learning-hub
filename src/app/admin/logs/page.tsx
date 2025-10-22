@@ -1,10 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
+import { useActivityLogs } from '@/hooks/useQueryCache';
 // Using simple HTML selects instead of custom Select component
 
 interface ActivityLog {
@@ -31,61 +34,20 @@ interface LogsResponse {
 }
 
 export default function AdminLogsPage() {
-  const [logs, setLogs] = useState<ActivityLog[]>([]);
-  const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
     action: '',
-    table_name: '',
-    user_name: '',
+    tableName: '',
+    search: '',
     page: 1,
     limit: 50
   });
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 50,
-    total: 0,
-    totalPages: 0
-  });
-  const [stats, setStats] = useState({ totalLogs: 0 });
 
-  useEffect(() => {
-    loadLogs();
-  }, [filters]);
-
-  const loadLogs = async () => {
-    try {
-      setLoading(true);
-      
-      const params = new URLSearchParams();
-      if (filters.action) params.set('action', filters.action);
-      if (filters.table_name) params.set('resource_type', filters.table_name);
-      if (filters.user_name) params.set('user_name', filters.user_name);
-      params.set('page', filters.page.toString());
-      params.set('limit', filters.limit.toString());
-
-      const response = await fetch(`/api/admin/activity-logs?${params}`);
-      
-      if (response.ok) {
-        const data: LogsResponse = await response.json();
-        setLogs(data.logs);
-        setPagination(data.pagination);
-        setStats(data.stats);
-      } else {
-        const errorText = await response.text();
-        console.error('Failed to fetch logs:', {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorText
-        });
-        setLogs([]);
-      }
-    } catch (error) {
-      console.error('Error loading logs:', error);
-      setLogs([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // React Query hook - automatic caching and refetching!
+  const { data, isLoading } = useActivityLogs(filters);
+  const logs = data?.logs || [];
+  const pagination = data?.pagination || { page: 1, limit: 50, total: 0, totalPages: 0 };
+  const stats = data?.stats || { totalLogs: 0 };
+  const loading = isLoading;
 
   const handleFilterChange = (key: string, value: string | number) => {
     setFilters(prev => ({
@@ -93,6 +55,17 @@ export default function AdminLogsPage() {
       [key]: value,
       page: key !== 'page' ? 1 : (value as number) // Reset page when other filters change
     }));
+  };
+
+  const clearFilters = () => {
+    setFilters({
+      action: '',
+      tableName: '',
+      search: '',
+      page: 1,
+      limit: 50
+    });
+    toast.success('Filters cleared');
   };
 
   const formatDate = (dateString: string) => {
@@ -141,7 +114,7 @@ export default function AdminLogsPage() {
             Monitor all user activities and system events. Logs are automatically cleaned up after 14 days.
           </p>
         </div>
-        <Button onClick={loadLogs} disabled={loading}>
+        <Button onClick={() => window.location.reload()} disabled={loading}>
           {loading ? 'Loading...' : 'Refresh'}
         </Button>
       </div>
@@ -233,8 +206,8 @@ export default function AdminLogsPage() {
             <div>
               <label className="text-sm font-medium">Table</label>
               <select 
-                value={filters.table_name} 
-                onChange={(e) => handleFilterChange('table_name', e.target.value)}
+                value={filters.tableName} 
+                onChange={(e) => handleFilterChange('tableName', e.target.value)}
                 className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
                 <option value="">All tables</option>
@@ -265,9 +238,7 @@ export default function AdminLogsPage() {
 
             <div className="flex items-end">
               <Button 
-                onClick={() => {
-                  setFilters({ action: '', table_name: '', user_name: '', page: 1, limit: 50 });
-                }}
+                onClick={clearFilters}
                 variant="outline"
                 className="w-full"
               >
@@ -286,9 +257,23 @@ export default function AdminLogsPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <div className="text-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-              <p className="mt-2 text-gray-600">Loading logs...</p>
+            <div className="space-y-3">
+              {[...Array(10)].map((_, i) => (
+                <Card key={i} className="p-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-5 w-32" />
+                      <Skeleton className="h-5 w-24" />
+                    </div>
+                    <Skeleton className="h-4 w-full" />
+                    <div className="flex items-center gap-4">
+                      <Skeleton className="h-4 w-20" />
+                      <Skeleton className="h-4 w-20" />
+                      <Skeleton className="h-4 w-32" />
+                    </div>
+                  </div>
+                </Card>
+              ))}
             </div>
           ) : logs.length === 0 ? (
             <div className="text-center py-8">
@@ -296,7 +281,7 @@ export default function AdminLogsPage() {
             </div>
           ) : (
             <div className="space-y-4">
-              {logs.map((log) => (
+              {logs.map((log: ActivityLog) => (
                 <div key={log.id} className="border rounded-lg p-4 hover:bg-gray-50">
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">

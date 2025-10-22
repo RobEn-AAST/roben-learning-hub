@@ -921,3 +921,34 @@ export function useActivityLogs(filters: { page?: number; limit?: number; action
     placeholderData: (previousData: any) => previousData, // Keep previous page while loading next page
   });
 }
+
+// ============================================================================
+// INSTRUCTOR: DASHBOARD
+// ============================================================================
+
+export function useInstructorDashboard() {
+  return useQuery({
+    queryKey: ['instructor-dashboard'],
+    queryFn: async () => {
+      const response = await fetch('/api/instructor/dashboard');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to load dashboard data');
+      }
+      return await response.json();
+    },
+    staleTime: 3 * 60 * 1000, // 3 minutes - dashboard data doesn't change frequently
+  });
+}
+
+export function useInstructorCourses() {
+  return useQuery({
+    queryKey: ['instructor-courses'],
+    queryFn: async () => {
+      const response = await fetch('/api/instructor/courses');
+      if (!response.ok) throw new Error('Failed to fetch instructor courses');
+      return await response.json();
+    },
+    staleTime: 3 * 60 * 1000, // 3 minutes
+  });
+}

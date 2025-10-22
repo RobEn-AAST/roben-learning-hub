@@ -6,10 +6,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
 import { Module, ModuleStats, Course } from '@/services/moduleService';
 import { activityLogService } from '@/services/activityLogService';
 import { Lesson } from '@/services/lessonService';
 import { createClient } from '@/lib/supabase/client';
+import { useModulesAdmin, useModuleStats, useInstructorCourses } from '@/hooks/useQueryCache';
 
 // Icons
 const Icons = {
@@ -260,6 +263,7 @@ export function InstructorModulesManager() {
             formData.title,
             editingModule.title // old title
           );
+          toast.success('Module updated successfully!');
           // Close form after successful update
           await loadModules();
           await loadInitialData();
@@ -275,6 +279,8 @@ export function InstructorModulesManager() {
             record_name: formData.title,
             description: `Created new module: "${formData.title}"`
           });
+          
+          toast.success('Module created successfully!');
           
           // FIXED: Set the current module ID and automatically go to lesson step
           const moduleId = createdModule.id;
@@ -299,11 +305,15 @@ export function InstructorModulesManager() {
         }
       } else {
         const error = await response.json();
-        setError(error.error || 'Failed to save module');
+        const errorMsg = error.error || 'Failed to save module';
+        setError(errorMsg);
+        toast.error(errorMsg);
       }
     } catch (error) {
       console.error('Error saving module:', error);
-      setError('Error saving module');
+      const errorMsg = 'Error saving module';
+      setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -343,6 +353,7 @@ export function InstructorModulesManager() {
           description: `Created new lesson: "${lessonFormData.title}"`
         });
         
+        toast.success('Lesson created successfully!');
         setError('');
         // If lesson type is quiz, create quiz and show success message
         if (lessonFormData.lesson_type === 'quiz') {
@@ -354,11 +365,15 @@ export function InstructorModulesManager() {
         }
       } else {
         const errorData = await response.json();
-        setError(errorData.error || 'Failed to create lesson');
+        const errorMsg = errorData.error || 'Failed to create lesson';
+        setError(errorMsg);
+        toast.error(errorMsg);
       }
     } catch (error) {
       console.error('Error creating lesson:', error);
-      setError('Failed to create lesson');
+      const errorMsg = 'Failed to create lesson';
+      setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -377,10 +392,14 @@ export function InstructorModulesManager() {
       });
 
       if (response.ok) {
+        toast.success('Lesson and quiz created successfully!');
         setError('Lesson and quiz created successfully!');
+      } else {
+        toast.error('Failed to create quiz');
       }
     } catch (error) {
       console.error('Error creating quiz:', error);
+      toast.error('Failed to create quiz');
     }
   };
 
@@ -454,7 +473,9 @@ export function InstructorModulesManager() {
           description: `Created new ${currentLessonType} content`
         });
         
-        setError(`${currentLessonType.charAt(0).toUpperCase() + currentLessonType.slice(1)} created successfully!`);
+        const successMsg = `${currentLessonType.charAt(0).toUpperCase() + currentLessonType.slice(1)} created successfully!`;
+        toast.success(successMsg);
+        setError(successMsg);
         setContentFormData({});
       } else {
         console.error(`API Error - Status: ${response.status} ${response.statusText}`);
@@ -465,11 +486,15 @@ export function InstructorModulesManager() {
           errorData = { error: `Server error: ${response.status} ${response.statusText}` };
         }
         console.error(`Failed to create ${currentLessonType}:`, errorData);
-        setError(errorData.error || errorData.message || `Failed to create ${currentLessonType} (Status: ${response.status})`);
+        const errorMsg = errorData.error || errorData.message || `Failed to create ${currentLessonType} (Status: ${response.status})`;
+        setError(errorMsg);
+        toast.error(errorMsg);
       }
     } catch (error) {
       console.error(`Error creating ${currentLessonType}:`, error);
-      setError(`Failed to create ${currentLessonType}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const errorMsg = `Failed to create ${currentLessonType}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -507,15 +532,16 @@ export function InstructorModulesManager() {
           description: `Deleted module: "${module.title}"`
         });
 
+        toast.success('Module deleted successfully!');
         await loadModules();
         await loadInitialData();
       } else {
         const error = await response.json();
-        alert(`Error: ${error.error}`);
+        toast.error(`Error: ${error.error}`);
       }
     } catch (error) {
       console.error('Error deleting module:', error);
-      alert('Error deleting module');
+      toast.error('Error deleting module');
     }
   };
 
