@@ -313,7 +313,8 @@ class VideoService {
 
   async getLessonsForSelect(): Promise<Lesson[]> {
     try {
-      const { data, error } = await this.supabase
+      // First, get all video-type lessons
+      const { data: lessonsData, error: lessonsError } = await this.supabase
         .from('lessons')
         .select(`
           id,
@@ -326,9 +327,29 @@ class VideoService {
         .eq('lesson_type', 'video')  // Only get video lessons
         .order('title');
 
-      if (error) throw error;
+      if (lessonsError) {
+        console.error('❌ VideoService.getLessonsForSelect - Error fetching lessons:', lessonsError);
+        throw lessonsError;
+      }
 
-      return data?.map((lesson: {
+      // Get all lesson IDs that already have videos
+      const { data: videosData, error: videosError } = await this.supabase
+        .from('videos')
+        .select('lesson_id');
+
+      if (videosError) {
+        console.error('❌ VideoService.getLessonsForSelect - Error fetching videos:', videosError);
+        throw videosError;
+      }
+
+      // Create a Set of lesson IDs that already have videos
+      const usedLessonIds = new Set(videosData?.map((video: { lesson_id: string }) => video.lesson_id) || []);
+      console.log('📋 VideoService.getLessonsForSelect - Lessons with existing videos:', usedLessonIds.size);
+
+      // Filter out lessons that already have videos
+      const availableLessons = lessonsData?.filter((lesson: { id: string }) => !usedLessonIds.has(lesson.id)) || [];
+
+      const lessons = availableLessons.map((lesson: {
         id: string;
         title: string;
         modules: {
@@ -340,9 +361,13 @@ class VideoService {
         title: lesson.title,
         module_title: lesson.modules[0]?.title,
         course_title: lesson.modules[0]?.courses[0]?.title
-      })) || [];
+      }));
+
+      console.log('✅ VideoService.getLessonsForSelect - Found', lessons.length, 'available lessons (filtered from', lessonsData?.length || 0, 'total)');
+      
+      return lessons;
     } catch (error) {
-      console.error('Error fetching lessons:', error);
+      console.error('❌ VideoService.getLessonsForSelect - Error:', error);
       throw error;
     }
   }

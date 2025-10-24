@@ -120,6 +120,15 @@ export default function ProjectAdminDashboard() {
     });
   }, []);
 
+  // Debug: Log lessons data
+  useEffect(() => {
+    console.log('📋 ProjectAdminDashboard - Lessons data:', {
+      loading: lessonsLoading,
+      count: lessons?.length || 0,
+      lessons: lessons
+    });
+  }, [lessons, lessonsLoading]);
+
   const validateForm = (): boolean => {
     const errors: Partial<Record<keyof FormData, string>> = {};
 
@@ -311,16 +320,35 @@ export default function ProjectAdminDashboard() {
                   onChange={(e) => setFormData({ ...formData, lesson_id: e.target.value })}
                   className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
                   required
+                  disabled={lessonsLoading}
                 >
-                  <option value="">Select a lesson</option>
-                  {lessons.map((lesson: Lesson) => (
-                    <option key={lesson.id} value={lesson.id}>
-                      {lesson.course_title} → {lesson.module_title} → {lesson.title}
-                    </option>
-                  ))}
+                  <option value="">
+                    {lessonsLoading ? 'Loading lessons...' : 'Select a lesson'}
+                  </option>
+                  {lessons && lessons.length > 0 ? (
+                    lessons.map((lesson: Lesson) => (
+                      <option key={lesson.id} value={lesson.id}>
+                        {lesson.course_title} → {lesson.module_title} → {lesson.title}
+                      </option>
+                    ))
+                  ) : (
+                    !lessonsLoading && (
+                      <option value="" disabled>
+                        No project-type lessons found. Create a lesson with type "project" first.
+                      </option>
+                    )
+                  )}
                 </select>
                 {formErrors.lesson_id && (
                   <p className="text-red-500 text-sm mt-1">{formErrors.lesson_id}</p>
+                )}
+                {!lessonsLoading && lessons.length === 0 && (
+                  <p className="text-amber-600 text-sm mt-1 flex items-center gap-1">
+                    <span>💡</span>
+                    <span>
+                      Tip: Go to Lesson Management and create a lesson with lesson type set to "project"
+                    </span>
+                  </p>
                 )}
               </div>
 

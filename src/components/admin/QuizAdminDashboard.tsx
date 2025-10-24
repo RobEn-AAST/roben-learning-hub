@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { quizService , Quiz } from "@/services/quizService";
-import { useQuizzes, useQuizLessons, useQuizStats } from '@/hooks/useQueryCache';
+import { useQuizzes, useQuizLessons, useQuizStats, useCreateQuiz, useUpdateQuiz, useDeleteQuiz } from '@/hooks/useQueryCache';
+import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 // Icons (copied from LessonsAdminDashboard for visual match)
@@ -42,9 +43,15 @@ const Icons = {
 
 export default function QuizAdminDashboard() {
   // PERFORMANCE: React Query hooks - instant revisits from cache
+  const queryClient = useQueryClient();
   const { data: quizzes = [], isLoading: quizzesLoading } = useQuizzes();
   const { data: lessons = [], isLoading: lessonsLoading } = useQuizLessons();
   const { data: stats, isLoading: statsLoading } = useQuizStats();
+  
+  // Mutations
+  const createQuizMutation = useCreateQuiz();
+  const updateQuizMutation = useUpdateQuiz();
+  const deleteQuizMutation = useDeleteQuiz();
   
   const loading = quizzesLoading || lessonsLoading || statsLoading;
   
@@ -78,12 +85,36 @@ export default function QuizAdminDashboard() {
   const [options, setOptions] = useState<any[]>([]);
 
 
-  // Get lessons that don't have quizzes yet (for creating new quiz)
-  // When editing, include the current lesson
-  const availableLessons = lessons.filter((lesson: any) => 
-    !quizzes.some((quiz: Quiz) => quiz.lessonId === lesson.id) ||
-    (editingQuiz && lesson.id === editingQuiz.lessonId)
-  );
+  // PERFORMANCE: Server-side filtering already done, no need for client-side filter
+  // Lessons array already contains only available lessons (without quizzes)
+  // When editing, we'll show all quiz-type lessons
+  const availableLessons = lessons;
+
+  // Debug: Log quizzes data
+  useEffect(() => {
+    console.log('📋 QuizAdminDashboard - Quizzes data:', {
+      loading: quizzesLoading,
+      count: quizzes?.length || 0,
+      quizzes: quizzes
+    });
+  }, [quizzes, quizzesLoading]);
+
+  // Debug: Log lessons data
+  useEffect(() => {
+    console.log('📋 QuizAdminDashboard - Lessons data:', {
+      loading: lessonsLoading,
+      count: lessons?.length || 0,
+      lessons: lessons
+    });
+  }, [lessons, lessonsLoading]);
+
+  // Debug: Log stats data
+  useEffect(() => {
+    console.log('📋 QuizAdminDashboard - Stats data:', {
+      loading: statsLoading,
+      stats: stats
+    });
+  }, [stats, statsLoading]);
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -94,67 +125,34 @@ export default function QuizAdminDashboard() {
     setError('');
     
     try {
-      let quiz;
       if (editingQuiz) {
-        // Update existing quiz
-        console.log('Updating quiz with data:', formData);
-        const response = await fetch(`/api/admin/quizzes/${editingQuiz.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: formData.title,
-            description: formData.description,
-            timeLimitMinutes: formData.timeLimitMinutes ? parseInt(formData.timeLimitMinutes) : null
-          })
+        // Update existing quiz using mutation
+        await updateQuizMutation.mutateAsync({
+          id: editingQuiz.id,
+          title: formData.title,
+          description: formData.description,
+          timeLimitMinutes: formData.timeLimitMinutes ? parseInt(formData.timeLimitMinutes) : null
         });
         
-        if (response.ok) {
-          quiz = await response.json();
-          console.log('Quiz update result:', quiz);
-          // Close form after successful update
-          resetForm();
-        } else {
-          const errorData = await response.json();
-          console.error('Quiz update failed:', errorData);
-          throw new Error(errorData.error || 'Failed to update quiz');
-        }
+        toast.success('Quiz updated successfully!');
+        resetForm();
       } else {
-        // Create new quiz
-        console.log('Creating quiz with data:', formData);
-        const response = await fetch('/api/admin/quizzes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            lessonId: formData.lessonId,
-            title: formData.title,
-            description: formData.description,
-            timeLimitMinutes: formData.timeLimitMinutes ? parseInt(formData.timeLimitMinutes) : null
-          })
+        // Create new quiz using mutation
+        const quiz = await createQuizMutation.mutateAsync({
+          lessonId: formData.lessonId,
+          title: formData.title,
+          description: formData.description,
+          timeLimitMinutes: formData.timeLimitMinutes ? parseInt(formData.timeLimitMinutes) : null
         });
         
-        if (response.ok) {
-          quiz = await response.json();
-          console.log('Quiz creation result:', quiz);
-          setCurrentQuizId(quiz.id);
-          // Don't close the form, just show success and enable question creation
-        } else {
-          const errorData = await response.json();
-          console.error('Quiz creation failed:', errorData);
-          throw new Error(errorData.error || 'Failed to create quiz');
-        }
+        toast.success('Quiz created successfully!');
+        setCurrentQuizId(quiz.id);
+        // Move to question step
+        setWorkflowStep('question');
       }
-      
-      if (quiz) {
-        setError('');
-        toast.success(editingQuiz ? 'Quiz updated successfully!' : 'Quiz created successfully!');
-        // PERFORMANCE: React Query auto-refetches - no manual reload needed
-      } else {
-        setError('Failed to process quiz - check console for details');
-        toast.error('Failed to process quiz');
-      }
-    } catch (e) {
-      console.error('Quiz creation error:', e);
-      const errorMsg = `Failed to ${editingQuiz ? 'update' : 'create'} quiz: ${e instanceof Error ? e.message : 'Unknown error'}`;
+    } catch (error: any) {
+      console.error('Quiz operation error:', error);
+      const errorMsg = error.message || `Failed to ${editingQuiz ? 'update' : 'create'} quiz`;
       setError(errorMsg);
       toast.error(errorMsg);
     }
@@ -179,24 +177,13 @@ export default function QuizAdminDashboard() {
     setError('');
     
     try {
-      console.log('Deleting quiz:', quiz.id);
-      const response = await fetch(`/api/admin/quizzes/${quiz.id}`, {
-        method: 'DELETE'
-      });
-      
-      if (response.ok) {
-        console.log('Quiz deleted successfully');
-        toast.success('Quiz deleted successfully!');
-        // PERFORMANCE: React Query auto-refetches - no manual reload needed
-      } else {
-        const errorData = await response.json();
-        console.error('Quiz deletion failed:', errorData);
-        toast.error(errorData.error || 'Failed to delete quiz');
-        setError(errorData.error || 'Failed to delete quiz');
-      }
-    } catch (error) {
+      await deleteQuizMutation.mutateAsync(quiz.id);
+      toast.success('Quiz deleted successfully!');
+    } catch (error: any) {
       console.error('Error deleting quiz:', error);
-      setError('Failed to delete quiz');
+      const errorMsg = error.message || 'Failed to delete quiz';
+      setError(errorMsg);
+      toast.error(errorMsg);
     }
   };
 
@@ -413,23 +400,36 @@ export default function QuizAdminDashboard() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     style={{ backgroundColor: 'white', color: 'black' }}
                     required
-                    disabled={editingQuiz ? true : false}
+                    disabled={!!editingQuiz || lessonsLoading}
                   >
-                    <option value="" style={{ backgroundColor: 'white', color: 'black' }}>Select a lesson</option>
-                    {availableLessons.map((lesson: any) => (
-                      <option key={lesson.id} value={lesson.id} style={{ backgroundColor: 'white', color: 'black' }}>
-                        {lesson.title}
-                      </option>
-                    ))}
-                    {availableLessons.length === 0 && !editingQuiz && (
-                      <option disabled style={{ backgroundColor: 'white', color: 'gray' }}>
-                        No lessons available (all lessons already have quizzes)
-                      </option>
+                    <option value="" style={{ backgroundColor: 'white', color: 'black' }}>
+                      {lessonsLoading ? 'Loading lessons...' : 'Select a lesson'}
+                    </option>
+                    {availableLessons && availableLessons.length > 0 ? (
+                      availableLessons.map((lesson: any) => (
+                        <option key={lesson.id} value={lesson.id} style={{ backgroundColor: 'white', color: 'black' }}>
+                          {lesson.course_title} → {lesson.module_title} → {lesson.title}
+                        </option>
+                      ))
+                    ) : (
+                      !lessonsLoading && (
+                        <option disabled style={{ backgroundColor: 'white', color: 'gray' }}>
+                          No lessons available (all lessons already have quizzes)
+                        </option>
+                      )
                     )}
                   </select>
                   {editingQuiz && (
                     <p className="text-sm text-gray-500 mt-1">
                       Lesson cannot be changed when editing a quiz
+                    </p>
+                  )}
+                  {!lessonsLoading && availableLessons.length === 0 && !editingQuiz && (
+                    <p className="text-amber-600 text-sm mt-1 flex items-center gap-1">
+                      <span>💡</span>
+                      <span>
+                        Tip: Go to Lesson Management and create a lesson with lesson type set to "quiz"
+                      </span>
                     </p>
                   )}
                 </div>

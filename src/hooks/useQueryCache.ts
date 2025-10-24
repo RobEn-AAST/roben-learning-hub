@@ -340,9 +340,47 @@ export function useUsersAdmin(page = 1, limit = 50, filters?: { role?: string })
   });
 }
 
-// ============================================================================
-// MUTATIONS - Optimistic updates
-// ============================================================================
+// Get all modules (no pagination, for dropdowns)
+export function useAllModules(courseId?: string) {
+  return useQuery({
+    queryKey: courseId ? ['modules-all', courseId] : ['modules-all'],
+    queryFn: async () => {
+      let query = supabase
+        .from('modules')
+        .select('id, title, course_id, courses(id, title)')
+        .order('position', { ascending: true });
+
+      if (courseId) {
+        query = query.eq('course_id', courseId);
+      }
+
+      const { data, error } = await query;
+      
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 5 * 60 * 1000, // Modules don't change frequently
+  });
+}
+
+// Get all instructors (users with role=instructor)
+export function useInstructors() {
+  return useQuery({
+    queryKey: ['instructors-all'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .eq('role', 'instructor')
+        .order('full_name', { ascending: true });
+      
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 5 * 60 * 1000, // Instructors don't change frequently
+  });
+}
+
 
 // Create course with optimistic update
 export function useCreateCourse() {
@@ -752,13 +790,57 @@ export function useProjects() {
   });
 }
 
+// Get all project-type lessons (for project creation form dropdown)
 export function useProjectLessons() {
   return useQuery({
     queryKey: ['project-lessons', 'admin'],
     queryFn: async () => {
       const response = await fetch('/api/admin/projects/lessons');
-      if (!response.ok) throw new Error('Failed to fetch project lessons');
-      return await response.json();
+      if (!response.ok) {
+        console.error('Failed to fetch project lessons:', await response.text());
+        throw new Error('Failed to fetch project lessons');
+      }
+      const data = await response.json();
+      console.log('✅ useProjectLessons - Fetched lessons:', data);
+      return data;
+    },
+    staleTime: 3 * 60 * 1000,
+    retry: 2,
+  });
+}
+
+// Alternative: Get project lessons directly from Supabase (client-side)
+export function useProjectLessonsClient() {
+  return useQuery({
+    queryKey: ['project-lessons', 'client'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('lessons')
+        .select(`
+          id,
+          title,
+          module_id,
+          lesson_type,
+          modules!inner(
+            id,
+            title,
+            course_id,
+            courses(
+              id,
+              title
+            )
+          )
+        `)
+        .eq('lesson_type', 'project')
+        .order('title', { ascending: true });
+
+      if (error) {
+        console.error('❌ useProjectLessonsClient - Error:', error);
+        throw error;
+      }
+
+      console.log('✅ useProjectLessonsClient - Found', data?.length || 0, 'project lessons');
+      return data || [];
     },
     staleTime: 3 * 60 * 1000,
   });
@@ -780,27 +862,41 @@ export function useProjectStats() {
 // ADMIN: QUIZZES
 // ============================================================================
 
+// Get all quizzes with enhanced error handling
 export function useQuizzes() {
   return useQuery({
     queryKey: ['quizzes', 'admin'],
     queryFn: async () => {
       const response = await fetch('/api/admin/quizzes');
-      if (!response.ok) throw new Error('Failed to fetch quizzes');
-      return await response.json();
+      if (!response.ok) {
+        console.error('Failed to fetch quizzes:', await response.text());
+        throw new Error('Failed to fetch quizzes');
+      }
+      const data = await response.json();
+      console.log('✅ useQuizzes - Fetched quizzes:', data);
+      return data;
     },
     staleTime: 3 * 60 * 1000,
+    retry: 2,
   });
 }
 
+// Get available quiz lessons (filtered to exclude lessons with existing quizzes)
 export function useQuizLessons() {
   return useQuery({
     queryKey: ['quiz-lessons', 'admin'],
     queryFn: async () => {
       const response = await fetch('/api/admin/quizzes/lessons');
-      if (!response.ok) throw new Error('Failed to fetch quiz lessons');
-      return await response.json();
+      if (!response.ok) {
+        console.error('Failed to fetch quiz lessons:', await response.text());
+        throw new Error('Failed to fetch quiz lessons');
+      }
+      const data = await response.json();
+      console.log('✅ useQuizLessons - Fetched lessons:', data);
+      return data;
     },
     staleTime: 3 * 60 * 1000,
+    retry: 2,
   });
 }
 
@@ -809,10 +905,108 @@ export function useQuizStats() {
     queryKey: ['quiz-stats', 'admin'],
     queryFn: async () => {
       const response = await fetch('/api/admin/quizzes/stats');
-      if (!response.ok) throw new Error('Failed to fetch quiz stats');
-      return await response.json();
+      if (!response.ok) {
+        console.error('Failed to fetch quiz stats:', await response.text());
+        throw new Error('Failed to fetch quiz stats');
+      }
+      const data = await response.json();
+      console.log('✅ useQuizStats - Fetched stats:', data);
+      return data;
     },
     staleTime: 5 * 60 * 1000,
+    retry: 2,
+  });
+}
+
+// Create quiz mutation
+export function useCreateQuiz() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (quizData: { lessonId: string; title: string; description?: string; timeLimitMinutes?: number | null }) => {
+      console.log('🔄 Creating quiz:', quizData);
+      const response = await fetch('/api/admin/quizzes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(quizData),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('❌ Failed to create quiz:', error);
+        throw new Error(error.error || 'Failed to create quiz');
+      }
+      
+      const data = await response.json();
+      console.log('✅ Quiz created:', data);
+      return data;
+    },
+    onSuccess: () => {
+      // Invalidate and refetch
+      queryClient.invalidateQueries({ queryKey: ['quizzes', 'admin'] });
+      queryClient.invalidateQueries({ queryKey: ['quiz-lessons', 'admin'] });
+      queryClient.invalidateQueries({ queryKey: ['quiz-stats', 'admin'] });
+    },
+  });
+}
+
+// Update quiz mutation
+export function useUpdateQuiz() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ id, ...quizData }: { id: string; title: string; description?: string; timeLimitMinutes?: number | null }) => {
+      console.log('🔄 Updating quiz:', id, quizData);
+      const response = await fetch(`/api/admin/quizzes/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(quizData),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('❌ Failed to update quiz:', error);
+        throw new Error(error.error || 'Failed to update quiz');
+      }
+      
+      const data = await response.json();
+      console.log('✅ Quiz updated:', data);
+      return data;
+    },
+    onSuccess: () => {
+      // Invalidate and refetch
+      queryClient.invalidateQueries({ queryKey: ['quizzes', 'admin'] });
+      queryClient.invalidateQueries({ queryKey: ['quiz-stats', 'admin'] });
+    },
+  });
+}
+
+// Delete quiz mutation
+export function useDeleteQuiz() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (id: string) => {
+      console.log('🔄 Deleting quiz:', id);
+      const response = await fetch(`/api/admin/quizzes/${id}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('❌ Failed to delete quiz:', error);
+        throw new Error(error.error || 'Failed to delete quiz');
+      }
+      
+      console.log('✅ Quiz deleted:', id);
+      return { id };
+    },
+    onSuccess: () => {
+      // Invalidate and refetch
+      queryClient.invalidateQueries({ queryKey: ['quizzes', 'admin'] });
+      queryClient.invalidateQueries({ queryKey: ['quiz-lessons', 'admin'] });
+      queryClient.invalidateQueries({ queryKey: ['quiz-stats', 'admin'] });
+    },
   });
 }
 
@@ -820,27 +1014,41 @@ export function useQuizStats() {
 // ADMIN: QUIZ QUESTIONS
 // ============================================================================
 
+// Get all quiz questions
 export function useQuizQuestions() {
   return useQuery({
     queryKey: ['quiz-questions', 'admin'],
     queryFn: async () => {
       const response = await fetch('/api/admin/quiz-questions');
-      if (!response.ok) throw new Error('Failed to fetch quiz questions');
-      return await response.json();
+      if (!response.ok) {
+        console.error('Failed to fetch quiz questions:', await response.text());
+        throw new Error('Failed to fetch quiz questions');
+      }
+      const data = await response.json();
+      console.log('✅ useQuizQuestions - Fetched questions:', data);
+      return data;
     },
     staleTime: 3 * 60 * 1000,
+    retry: 2,
   });
 }
 
+// Get all quizzes (for question creation dropdown)
 export function useQuestionQuizzes() {
   return useQuery({
     queryKey: ['question-quizzes', 'admin'],
     queryFn: async () => {
       const response = await fetch('/api/admin/quiz-questions/quizzes');
-      if (!response.ok) throw new Error('Failed to fetch question quizzes');
-      return await response.json();
+      if (!response.ok) {
+        console.error('Failed to fetch question quizzes:', await response.text());
+        throw new Error('Failed to fetch question quizzes');
+      }
+      const data = await response.json();
+      console.log('✅ useQuestionQuizzes - Fetched quizzes:', data);
+      return data;
     },
     staleTime: 3 * 60 * 1000,
+    retry: 2,
   });
 }
 
@@ -849,10 +1057,16 @@ export function useQuestionStats() {
     queryKey: ['question-stats', 'admin'],
     queryFn: async () => {
       const response = await fetch('/api/admin/quiz-questions/stats');
-      if (!response.ok) throw new Error('Failed to fetch question stats');
-      return await response.json();
+      if (!response.ok) {
+        console.error('Failed to fetch question stats:', await response.text());
+        throw new Error('Failed to fetch question stats');
+      }
+      const data = await response.json();
+      console.log('✅ useQuestionStats - Fetched stats:', data);
+      return data;
     },
     staleTime: 5 * 60 * 1000,
+    retry: 2,
   });
 }
 
@@ -950,5 +1164,322 @@ export function useInstructorCourses() {
       return await response.json();
     },
     staleTime: 3 * 60 * 1000, // 3 minutes
+  });
+}
+
+// ============================================================================
+// ENROLLMENTS - Course enrollment management
+// ============================================================================
+
+export interface Enrollment {
+  id: string;
+  course_id: string;
+  user_id: string;
+  role: string;
+  enrolled_at: string;
+  courses: {
+    id: string;
+    title: string;
+    slug: string;
+  };
+  profiles: {
+    id: string;
+    full_name: string;
+    email: string;
+    avatar_url?: string;
+    role: string;
+  };
+}
+
+export interface EnrollmentStats {
+  total: number;
+  students: number;
+  instructors: number;
+  monthly: number;
+}
+
+export function useEnrollments(filters: {
+  page?: number;
+  limit?: number;
+  courseId?: string;
+  role?: string;
+  search?: string;
+}) {
+  const params = new URLSearchParams();
+  if (filters.page) params.append('page', filters.page.toString());
+  if (filters.limit) params.append('limit', filters.limit.toString());
+  if (filters.courseId) params.append('courseId', filters.courseId);
+  if (filters.role) params.append('role', filters.role);
+  if (filters.search) params.append('search', filters.search);
+
+  return useQuery({
+    queryKey: ['enrollments', filters],
+    queryFn: async () => {
+      console.log('🔄 Fetching enrollments with filters:', filters);
+      const response = await fetch(`/api/admin/enrollments?${params.toString()}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ Failed to fetch enrollments:', errorData);
+        throw new Error(errorData.error || 'Failed to fetch enrollments');
+      }
+      const data = await response.json();
+      console.log('✅ Enrollments fetched:', data.enrollments.length);
+      return data;
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutes
+  });
+}
+
+export function useEnrollmentStats() {
+  return useQuery({
+    queryKey: ['enrollment-stats'],
+    queryFn: async () => {
+      console.log('🔄 Fetching enrollment stats');
+      const response = await fetch('/api/admin/enrollments/stats');
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ Failed to fetch enrollment stats:', errorData);
+        throw new Error(errorData.error || 'Failed to fetch enrollment stats');
+      }
+      const data = await response.json();
+      console.log('✅ Enrollment stats fetched:', data);
+      return data as EnrollmentStats;
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+export function useCreateEnrollment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: { course_id: string; user_id: string; role: string }) => {
+      console.log('🔄 Creating enrollment:', data);
+      const response = await fetch('/api/admin/enrollments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ Failed to create enrollment:', errorData);
+        throw new Error(errorData.error || 'Failed to create enrollment');
+      }
+
+      const result = await response.json();
+      console.log('✅ Enrollment created successfully');
+      return result;
+    },
+    onSuccess: () => {
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['enrollments'] });
+      queryClient.invalidateQueries({ queryKey: ['enrollment-stats'] });
+    },
+  });
+}
+
+export function useDeleteEnrollment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      console.log('🔄 Deleting enrollment:', id);
+      const response = await fetch(`/api/admin/enrollments/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ Failed to delete enrollment:', errorData);
+        throw new Error(errorData.error || 'Failed to delete enrollment');
+      }
+
+      console.log('✅ Enrollment deleted successfully');
+      return await response.json();
+    },
+    onSuccess: () => {
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ['enrollments'] });
+      queryClient.invalidateQueries({ queryKey: ['enrollment-stats'] });
+    },
+  });
+}
+
+// ============================================================================
+// LESSON PROGRESS - User progress tracking
+// ============================================================================
+
+export interface LessonProgress {
+  id: string;
+  lesson_id: string;
+  user_id: string;
+  status: 'not_started' | 'in_progress' | 'completed';
+  progress: number;
+  started_at: string;
+  completed_at?: string;
+  lessons: {
+    id: string;
+    title: string;
+    lesson_type: string;
+    modules: {
+      id: string;
+      title: string;
+      courses: {
+        id: string;
+        title: string;
+      };
+    };
+  };
+  profiles: {
+    id: string;
+    full_name: string;
+    email: string;
+    avatar_url?: string;
+  };
+}
+
+export interface LessonProgressStats {
+  total: number;
+  completed: number;
+  inProgress: number;
+  notStarted: number;
+  averageProgress: number;
+}
+
+export function useAdminLessonProgress(filters: {
+  page?: number;
+  limit?: number;
+  lessonId?: string;
+  userId?: string;
+  status?: string;
+  search?: string;
+}) {
+  const params = new URLSearchParams();
+  if (filters.page) params.append('page', filters.page.toString());
+  if (filters.limit) params.append('limit', filters.limit.toString());
+  if (filters.lessonId) params.append('lessonId', filters.lessonId);
+  if (filters.userId) params.append('userId', filters.userId);
+  if (filters.status) params.append('status', filters.status);
+  if (filters.search) params.append('search', filters.search);
+
+  return useQuery({
+    queryKey: ['admin-lesson-progress', filters],
+    queryFn: async () => {
+      console.log('🔄 Fetching lesson progress with filters:', filters);
+      const response = await fetch(`/api/admin/lesson-progress?${params.toString()}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ Failed to fetch lesson progress:', errorData);
+        throw new Error(errorData.error || 'Failed to fetch lesson progress');
+      }
+      const data = await response.json();
+      console.log('✅ Lesson progress fetched:', data.progress.length);
+      return data;
+    },
+    staleTime: 1 * 60 * 1000, // 1 minute - progress changes frequently
+  });
+}
+
+export function useAdminLessonProgressStats() {
+  return useQuery({
+    queryKey: ['admin-lesson-progress-stats'],
+    queryFn: async () => {
+      console.log('🔄 Fetching lesson progress stats');
+      const response = await fetch('/api/admin/lesson-progress/stats');
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ Failed to fetch lesson progress stats:', errorData);
+        throw new Error(errorData.error || 'Failed to fetch lesson progress stats');
+      }
+      const data = await response.json();
+      console.log('✅ Lesson progress stats fetched:', data);
+      return data as LessonProgressStats;
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+export function useCreateAdminLessonProgress() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: { lesson_id: string; user_id: string; status?: string; progress?: number }) => {
+      console.log('🔄 Creating lesson progress:', data);
+      const response = await fetch('/api/admin/lesson-progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ Failed to create lesson progress:', errorData);
+        throw new Error(errorData.error || 'Failed to create lesson progress');
+      }
+
+      const result = await response.json();
+      console.log('✅ Lesson progress created successfully');
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-lesson-progress'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-lesson-progress-stats'] });
+    },
+  });
+}
+
+export function useUpdateAdminLessonProgress() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: { status?: string; progress?: number } }) => {
+      console.log('🔄 Updating lesson progress:', id, data);
+      const response = await fetch(`/api/admin/lesson-progress/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ Failed to update lesson progress:', errorData);
+        throw new Error(errorData.error || 'Failed to update lesson progress');
+      }
+
+      const result = await response.json();
+      console.log('✅ Lesson progress updated successfully');
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-lesson-progress'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-lesson-progress-stats'] });
+    },
+  });
+}
+
+export function useDeleteAdminLessonProgress() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      console.log('🔄 Deleting lesson progress:', id);
+      const response = await fetch(`/api/admin/lesson-progress/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ Failed to delete lesson progress:', errorData);
+        throw new Error(errorData.error || 'Failed to delete lesson progress');
+      }
+
+      console.log('✅ Lesson progress deleted successfully');
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-lesson-progress'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-lesson-progress-stats'] });
+    },
   });
 }

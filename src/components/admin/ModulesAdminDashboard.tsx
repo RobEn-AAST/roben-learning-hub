@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 import { Module, ModuleStats, Course } from '@/services/moduleService';
 import { activityLogService } from '@/services/activityLogService';
 import { Lesson } from '@/services/lessonService';
@@ -109,6 +110,7 @@ interface ContentFormData {
   project_title?: string;
   project_description?: string;
   submission_instructions?: string;
+  submission_platform?: string;
   external_link?: string;
   // Quiz fields (quiz is created automatically with lesson)
 }
@@ -327,54 +329,84 @@ export function ModulesAdminDashboard() {
 
   const handleContentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentLessonId) return;
+    if (!currentLessonId) {
+      toast.error('No lesson selected');
+      return;
+    }
     
     setError('');
-    // PERFORMANCE: Loading state managed by React Query
+    
     try {
       let endpoint = '';
       let bodyData: any = { lesson_id: currentLessonId };
 
+      // Prepare data based on content type
       switch (currentLessonType) {
         case 'video':
           endpoint = '/api/admin/videos';
+          
+          // Validate required fields
+          if (!contentFormData.url || !contentFormData.provider_video_id) {
+            toast.error('Please provide video URL and provider video ID');
+            setError('Please provide video URL and provider video ID');
+            return;
+          }
+          
           bodyData = {
             lesson_id: currentLessonId,
             provider: contentFormData.provider || 'youtube',
-            provider_video_id: contentFormData.provider_video_id || '',
-            url: contentFormData.url || '',
+            provider_video_id: contentFormData.provider_video_id.trim(),
+            url: contentFormData.url.trim(),
             duration_seconds: parseInt(String(contentFormData.duration_seconds || 0)),
-            transcript: contentFormData.transcript || '',
+            transcript: contentFormData.transcript?.trim() || '',
             metadata: {}
           };
-          console.log('Video data to submit:', bodyData);
+          console.log('📹 Video data to submit:', bodyData);
           break;
+          
         case 'article':
           endpoint = '/api/admin/articles';
+          
+          // Validate required fields
+          if (!contentFormData.article_title || !contentFormData.content) {
+            toast.error('Please provide article title and content');
+            setError('Please provide article title and content');
+            return;
+          }
+          
           bodyData = {
             lesson_id: currentLessonId,
-            title: contentFormData.article_title || '',
-            content: contentFormData.content || '',
-            summary: contentFormData.summary || '',
+            title: contentFormData.article_title.trim(),
+            content: contentFormData.content.trim(),
+            summary: contentFormData.summary?.trim() || '',
             reading_time_minutes: parseInt(String(contentFormData.reading_time_minutes || 5)),
             metadata: {}
           };
-          console.log('Article data to submit:', bodyData);
+          console.log('📄 Article data to submit:', { ...bodyData, content: bodyData.content.substring(0, 100) + '...' });
           break;
+          
         case 'project':
           endpoint = '/api/admin/projects';
+          
+          // Validate required fields
+          if (!contentFormData.project_title || !contentFormData.project_description) {
+            toast.error('Please provide project title and description');
+            setError('Please provide project title and description');
+            return;
+          }
+          
           bodyData = {
             lesson_id: currentLessonId,
-            title: contentFormData.project_title || '',
-            description: contentFormData.project_description || '',
-            submission_instructions: contentFormData.submission_instructions || null,
-            external_link: contentFormData.external_link || null
+            title: contentFormData.project_title.trim(),
+            description: contentFormData.project_description.trim(),
+            submission_instructions: contentFormData.submission_instructions?.trim() || null,
+            submission_platform: contentFormData.submission_platform || null
           };
-          console.log('Project data to submit:', bodyData);
+          console.log('🎯 Project data to submit:', bodyData);
           break;
       }
 
-      console.log(`Submitting ${currentLessonType} to ${endpoint}`);
+      console.log(`🚀 Submitting ${currentLessonType} to ${endpoint}`);
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -382,35 +414,60 @@ export function ModulesAdminDashboard() {
         body: JSON.stringify(bodyData)
       });
 
+      // Parse response
+      let result;
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        result = await response.json();
+      } else {
+        const text = await response.text();
+        console.error('❌ Non-JSON response:', text);
+        throw new Error('Server returned non-JSON response');
+      }
+
       if (response.ok) {
-        const result = await response.json();
-        console.log('Content created successfully:', result);
+        console.log('✅ Content created successfully:', result);
+        
+        toast.success(`${currentLessonType.charAt(0).toUpperCase() + currentLessonType.slice(1)} created successfully!`);
         
         // Log activity
-        await activityLogService.logActivity({
-          action: 'CREATE',
-          table_name: `${currentLessonType}s`,
-          record_id: result.id,
-          record_name: contentFormData.article_title || contentFormData.project_title || 'Content',
-          description: `Created new ${currentLessonType} content`
-        });
-        
-        setError(`${currentLessonType.charAt(0).toUpperCase() + currentLessonType.slice(1)} created successfully!`);
-        setContentFormData({});
-      } else {
-        console.error(`API Error - Status: ${response.status} ${response.statusText}`);
-        let errorData;
         try {
-          errorData = await response.json();
-        } catch (e) {
-          errorData = { error: `Server error: ${response.status} ${response.statusText}` };
+          await activityLogService.logActivity({
+            action: 'CREATE',
+            table_name: `${currentLessonType}s`,
+            record_id: result.id,
+            record_name: contentFormData.article_title || contentFormData.project_title || contentFormData.url || 'Content',
+            description: `Created new ${currentLessonType} content`
+          });
+        } catch (logError) {
+          console.warn('⚠️ Failed to log activity:', logError);
         }
-        console.error(`Failed to create ${currentLessonType}:`, errorData);
-        setError(errorData.error || errorData.message || `Failed to create ${currentLessonType} (Status: ${response.status})`);
+        
+        setError('');
+        setContentFormData({});
+        
+        // Refresh the page to show the new content
+        setTimeout(() => window.location.reload(), 1500);
+      } else {
+        // Handle error response
+        console.error(`❌ API Error - Status: ${response.status} ${response.statusText}`);
+        console.error(`❌ Error details:`, result);
+        
+        const errorMessage = result.message || result.error || `Failed to create ${currentLessonType}`;
+        
+        toast.error(errorMessage);
+        setError(errorMessage);
+        
+        // Show missing fields if available
+        if (result.missingFields && result.missingFields.length > 0) {
+          toast.error(`Missing required fields: ${result.missingFields.join(', ')}`);
+        }
       }
     } catch (error) {
-      console.error(`Error creating ${currentLessonType}:`, error);
-      setError(`Failed to create ${currentLessonType}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      console.error(`❌ Error creating ${currentLessonType}:`, error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      toast.error(`Failed to create ${currentLessonType}: ${errorMessage}`);
+      setError(`Failed to create ${currentLessonType}: ${errorMessage}`);
     }
   };
 
