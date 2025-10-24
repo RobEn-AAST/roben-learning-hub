@@ -1112,12 +1112,31 @@ export default function CourseLearnPage() {
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [markingComplete, setMarkingComplete] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(false);
 
   useEffect(() => {
     if (courseId) {
       fetchCourseData();
     }
   }, [courseId]);
+
+  // Refresh lesson completion status when tab becomes visible
+  // This helps when instructor approves a submission while student has the page open
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && courseData) {
+        console.log('👁️ Tab became visible - refreshing lesson progress...');
+        const completedLessonsSet = await fetchCompletedLessons(courseData.modules);
+        // If current lesson is now complete, update the state
+        if (currentLesson && completedLessonsSet.has(currentLesson.id) && !completedLessons.has(currentLesson.id)) {
+          console.log('🎉 Current lesson is now complete!');
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [courseData, currentLesson, completedLessons]);
 
   const fetchCourseData = async () => {
     try {
@@ -1246,6 +1265,50 @@ export default function CourseLearnPage() {
       console.error('Error marking lesson complete:', error);
     } finally {
       setMarkingComplete(false);
+    }
+  };
+
+  const handleCheckProjectStatus = async () => {
+    if (!currentLesson) return;
+    
+    setCheckingStatus(true);
+    try {
+      console.log('🔄 Checking project approval status...');
+      const response = await fetch(`/api/lessons/${currentLesson.id}/progress`, {
+        cache: 'no-store' // Force fresh data
+      });
+      const data = await response.json();
+      
+      if (data.completed) {
+        setCompletedLessons(prev => new Set([...prev, currentLesson.id]));
+        console.log('🎉 Project has been approved! Lesson is now complete.');
+        
+        // Update progress
+        if (courseData) {
+          const totalLessons = courseData.modules.reduce((acc, m) => acc + m.lessons.length, 0);
+          const newCompletedCount = completedLessons.size + 1;
+          const newPercentage = Math.round((newCompletedCount / totalLessons) * 100);
+          
+          setCourseData({
+            ...courseData,
+            progress: {
+              completedLessons: newCompletedCount,
+              totalLessons: totalLessons,
+              percentage: newPercentage
+            }
+          });
+        }
+        
+        alert('✅ Great news! Your project has been approved by the instructor. You can now proceed to the next lesson.');
+      } else {
+        console.log('⏳ Project is still pending approval');
+        alert('⏳ Your project submission is still pending instructor approval. Please check back later.');
+      }
+    } catch (error) {
+      console.error('Error checking project status:', error);
+      alert('❌ Failed to check project status. Please try again.');
+    } finally {
+      setCheckingStatus(false);
     }
   };
 
@@ -1595,12 +1658,34 @@ export default function CourseLearnPage() {
                   
                   {/* Message for project lessons - only show if not completed */}
                   {!isLessonComplete && currentLesson.content_type === 'project' && (
-                    <div className="px-4 py-2 bg-orange-50 text-orange-700 rounded-md text-sm flex items-center">
-                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                      </svg>
-                      Submit your project and wait for instructor approval
-                    </div>
+                    <>
+                      <Button
+                        onClick={handleCheckProjectStatus}
+                        disabled={checkingStatus}
+                        variant="outline"
+                        className="border-orange-300 text-orange-700 hover:bg-orange-50"
+                      >
+                        {checkingStatus ? (
+                          <span className="flex items-center">
+                            <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-orange-600 mr-2"></div>
+                            Checking...
+                          </span>
+                        ) : (
+                          <span className="flex items-center">
+                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Check Approval Status
+                          </span>
+                        )}
+                      </Button>
+                      <div className="px-4 py-2 bg-orange-50 text-orange-700 rounded-md text-sm flex items-center">
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        Waiting for instructor approval
+                      </div>
+                    </>
                   )}
                   
                   {nextLesson && (

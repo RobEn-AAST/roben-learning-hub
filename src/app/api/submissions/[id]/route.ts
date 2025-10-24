@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/adminHelpers';
 import { submissionService } from '@/services/submissionService';
 import { activityLogService } from '@/services/activityLogService';
 
@@ -84,6 +85,72 @@ export async function PUT(
 
     const clientToUse = (profile?.role === 'admin' || profile?.role === 'instructor') ? 'admin' : 'regular';
     const submission = await submissionService.updateSubmission(params.id, updateData, clientToUse);
+
+    // If status is approved, automatically complete the lesson for the student
+    if (status === 'approved') {
+      console.log('🎉 Submission approved - marking lesson as complete');
+      
+      // Use admin client to bypass RLS for updating student's progress
+      const adminClient = createAdminClient();
+      
+      // Get the lesson_id from the project
+      const { data: submissionWithProject } = await adminClient
+        .from('project_submissions')
+        .select('user_id, project:projects(lesson_id)')
+        .eq('id', params.id)
+        .single();
+      
+      if (submissionWithProject) {
+        // @ts-ignore
+        const lessonId = submissionWithProject.project?.lesson_id;
+        const studentId = submissionWithProject.user_id;
+        
+        if (lessonId && studentId) {
+          // Check if lesson progress exists
+          const { data: existingProgress } = await adminClient
+            .from('lesson_progress')
+            .select('id, status')
+            .eq('lesson_id', lessonId)
+            .eq('user_id', studentId)
+            .maybeSingle();
+          
+          if (existingProgress) {
+            if (existingProgress.status !== 'completed') {
+              // Update existing progress to completed
+              const { error: updateError } = await adminClient
+                .from('lesson_progress')
+                .update({
+                  status: 'completed',
+                  completed_at: new Date().toISOString()
+                })
+                .eq('id', existingProgress.id);
+              
+              if (updateError) {
+                console.error('❌ Error updating lesson progress:', updateError);
+              } else {
+                console.log('✅ Lesson marked as complete for student');
+              }
+            }
+          } else {
+            // Create new progress record as completed
+            const { error: insertError } = await adminClient
+              .from('lesson_progress')
+              .insert({
+                user_id: studentId,
+                lesson_id: lessonId,
+                status: 'completed',
+                completed_at: new Date().toISOString()
+              });
+            
+            if (insertError) {
+              console.error('❌ Error creating lesson progress:', insertError);
+            } else {
+              console.log('✅ Created lesson progress and marked as complete');
+            }
+          }
+        }
+      }
+    }
 
     // Log the submission update
     await activityLogService.logActivity({

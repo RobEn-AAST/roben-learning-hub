@@ -189,6 +189,59 @@ export default function ProjectSubmissionsAdminDashboard() {
     setFormErrors({});
   };
 
+  const handleQuickApprove = async (submission: ExtendedSubmission) => {
+    if (!confirm(`Approve submission for "${submission.project_title}" by ${submission.student_name}?`)) return;
+
+    try {
+      const response = await fetch(`/api/submissions/${submission.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'approved',
+          grade: 100 // Auto-assign 100% on quick approve
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to approve submission');
+
+      await loadData();
+      toast.success('✅ Submission approved! Student can now proceed to the next lesson.');
+    } catch (error) {
+      console.error('Error approving submission:', error);
+      toast.error('Failed to approve submission. Please try again.');
+    }
+  };
+
+  const handleQuickReject = async (submission: ExtendedSubmission) => {
+    const feedback = prompt(`Reject submission for "${submission.project_title}"?\n\nPlease provide feedback for the student:`);
+    
+    if (feedback === null) return; // User cancelled
+    
+    if (!feedback.trim()) {
+      toast.error('Please provide feedback when rejecting a submission');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/submissions/${submission.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'resubmission_required',
+          feedback: feedback.trim()
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to reject submission');
+
+      await loadData();
+      toast.success('Submission marked for resubmission. Student has been notified.');
+    } catch (error) {
+      console.error('Error rejecting submission:', error);
+      toast.error('Failed to reject submission. Please try again.');
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { color: string; label: string }> = {
       submitted: { color: 'bg-blue-100 text-blue-800', label: 'Submitted' },
@@ -585,10 +638,38 @@ export default function ProjectSubmissionsAdminDashboard() {
                       </td>
                       <td className="p-3">
                         <div className="flex justify-end gap-2">
+                          {/* Quick Actions for pending submissions */}
+                          {(submission.status === 'submitted' || submission.status === 'pending_review') && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleQuickApprove(submission)}
+                                className="text-green-600 hover:bg-green-50 border-green-300"
+                                title="Quick Approve (100%)"
+                              >
+                                <Icons.Check />
+                                <span className="ml-1">Approve</span>
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleQuickReject(submission)}
+                                className="text-orange-600 hover:bg-orange-50 border-orange-300"
+                                title="Request Resubmission"
+                              >
+                                <Icons.X />
+                                <span className="ml-1">Reject</span>
+                              </Button>
+                            </>
+                          )}
+                          
+                          {/* Standard Actions */}
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => handleView(submission)}
+                            title="View Details"
                           >
                             <Icons.View />
                           </Button>
@@ -596,6 +677,7 @@ export default function ProjectSubmissionsAdminDashboard() {
                             size="sm"
                             variant="outline"
                             onClick={() => handleEdit(submission)}
+                            title="Edit Submission"
                           >
                             <Icons.Edit />
                           </Button>
@@ -604,6 +686,7 @@ export default function ProjectSubmissionsAdminDashboard() {
                             variant="outline"
                             onClick={() => handleDelete(submission)}
                             className="text-red-600 hover:bg-red-50"
+                            title="Delete Submission"
                           >
                             <Icons.Delete />
                           </Button>
