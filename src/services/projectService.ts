@@ -240,7 +240,8 @@ class ProjectService {
       const supabaseClient = await this.getClientForRole(clientType);
       console.log('📋 ProjectService.getLessonsForProjects - Using client type:', clientType || 'default');
 
-      const { data, error } = await supabaseClient
+      // First, get all project-type lessons
+      const { data: lessonsData, error: lessonsError } = await supabaseClient
         .from('lessons')
         .select(`
           id,
@@ -259,19 +260,36 @@ class ProjectService {
         .eq('lesson_type', 'project')  // Only get project lessons
         .order('title');
 
-      if (error) {
-        console.error('❌ ProjectService.getLessonsForProjects - Error:', error);
+      if (lessonsError) {
+        console.error('❌ ProjectService.getLessonsForProjects - Error fetching lessons:', lessonsError);
         throw new Error('Failed to fetch lessons');
       }
 
-      const lessons = data.map((lesson: any) => ({
+      // Get all lesson IDs that already have projects
+      const { data: projectsData, error: projectsError } = await supabaseClient
+        .from('projects')
+        .select('lesson_id');
+
+      if (projectsError) {
+        console.error('❌ ProjectService.getLessonsForProjects - Error fetching projects:', projectsError);
+        throw projectsError;
+      }
+
+      // Create a Set of lesson IDs that already have projects
+      const usedLessonIds = new Set(projectsData?.map((project: { lesson_id: string }) => project.lesson_id) || []);
+      console.log('📋 ProjectService.getLessonsForProjects - Lessons with existing projects:', usedLessonIds.size);
+
+      // Filter out lessons that already have projects
+      const availableLessons = lessonsData?.filter((lesson: any) => !usedLessonIds.has(lesson.id)) || [];
+
+      const lessons = availableLessons.map((lesson: any) => ({
         id: lesson.id,
         title: lesson.title,
         module_title: lesson.modules.title,
         course_title: lesson.modules.courses.title
       }));
 
-      console.log('✅ ProjectService.getLessonsForProjects - Found', lessons.length, 'project lessons');
+      console.log('✅ ProjectService.getLessonsForProjects - Found', lessons.length, 'available lessons (filtered from', lessonsData?.length || 0, 'total)');
       return lessons;
     } catch (error) {
       console.error('❌ ProjectService.getLessonsForProjects - Error:', error);

@@ -301,7 +301,8 @@ class ArticleService {
       const supabaseClient = await this.getClientForRole(clientType);
       console.log('📋 ArticleService.getAvailableLessons - Using client type:', clientType || 'default');
 
-      const { data, error } = await supabaseClient
+      // First, get all article-type lessons
+      const { data: lessonsData, error: lessonsError } = await supabaseClient
         .from('lessons')
         .select(`
           id,
@@ -320,21 +321,38 @@ class ArticleService {
         .eq('lesson_type', 'article')  // Only get article lessons
         .order('title');
 
-      if (error) {
-        console.error('❌ ArticleService.getAvailableLessons - Error:', error);
-        throw error;
+      if (lessonsError) {
+        console.error('❌ ArticleService.getAvailableLessons - Error fetching lessons:', lessonsError);
+        throw lessonsError;
       }
 
-      const lessons = data?.map((lesson: any) => ({
+      // Get all lesson IDs that already have articles
+      const { data: articlesData, error: articlesError } = await supabaseClient
+        .from('articles')
+        .select('lesson_id');
+
+      if (articlesError) {
+        console.error('❌ ArticleService.getAvailableLessons - Error fetching articles:', articlesError);
+        throw articlesError;
+      }
+
+      // Create a Set of lesson IDs that already have articles
+      const usedLessonIds = new Set(articlesData?.map((article: { lesson_id: string }) => article.lesson_id) || []);
+      console.log('📋 ArticleService.getAvailableLessons - Lessons with existing articles:', usedLessonIds.size);
+
+      // Filter out lessons that already have articles
+      const availableLessons = lessonsData?.filter((lesson: any) => !usedLessonIds.has(lesson.id)) || [];
+
+      const lessons = availableLessons.map((lesson: any) => ({
         id: lesson.id,
         title: lesson.title,
         instructor_id: lesson.instructor_id,
         module_title: lesson.modules?.title,
         course_title: lesson.modules?.courses?.title,
         course_id: lesson.modules?.course_id
-      })) || [];
+      }));
 
-      console.log('✅ ArticleService.getAvailableLessons - Found', lessons.length, 'lessons');
+      console.log('✅ ArticleService.getAvailableLessons - Found', lessons.length, 'available lessons (filtered from', lessonsData?.length || 0, 'total)');
       console.log('📋 ArticleService.getAvailableLessons - Sample lessons:', lessons.slice(0, 3));
       
       return lessons;

@@ -51,12 +51,62 @@ class QuizService {
   private supabase = createClient();
 
   async getLessons() {
-    const { data, error } = await this.supabase
-      .from('lessons')
-      .select('id, title')
-      .eq('lesson_type', 'quiz');
-    if (error) return [];
-    return data || [];
+    try {
+      // First, get all quiz-type lessons with module and course info
+      const { data: lessonsData, error: lessonsError } = await this.supabase
+        .from('lessons')
+        .select(`
+          id,
+          title,
+          modules!inner(
+            id,
+            title,
+            course_id,
+            courses!inner(
+              id,
+              title
+            )
+          )
+        `)
+        .eq('lesson_type', 'quiz')
+        .order('title');
+
+      if (lessonsError) {
+        console.error('❌ QuizService.getLessons - Error fetching lessons:', lessonsError);
+        return [];
+      }
+
+      // Get all lesson IDs that already have quizzes
+      const { data: quizzesData, error: quizzesError } = await this.supabase
+        .from('quizzes')
+        .select('lesson_id');
+
+      if (quizzesError) {
+        console.error('❌ QuizService.getLessons - Error fetching quizzes:', quizzesError);
+        return [];
+      }
+
+      // Create a Set of lesson IDs that already have quizzes
+      const usedLessonIds = new Set(quizzesData?.map((quiz: { lesson_id: string }) => quiz.lesson_id) || []);
+      console.log('📋 QuizService.getLessons - Lessons with existing quizzes:', usedLessonIds.size);
+
+      // Filter out lessons that already have quizzes
+      const availableLessons = lessonsData?.filter((lesson: any) => !usedLessonIds.has(lesson.id)) || [];
+
+      const lessons = availableLessons.map((lesson: any) => ({
+        id: lesson.id,
+        title: lesson.title,
+        module_title: lesson.modules?.title,
+        course_title: lesson.modules?.courses?.title,
+        course_id: lesson.modules?.course_id
+      }));
+
+      console.log('✅ QuizService.getLessons - Found', lessons.length, 'available lessons (filtered from', lessonsData?.length || 0, 'total)');
+      return lessons;
+    } catch (error) {
+      console.error('❌ QuizService.getLessons - Error:', error);
+      return [];
+    }
   }
 
   async getQuizzes() {

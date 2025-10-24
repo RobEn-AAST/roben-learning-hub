@@ -49,7 +49,10 @@ export async function POST(request: NextRequest) {
     
     if (authError || !user) {
       console.log('❌ POST /api/admin/projects - Auth error:', authError);
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ 
+        error: 'Unauthorized',
+        message: 'You must be logged in to create projects'
+      }, { status: 401 });
     }
 
     // Check user role to determine which client to use
@@ -62,18 +65,31 @@ export async function POST(request: NextRequest) {
     console.log('🔍 POST /api/admin/projects - User role:', profile?.role);
 
     if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      return NextResponse.json({ 
+        error: 'Forbidden',
+        message: 'You do not have permission to create projects'
+      }, { status: 403 });
     }
 
     const body = await request.json();
+    console.log('📝 POST /api/admin/projects - Request body:', JSON.stringify(body, null, 2));
+    
     const { lesson_id, title, description, submission_instructions, submission_platform } = body;
 
-    console.log('📝 POST /api/admin/projects - Creating project:', { lesson_id, title: title?.substring(0, 50) + '...' });
+    // Validate required fields with detailed error messages
+    const missingFields: string[] = [];
+    if (!lesson_id) missingFields.push('lesson_id');
+    if (!title) missingFields.push('title');
+    if (!description) missingFields.push('description');
 
-    if (!lesson_id || !title || !description) {
-      console.log('❌ POST /api/admin/projects - Missing required fields');
+    if (missingFields.length > 0) {
+      console.log('❌ POST /api/admin/projects - Missing required fields:', missingFields);
       return NextResponse.json(
-        { error: 'lesson_id, title, and description are required' },
+        { 
+          error: `Missing required fields: ${missingFields.join(', ')}`,
+          message: `Please provide all required fields: ${missingFields.join(', ')}`,
+          missingFields
+        },
         { status: 400 }
       );
     }
@@ -86,16 +102,21 @@ export async function POST(request: NextRequest) {
       lesson_id,
       title,
       description,
-      submission_instructions,
-      submission_platform
+      submission_instructions: submission_instructions || null,
+      submission_platform: submission_platform || null
     }, clientToUse);
 
     console.log('✅ POST /api/admin/projects - Project created successfully:', project.id);
     return NextResponse.json(project, { status: 201 });
   } catch (error) {
     console.error('❌ POST /api/admin/projects - Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return NextResponse.json(
-      { error: 'Failed to create project' },
+      { 
+        error: `Failed to create project: ${errorMessage}`,
+        message: errorMessage,
+        stack: error instanceof Error ? error.stack : undefined
+      },
       { status: 500 }
     );
   }

@@ -6,9 +6,11 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
 import { Lesson, LessonStats, Module } from '@/services/lessonService';
 import { createClient } from '@/lib/supabase/client';
-import { useLessonsAdmin, useLessonStats } from '@/hooks/useQueryCache';
+import { useLessonsAdmin, useLessonStats, useAllModules, useInstructors } from '@/hooks/useQueryCache';
+import { useQueryClient } from '@tanstack/react-query';
 
 // Icons
 const Icons = {
@@ -80,8 +82,6 @@ export function LessonsAdminDashboard() {
   // PERFORMANCE: Use cached queries
   const [currentPage, setCurrentPage] = useState(1);
   const [filters, setFilters] = useState<Filters>({});
-  const [modules, setModules] = useState<Module[]>([]);
-  const [instructors, setInstructors] = useState<{ id: string; full_name: string }[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const [currentUser, setCurrentUser] = useState<{ id: string; role: string; full_name?: string } | null>(null);
@@ -93,9 +93,12 @@ export function LessonsAdminDashboard() {
     instructor_id: ''
   });
 
-  // PERFORMANCE: Cached queries
+  // PERFORMANCE: Cached queries with TanStack Query
+  const queryClient = useQueryClient();
   const { data: lessonsData, isLoading: lessonsLoading } = useLessonsAdmin(currentPage, 10, filters);
   const { data: stats } = useLessonStats();
+  const { data: modules = [], isLoading: modulesLoading } = useAllModules();
+  const { data: instructors = [], isLoading: instructorsLoading } = useInstructors();
 
   // Extract data
   const lessons = lessonsData?.lessons || [];
@@ -146,7 +149,7 @@ export function LessonsAdminDashboard() {
       
       // Validate required fields before sending
       if (!formData.module_id || !formData.title || !formData.lesson_type || !formData.instructor_id) {
-        alert('Please fill in all required fields: Module, Title, Lesson Type, and Instructor');
+        toast.error('Please fill in all required fields: Module, Title, Lesson Type, and Instructor');
         return;
       }
       
@@ -165,15 +168,24 @@ export function LessonsAdminDashboard() {
       });
 
       if (response.ok) {
-        // PERFORMANCE: Cache will auto-refresh
+        // Show success notification
+        toast.success(editingLesson ? 'Lesson updated successfully!' : 'Lesson created successfully!');
+        
+        // Invalidate and refetch lessons data
+        await queryClient.invalidateQueries({ queryKey: ['lessons-admin'] });
+        await queryClient.invalidateQueries({ queryKey: ['lesson-stats'] });
+        
+        // Reset form and redirect to list view
         resetForm();
+        setShowForm(false);
+        setEditingLesson(null);
       } else {
         const error = await response.json();
-        alert(`Error: ${error.error}`);
+        toast.error(error?.error || error?.message || 'Failed to save lesson');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving lesson:', error);
-      alert('Error saving lesson');
+      toast.error(error?.message || 'Error saving lesson. Please try again.');
     }
   };
 
@@ -202,13 +214,18 @@ export function LessonsAdminDashboard() {
       });
 
       if (response.ok) {
-        // PERFORMANCE: Cache will auto-refresh
+        toast.success('Lesson deleted successfully!');
+        
+        // Invalidate and refetch lessons data
+        await queryClient.invalidateQueries({ queryKey: ['lessons-admin'] });
+        await queryClient.invalidateQueries({ queryKey: ['lesson-stats'] });
       } else {
-        alert('Error deleting lesson');
+        const error = await response.json();
+        toast.error(error?.error || error?.message || 'Error deleting lesson');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting lesson:', error);
-      alert('Error deleting lesson');
+      toast.error(error?.message || 'Error deleting lesson. Please try again.');
     }
   };
 
@@ -285,14 +302,20 @@ export function LessonsAdminDashboard() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     style={{ backgroundColor: 'white', color: 'black' }}
                     required
+                    disabled={modulesLoading}
                   >
-                    <option value="" style={{ backgroundColor: 'white', color: 'black' }}>Select a module</option>
-                    {modules.map((module) => (
+                    <option value="" style={{ backgroundColor: 'white', color: 'black' }}>
+                      {modulesLoading ? 'Loading modules...' : modules.length === 0 ? 'No modules found' : 'Select a module'}
+                    </option>
+                    {modules.map((module: any) => (
                       <option key={module.id} value={module.id} style={{ backgroundColor: 'white', color: 'black' }}>
-                        {module.courses?.title} - {module.title}
+                        {module.courses?.title || 'Unknown Course'} - {module.title}
                       </option>
                     ))}
                   </select>
+                  {!modulesLoading && modules.length === 0 && (
+                    <p className="text-sm text-red-600">No modules found. Please create a module first.</p>
+                  )}
                 </div>
 
 {/* Only show instructor selection for admins */}
@@ -306,14 +329,20 @@ export function LessonsAdminDashboard() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       style={{ backgroundColor: 'white', color: 'black' }}
                       required
+                      disabled={instructorsLoading}
                     >
-                      <option value="" style={{ backgroundColor: 'white', color: 'black' }}>Select an instructor</option>
-                      {instructors.map((instructor) => (
+                      <option value="" style={{ backgroundColor: 'white', color: 'black' }}>
+                        {instructorsLoading ? 'Loading instructors...' : instructors.length === 0 ? 'No instructors found' : 'Select an instructor'}
+                      </option>
+                      {instructors.map((instructor: any) => (
                         <option key={instructor.id} value={instructor.id} style={{ backgroundColor: 'white', color: 'black' }}>
-                          {instructor.full_name}
+                          {instructor.full_name || instructor.email}
                         </option>
                       ))}
                     </select>
+                    {!instructorsLoading && instructors.length === 0 && (
+                      <p className="text-sm text-red-600">No instructors found. Please create an instructor user first.</p>
+                    )}
                   </div>
                 )}
               </div>
@@ -485,8 +514,15 @@ export function LessonsAdminDashboard() {
                 style={{ backgroundColor: 'white', color: 'black' }}
               >
                 <option value="" style={{ backgroundColor: 'white', color: 'black' }}>All Courses</option>
-                {Array.from(new Set(modules.map(m => m.courses?.id))).map((courseId) => {
-                  const course = modules.find(m => m.courses?.id === courseId)?.courses;
+                {Array.from(new Set(modules.map((m: any) => {
+                  const course = Array.isArray(m.courses) ? m.courses[0] : m.courses;
+                  return course?.id;
+                }))).filter(Boolean).map((courseId) => {
+                  const module = modules.find((m: any) => {
+                    const course = Array.isArray(m.courses) ? m.courses[0] : m.courses;
+                    return course?.id === courseId;
+                  });
+                  const course = module ? (Array.isArray((module as any).courses) ? (module as any).courses[0] : (module as any).courses) : null;
                   return course ? (
                     <option key={course.id} value={course.id} style={{ backgroundColor: 'white', color: 'black' }}>
                       {course.title}

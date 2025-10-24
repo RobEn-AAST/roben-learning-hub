@@ -70,6 +70,24 @@ export default function QuizQuestionAdminDashboard() {
   });
   const [options, setOptions] = useState<any[]>([]);
 
+  // Debug: Log quizzes data
+  useEffect(() => {
+    console.log('📋 QuizQuestionAdminDashboard - Quizzes data:', {
+      loading: quizzesLoading,
+      count: quizzes?.length || 0,
+      quizzes: quizzes
+    });
+  }, [quizzes, quizzesLoading]);
+
+  // Debug: Log questions data
+  useEffect(() => {
+    console.log('📋 QuizQuestionAdminDashboard - Questions data:', {
+      loading: questionsLoading,
+      count: questions?.length || 0,
+      questions: questions
+    });
+  }, [questions, questionsLoading]);
+
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -358,18 +376,36 @@ export default function QuizQuestionAdminDashboard() {
                       onChange={e => setFormData({ ...formData, quizId: e.target.value })}
                       className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
                       required
-                      disabled={editingQuestion ? true : false}
+                      disabled={!!editingQuestion || quizzesLoading}
                     >
-                      <option value="" style={{ backgroundColor: 'white', color: 'black' }}>Select a quiz</option>
-                      {quizzes.map((quiz: any) => (
-                        <option key={quiz.id} value={quiz.id} style={{ backgroundColor: 'white', color: 'black' }}>
-                          {quiz.title}
-                        </option>
-                      ))}
+                      <option value="" style={{ backgroundColor: 'white', color: 'black' }}>
+                        {quizzesLoading ? 'Loading quizzes...' : 'Select a quiz'}
+                      </option>
+                      {quizzes && quizzes.length > 0 ? (
+                        quizzes.map((quiz: any) => (
+                          <option key={quiz.id} value={quiz.id} style={{ backgroundColor: 'white', color: 'black' }}>
+                            {quiz.course_title} → {quiz.module_title} → {quiz.lesson_title} → {quiz.title}
+                          </option>
+                        ))
+                      ) : (
+                        !quizzesLoading && (
+                          <option disabled style={{ backgroundColor: 'white', color: 'gray' }}>
+                            No quizzes available. Create a quiz first.
+                          </option>
+                        )
+                      )}
                     </select>
                     {editingQuestion && (
                       <p className="text-sm text-gray-500 mt-1">
                         Quiz cannot be changed when editing a question
+                      </p>
+                    )}
+                    {!quizzesLoading && quizzes.length === 0 && !editingQuestion && (
+                      <p className="text-amber-600 text-sm mt-1 flex items-center gap-1">
+                        <span>💡</span>
+                        <span>
+                          Tip: Go to Quiz Management and create a quiz before adding questions
+                        </span>
                       </p>
                     )}
                   </div>

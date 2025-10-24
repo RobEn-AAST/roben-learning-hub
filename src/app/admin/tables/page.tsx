@@ -16,6 +16,8 @@ import { activityLogService } from '@/services/activityLogService';
 import  QuizAdminDashboard  from '@/components/admin/QuizAdminDashboard';
 import QuizQuestionAdminDashboard from '@/components/admin/QuizQuestionAdminDashboard';
 import QuestionOptionAdminDashboard from '@/components/admin/QuestionOptionAdminDashboard';
+import EnrollmentsAdminDashboard from '@/components/admin/EnrollmentsAdminDashboard';
+import LessonProgressAdminDashboard from '@/components/admin/LessonProgressAdminDashboard';
 
 // Icons
 const Icons = {
@@ -181,7 +183,7 @@ const databaseTables: DatabaseTable[] = [
     displayName: 'Course Enrollments',
     description: 'User enrollments and course access management',
     icon: <Icons.Users />,
-    status: 'development',
+    status: 'available',
     category: 'user'
   },
   {
@@ -189,7 +191,7 @@ const databaseTables: DatabaseTable[] = [
     displayName: 'Lesson Progress',
     description: 'Track user progress through individual lessons',
     icon: <Icons.Progress />,
-    status: 'development',
+    status: 'available',
     category: 'analytics'
   }
 ];
@@ -488,6 +490,52 @@ export default function TablesPage() {
           </Button>
         </div>
         <ProjectSubmissionsAdminDashboard />
+      </div>
+    );
+  }
+
+  // If a table is selected and it's course_enrollments, show the EnrollmentsAdminDashboard
+  if (selectedTable === 'course_enrollments') {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Course Enrollments Management</h1>
+            <p className="text-gray-600">Manage user course enrollments and access</p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={handleBackToTables}
+            className="flex items-center space-x-2"
+          >
+            <span>←</span>
+            <span>Back to Tables</span>
+          </Button>
+        </div>
+        <EnrollmentsAdminDashboard />
+      </div>
+    );
+  }
+
+  // If a table is selected and it's lesson_progress, show the LessonProgressAdminDashboard
+  if (selectedTable === 'lesson_progress') {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Lesson Progress Management</h1>
+            <p className="text-gray-600">Track and manage user progress through lessons</p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={handleBackToTables}
+            className="flex items-center space-x-2"
+          >
+            <span>←</span>
+            <span>Back to Tables</span>
+          </Button>
+        </div>
+        <LessonProgressAdminDashboard />
       </div>
     );
   }

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -8,9 +8,21 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import { videoService, Video, VideoStats, VideoQuestion, Lesson, CreateVideoData, UpdateVideoData } from '@/services/videoService';
+import { 
+  useVideos, 
+  useVideoStats, 
+  useLessons,
+  useCreateVideo,
+  useUpdateVideo,
+  useDeleteVideo,
+  type Video, 
+  type VideoStats, 
+  type Lesson,
+  type CreateVideoData,
+  type UpdateVideoData
+} from '@/hooks/useVideos';
+import { videoService, VideoQuestion } from '@/services/videoService';
 import { activityLogService } from '@/services/activityLogService';
-import { useVideos, useVideoLessons, useVideoStats } from '@/hooks/useQueryCache';
 
 // Icons
 const Icons = {
@@ -278,13 +290,14 @@ function StatsCard({ title, value, icon, color }: StatsCardProps) {
 
 interface VideoFormProps {
   video?: Video | null;
-  onSave: (videoData: VideoFormData) => void;
+  onSave: (videoData: VideoFormData) => Promise<void>;
   onCancel: () => void;
   loading: boolean;
   lessons: Lesson[];
+  existingVideos: Video[];
 }
 
-function VideoForm({ video, onSave, onCancel, loading, lessons }: VideoFormProps) {
+function VideoForm({ video, onSave, onCancel, loading, lessons, existingVideos }: VideoFormProps) {
   const [formData, setFormData] = useState<VideoFormData>({
     lesson_id: video?.lesson_id || '',
     provider: video?.provider || 'youtube',
@@ -303,6 +316,10 @@ function VideoForm({ video, onSave, onCancel, loading, lessons }: VideoFormProps
   const handleInputChange = (field: keyof VideoFormData, value: string | number) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
+
+  // Check if selected lesson already has a video (only for create mode)
+  const lessonHasVideo = !video && !!formData.lesson_id && 
+    existingVideos.some(v => v.lesson_id === formData.lesson_id);
 
   return (
     <Card className="bg-white">
@@ -333,6 +350,13 @@ function VideoForm({ video, onSave, onCancel, loading, lessons }: VideoFormProps
                   </option>
                 ))}
               </select>
+              {lessonHasVideo && (
+                <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <p className="text-sm text-yellow-800">
+                    ⚠️ This lesson already has a video. Each lesson can only have one video.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -406,11 +430,14 @@ function VideoForm({ video, onSave, onCancel, loading, lessons }: VideoFormProps
           <div className="flex space-x-4">
             <Button
               type="submit"
-              disabled={loading}
+              disabled={loading || lessonHasVideo}
               className="flex items-center space-x-2"
+              title={lessonHasVideo ? 'This lesson already has a video' : ''}
             >
               <Icons.Save />
-              <span>{loading ? 'Saving...' : 'Save Video'}</span>
+              <span>
+                {loading ? 'Saving...' : lessonHasVideo ? 'Lesson Already Has Video' : 'Save Video'}
+              </span>
             </Button>
             <Button
               type="button"
@@ -775,29 +802,26 @@ function VideoQuestionsManager({ video, onClose }: VideoQuestionsManagerProps) {
 }
 
 export default function VideoAdminDashboard() {
-  // React Query hooks - no manual fetching needed!
-  const { data: videos = [], isLoading: videosLoading } = useVideos();
-  const { data: lessons = [], isLoading: lessonsLoading } = useVideoLessons();
+  // ✅ Use React Query hooks for data fetching
+  const { data: videos = [], isLoading: videosLoading, error: videosError } = useVideos();
   const { data: stats, isLoading: statsLoading } = useVideoStats();
+  const { data: lessons = [], isLoading: lessonsLoading } = useLessons();
   
-  const [filteredVideos, setFilteredVideos] = useState<Video[]>([]);
-  const [loading, setLoading] = useState(false); // For mutations only
+  // ✅ Use React Query mutations for create, update, delete
+  const createVideoMutation = useCreateVideo();
+  const updateVideoMutation = useUpdateVideo();
+  const deleteVideoMutation = useDeleteVideo();
+
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLesson, setSelectedLesson] = useState<string>('');
   const [selectedProvider, setSelectedProvider] = useState<string>('');
 
-  // PERFORMANCE: React Query handles fetching automatically - no useEffect needed!
-
-  useEffect(() => {
-    // Add this check to prevent infinite loops
-    if (!videos) return;
-    
-    // Filter videos based on search term, lesson, and provider
+  // Filter videos based on search criteria using useMemo to prevent infinite re-renders
+  const filteredVideos = useMemo(() => {
     let filtered = videos;
 
-    // Filter by search term
     if (searchTerm.trim() !== '') {
       filtered = filtered.filter((video: Video) =>
         video.url.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -808,45 +832,55 @@ export default function VideoAdminDashboard() {
       );
     }
 
-    // Filter by lesson
     if (selectedLesson) {
       filtered = filtered.filter((video: Video) => video.lesson_id === selectedLesson);
     }
 
-    // Filter by provider
     if (selectedProvider) {
       filtered = filtered.filter((video: Video) => video.provider === selectedProvider);
     }
 
-    setFilteredVideos(filtered);
-  }, [searchTerm, selectedLesson, selectedProvider, videos?.length]); // ✅ Changed videos to videos?.length
+    return filtered;
+  }, [searchTerm, selectedLesson, selectedProvider, videos]);
 
-  // ✅ REMOVED: loadVideos(), loadStats(), loadLessons()
-  // React Query hooks handle all data fetching automatically with intelligent caching!
+  // Handle errors from React Query
+  React.useEffect(() => {
+    if (videosError) {
+      toast.error('Failed to load videos: ' + (videosError as Error).message);
+    }
+  }, [videosError]);
 
   const handleCreateVideo = async (videoData: VideoFormData) => {
+    // Check if a video already exists for this lesson
+    const existingVideo = videos.find(v => v.lesson_id === videoData.lesson_id);
+    if (existingVideo) {
+      toast.error('A video already exists for this lesson. Please edit the existing video instead.');
+      // Optionally, switch to edit mode
+      if (confirm('Would you like to edit the existing video instead?')) {
+        setSelectedVideo(existingVideo);
+        setViewMode('edit');
+      }
+      return;
+    }
+
     try {
-      setLoading(true);
-      await videoService.createVideo(videoData as CreateVideoData);
-      
-      // React Query will auto-refresh the cache
-      window.location.reload(); // Force refresh to invalidate all caches
-      
+      await createVideoMutation.mutateAsync(videoData as CreateVideoData);
       setViewMode('list');
-      toast.success('Video created successfully!');
       
       // Log activity
-      await activityLogService.logActivity({
-        action: 'CREATE',
-        table_name: 'videos',
-        description: `Created video: ${videoData.url}`,
-        new_values: JSON.stringify(videoData)
-      });
+      try {
+        await activityLogService.logActivity({
+          action: 'CREATE',
+          table_name: 'videos',
+          description: `Created video: ${videoData.url}`,
+          new_values: JSON.stringify(videoData)
+        });
+      } catch (logError) {
+        console.warn('Failed to log activity:', logError);
+      }
     } catch (error) {
+      // Error is already handled by the mutation hook with toast
       console.error('Error creating video:', error);
-      toast.error('Failed to create video');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -854,30 +888,29 @@ export default function VideoAdminDashboard() {
     if (!selectedVideo) return;
 
     try {
-      setLoading(true);
-      await videoService.updateVideo(selectedVideo.id, videoData as UpdateVideoData);
-      
-      // React Query will auto-refresh the cache
-      window.location.reload(); // Force refresh to invalidate all caches
-      
+      await updateVideoMutation.mutateAsync({
+        id: selectedVideo.id,
+        data: videoData as UpdateVideoData
+      });
       setViewMode('list');
       setSelectedVideo(null);
-      toast.success('Video updated successfully!');
       
       // Log activity
-      await activityLogService.logActivity({
-        action: 'UPDATE',
-        table_name: 'videos',
-        record_id: selectedVideo.id,
-        description: `Updated video: ${videoData.url}`,
-        old_values: JSON.stringify(selectedVideo),
-        new_values: JSON.stringify(videoData)
-      });
+      try {
+        await activityLogService.logActivity({
+          action: 'UPDATE',
+          table_name: 'videos',
+          record_id: selectedVideo.id,
+          description: `Updated video: ${videoData.url}`,
+          old_values: JSON.stringify(selectedVideo),
+          new_values: JSON.stringify(videoData)
+        });
+      } catch (logError) {
+        console.warn('Failed to log activity:', logError);
+      }
     } catch (error) {
+      // Error is already handled by the mutation hook
       console.error('Error updating video:', error);
-      toast.error('Failed to update video');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -887,28 +920,24 @@ export default function VideoAdminDashboard() {
     }
 
     try {
-      setLoading(true);
       const video = videos.find((v: Video) => v.id === videoId);
-      await videoService.deleteVideo(videoId);
-      
-      // React Query will auto-refresh the cache
-      window.location.reload(); // Force refresh to invalidate all caches
-      
-      toast.success('Video deleted successfully');
+      await deleteVideoMutation.mutateAsync(videoId);
       
       // Log activity
-      await activityLogService.logActivity({
-        action: 'DELETE',
-        table_name: 'videos',
-        record_id: videoId,
-        description: `Deleted video: ${video?.url || 'Unknown'}`,
-        old_values: JSON.stringify(video)
-      });
+      try {
+        await activityLogService.logActivity({
+          action: 'DELETE',
+          table_name: 'videos',
+          record_id: videoId,
+          description: `Deleted video: ${video?.url || 'Unknown'}`,
+          old_values: JSON.stringify(video)
+        });
+      } catch (logError) {
+        console.warn('Failed to log activity:', logError);
+      }
     } catch (error) {
+      // Error is already handled by the mutation hook
       console.error('Error deleting video:', error);
-      toast.error('Failed to delete video');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -958,8 +987,9 @@ export default function VideoAdminDashboard() {
           video={viewMode === 'edit' ? selectedVideo : undefined}
           onSave={viewMode === 'create' ? handleCreateVideo : handleUpdateVideo}
           onCancel={handleCancel}
-          loading={loading}
+          loading={createVideoMutation.isPending || updateVideoMutation.isPending}
           lessons={lessons}
+          existingVideos={videos}
         />
       </div>
     );
