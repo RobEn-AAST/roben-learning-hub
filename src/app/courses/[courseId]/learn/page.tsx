@@ -474,6 +474,8 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext }: {
 
   const handleStartQuiz = async () => {
     try {
+      console.log('🎯 Starting quiz...', quiz?.id);
+      
       // Create new attempt in database
       const response = await fetch('/api/quiz-attempts', {
         method: 'POST',
@@ -483,6 +485,7 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext }: {
 
       if (response.ok) {
         const data = await response.json();
+        console.log('✅ Quiz attempt created:', data.attempt.id);
         setCurrentAttemptId(data.attempt.id);
         setQuizStarted(true);
         setStartTime(Date.now());
@@ -491,10 +494,13 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext }: {
           setTimeRemaining(quiz.timeLimitMinutes * 60);
         }
       } else {
-        console.error('Failed to create quiz attempt');
+        const errorData = await response.json();
+        console.error('❌ Failed to create quiz attempt:', response.status, errorData);
+        alert('Failed to start quiz. Please try again.');
       }
     } catch (error) {
-      console.error('Error starting quiz:', error);
+      console.error('❌ Error starting quiz:', error);
+      alert('Failed to start quiz. Please try again.');
     }
   };
 
@@ -505,6 +511,8 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext }: {
   };
 
   const handleAnswerChange = async (questionId: string, answer: string) => {
+    console.log('📝 Answer changed:', { questionId, answer, currentAttemptId });
+    
     setUserAnswers(prev => ({
       ...prev,
       [questionId]: answer
@@ -513,7 +521,8 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext }: {
     // Save answer to database if we have an attempt
     if (currentAttemptId) {
       try {
-        await fetch(`/api/quiz-attempts/${currentAttemptId}/answers`, {
+        console.log('📤 Saving answer to API...');
+        const response = await fetch(`/api/quiz-attempts/${currentAttemptId}/answers`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -521,9 +530,19 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext }: {
             selectedOptionId: answer,
           }),
         });
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✅ Answer saved successfully:', data);
+        } else {
+          const errorData = await response.json();
+          console.error('❌ Failed to save answer:', response.status, errorData);
+        }
       } catch (error) {
-        console.error('Error saving answer:', error);
+        console.error('❌ Error saving answer:', error);
       }
+    } else {
+      console.warn('⚠️ No attempt ID - answer not saved to database');
     }
   };
 
@@ -573,7 +592,8 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext }: {
     }
   };
 
-  const resetQuiz = () => {
+  const resetQuiz = async () => {
+    // Reset state
     setUserAnswers({});
     setShowResults(false);
     setScore(0);
@@ -582,6 +602,9 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext }: {
     setCurrentAttemptId(null);
     setStartTime(null);
     setLatestAttempt(null);
+    
+    // Restart the quiz by creating a new attempt
+    await handleStartQuiz();
   };
 
   if (loading) {

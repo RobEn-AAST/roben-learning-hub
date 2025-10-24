@@ -43,6 +43,84 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    console.log('🔵 Checking for existing attempts...');
+
+    // Check if user has ANY existing attempts for this quiz (complete or incomplete)
+    const { data: existingAttempts } = await supabase
+      .from('quiz_attempts')
+      .select('id, completed_at')
+      .eq('quiz_id', quizId)
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+
+    if (existingAttempts && existingAttempts.length > 0) {
+      console.log(`🔵 Found ${existingAttempts.length} existing attempt(s), will reuse the latest one`);
+      
+      const latestAttempt = existingAttempts[0];
+      
+      console.log('🔵 Deleting old answers for attempt:', latestAttempt.id);
+      
+      // Delete all user_answers for this attempt to start fresh
+      const { error: deleteAnswersError } = await supabase
+        .from('user_answers')
+        .delete()
+        .eq('attempt_id', latestAttempt.id);
+
+      if (deleteAnswersError) {
+        console.error('⚠️ Error deleting old answers:', deleteAnswersError);
+        // Don't fail here, just log the error
+      } else {
+        console.log('✅ Successfully deleted old answers');
+      }
+
+      console.log('🔵 Resetting attempt to incomplete state...');
+      
+      // Reset the attempt to incomplete state
+      const { data: resetAttempt, error: resetError } = await supabase
+        .from('quiz_attempts')
+        .update({
+          completed_at: null,
+          score: null,
+          earned_points: null,
+          total_points: null,
+          passed: null,
+          time_taken_seconds: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', latestAttempt.id)
+        .select()
+        .single();
+
+      if (resetError) {
+        console.error('⚠️ Error resetting attempt:', resetError);
+        // If reset fails, just return the existing attempt
+        console.log('🔵 Returning existing attempt without reset');
+        return NextResponse.json({
+          success: true,
+          attempt: latestAttempt,
+        });
+      }
+
+      console.log('✅ Successfully reset attempt:', resetAttempt.id);
+      
+      // Delete any other old attempts for this user/quiz
+      if (existingAttempts.length > 1) {
+        const oldAttemptIds = existingAttempts.slice(1).map(a => a.id);
+        await supabase
+          .from('quiz_attempts')
+          .delete()
+          .in('id', oldAttemptIds);
+        console.log(`🔵 Deleted ${oldAttemptIds.length} old attempt(s)`);
+      }
+      
+      return NextResponse.json({
+        success: true,
+        attempt: resetAttempt,
+      });
+    }
+
+    console.log('🔵 No existing attempts, creating new one...');
+
     // Create new attempt
     const { data: attempt, error: attemptError } = await supabase
       .from('quiz_attempts')
@@ -54,12 +132,14 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (attemptError) {
-      console.error('Error creating quiz attempt:', attemptError);
+      console.error('🔴 Error creating quiz attempt:', attemptError);
       return NextResponse.json(
         { error: `Failed to start quiz: ${attemptError.message}` },
         { status: 500 }
       );
     }
+
+    console.log('✅ New quiz attempt created:', attempt.id);
 
     return NextResponse.json({
       success: true,

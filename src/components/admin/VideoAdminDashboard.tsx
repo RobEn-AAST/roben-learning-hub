@@ -791,6 +791,9 @@ export default function VideoAdminDashboard() {
   // PERFORMANCE: React Query handles fetching automatically - no useEffect needed!
 
   useEffect(() => {
+    // Add this check to prevent infinite loops
+    if (!videos) return;
+    
     // Filter videos based on search term, lesson, and provider
     let filtered = videos;
 
@@ -816,7 +819,7 @@ export default function VideoAdminDashboard() {
     }
 
     setFilteredVideos(filtered);
-  }, [searchTerm, selectedLesson, selectedProvider, videos]);
+  }, [searchTerm, selectedLesson, selectedProvider, videos?.length]); // ✅ Changed videos to videos?.length
 
   // ✅ REMOVED: loadVideos(), loadStats(), loadLessons()
   // React Query hooks handle all data fetching automatically with intelligent caching!
