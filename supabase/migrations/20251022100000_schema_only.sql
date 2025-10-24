@@ -709,12 +709,15 @@ CREATE OR REPLACE FUNCTION "public"."handle_new_user"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     AS $$
 BEGIN
-  INSERT INTO public.profiles (id, full_name, email, role, created_at, updated_at)
+  INSERT INTO public.profiles (id, first_name, last_name, email, phone_number, metadata, role, created_at, updated_at)
   VALUES (
     NEW.id,
-    COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
+    COALESCE(NEW.raw_user_meta_data->>'first_name', ''),
+    COALESCE(NEW.raw_user_meta_data->>'last_name', ''),
     NEW.email,
-    'student',
+    COALESCE(NEW.raw_user_meta_data->>'phone_number', ''),
+    COALESCE(NEW.raw_user_meta_data->'metadata', '{}'::jsonb),
+    COALESCE((NEW.raw_user_meta_data->>'role')::user_role, 'student'),
     NOW(),
     NOW()
   );
@@ -1228,10 +1231,13 @@ ALTER TABLE "public"."modules" OWNER TO "postgres";
 
 CREATE TABLE IF NOT EXISTS "public"."profiles" (
     "id" "uuid" NOT NULL,
-    "full_name" "text",
+    "first_name" "text",
+    "last_name" "text",
     "email" "text",
     "avatar_url" "text",
     "bio" "text",
+    "phone_number" "text",
+    "metadata" jsonb DEFAULT '{}'::jsonb,
     "role" "public"."user_role" DEFAULT 'student'::"public"."user_role" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"(),
     "updated_at" timestamp with time zone DEFAULT "now"()

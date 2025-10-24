@@ -31,7 +31,8 @@ export async function GET(request: NextRequest) {
           title
         ),
         profiles!inner (
-          full_name,
+          first_name,
+          last_name,
           email
         )
       `, { count: 'exact' });
@@ -46,8 +47,8 @@ export async function GET(request: NextRequest) {
     }
     
     if (search) {
-      // Search in user's full_name or email
-      query = query.or(`profiles.full_name.ilike.%${search}%,profiles.email.ilike.%${search}%`);
+      // Search in user's first_name, last_name or email
+      query = query.or(`profiles.first_name.ilike.%${search}%,profiles.last_name.ilike.%${search}%,profiles.email.ilike.%${search}%`);
     }
 
     // Order and paginate
@@ -165,7 +166,8 @@ export async function POST(request: NextRequest) {
         ),
         profiles (
           id,
-          full_name,
+          first_name,
+          last_name,
           email,
           avatar_url,
           role

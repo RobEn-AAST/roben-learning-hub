@@ -82,7 +82,7 @@ export async function GET() {
     // Fetch instructors (users with instructor role) - use admin client to bypass RLS
     const { data: instructors, error: instructorsError } = await supabaseAdmin
       .from('profiles')
-      .select('id, full_name, email, avatar_url, bio')
+      .select('id, first_name, last_name, email, avatar_url, bio')
       .eq('role', 'instructor')
       .limit(6);
 
@@ -93,7 +93,7 @@ export async function GET() {
     // Fetch admins - use admin client to bypass RLS
     const { data: admins, error: adminsError } = await supabaseAdmin
       .from('profiles')
-      .select('id, full_name, email, avatar_url, bio')
+      .select('id, first_name, last_name, email, avatar_url, bio')
       .eq('role', 'admin')
       .limit(3);
 

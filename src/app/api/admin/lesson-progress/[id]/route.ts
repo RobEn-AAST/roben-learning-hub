@@ -94,7 +94,8 @@ export async function PUT(
         ),
         profiles (
           id,
-          full_name,
+          first_name,
+          last_name,
           email,
           avatar_url
         )

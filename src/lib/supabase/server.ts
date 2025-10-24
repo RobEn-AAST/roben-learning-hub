@@ -72,3 +72,25 @@ export async function createClient() {
     },
   );
 }
+
+/**
+ * Create an admin client with service role key for server-side admin operations
+ * Use this for user management, bypassing RLS policies, etc.
+ */
+export function createAdminClient() {
+  const { createClient } = require('@supabase/supabase-js');
+  
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      },
+      global: {
+        fetch: fetchWithTimeout
+      }
+    }
+  );
+}

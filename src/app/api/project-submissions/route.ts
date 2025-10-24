@@ -188,9 +188,9 @@ export async function GET(request: NextRequest) {
       .from('project_submissions')
       .select(`
         *,
-        project:projects(id, title, lesson_id),
-        student:profiles!project_submissions_user_id_fkey(id, full_name, email),
-        reviewer:profiles!project_submissions_reviewed_by_fkey(id, full_name)
+        project:projects(id, title),
+        student:profiles!project_submissions_user_id_fkey(id, first_name, last_name, email),
+        reviewer:profiles!project_submissions_reviewed_by_fkey(id, first_name, last_name)
       `)
       .order('submitted_at', { ascending: false });
 

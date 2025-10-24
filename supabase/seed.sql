@@ -19,7 +19,7 @@ BEGIN
   INSERT INTO lessons (module_id, title, lesson_type, position)
   VALUES (m1, 'HTML Intro', 'video', 1) RETURNING id INTO l1;
   INSERT INTO videos (lesson_id, provider, provider_video_id, url, duration_seconds)
-  VALUES (l1, 'youtube', 'qz0aGYrrlhU', 'https://youtu.be/qz0aGYrrlhU', 1800);
+  VALUES (l1, 'youtube', 'qz0aGYrrlhU', 'https://youtu.be/w-lG_tDERYg?si=2UfAqLzXSYcvUVkV', 1800);
   
   INSERT INTO lessons (module_id, title, lesson_type, position)
   VALUES (m1, 'CSS Guide', 'article', 2) RETURNING id INTO l2;
@@ -63,7 +63,7 @@ BEGIN
   INSERT INTO lessons (module_id, title, lesson_type, position)
   VALUES (m2, 'Node Basics', 'video', 1) RETURNING id INTO l5;
   INSERT INTO videos (lesson_id, provider, provider_video_id, url, duration_seconds)
-  VALUES (l5, 'youtube', 'TlB_eWDSMt4', 'https://youtu.be/TlB_eWDSMt4', 2100);
+  VALUES (l5, 'youtube', 'TlB_eWDSMt4', 'https://youtu.be/w-lG_tDERYg?si=2UfAqLzXSYcvUVkV', 2100);
   
   INSERT INTO lessons (module_id, title, lesson_type, position)
   VALUES (m2, 'Express Framework', 'article', 2) RETURNING id INTO l6;

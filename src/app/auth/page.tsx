@@ -1,33 +1,24 @@
 "use client";
 
-import { EnhancedAuthForm } from "@/components/enhanced-auth-form";
+import { LoginForm } from "@/components/login-form";
 import { RobenLogo } from "@/components/roben-logo";
 import { useState, useEffect, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 // Force dynamic rendering for this page since it uses search params
 export const dynamic = 'force-dynamic';
 
 function AuthContent() {
-  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
-  const router = useRouter();
   const searchParams = useSearchParams();
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check URL to determine initial mode
-    const mode = searchParams.get('mode');
-    if (mode === 'signup') {
-      setAuthMode('signup');
+    // Check for SSO errors in URL
+    const errorParam = searchParams.get('error');
+    if (errorParam) {
+      setError(decodeURIComponent(errorParam));
     }
   }, [searchParams]);
-
-  const handleModeChange = (mode: 'login' | 'signup') => {
-    setAuthMode(mode);
-    // Update URL without causing a full page reload
-    const url = new URL(window.location.href);
-    url.searchParams.set('mode', mode);
-    window.history.replaceState({}, '', url.toString());
-  };
 
   return (
     <main className="min-h-screen flex flex-col items-center relative overflow-hidden bg-gradient-to-br from-blue-50 via-white to-indigo-50">
@@ -59,18 +50,32 @@ function AuthContent() {
             </p>
           </div>
 
+          {/* Error Alert */}
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-start">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-red-800">Authentication Error</h3>
+                  <div className="mt-2 text-sm text-red-700">{error}</div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Auth Form Container */}
           <div className="auth-glass rounded-2xl p-8 auth-form-enter">
-            <EnhancedAuthForm 
-              mode={authMode} 
-              onModeChange={handleModeChange}
-            />
+            <LoginForm />
           </div>
 
           {/* Footer */}
           <div className="text-center mt-8 text-sm text-gray-500">
             <p>
-              Secure authentication powered by Supabase
+              Secure authentication powered by Roben.club SSO
             </p>
           </div>
         </div>

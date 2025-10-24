@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
       .from('courses')
       .select(`
         *,
-        creator:profiles!courses_created_by_fkey (id, full_name, email)
+        creator:profiles!courses_created_by_fkey (id, first_name, last_name, email)
       `, { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);

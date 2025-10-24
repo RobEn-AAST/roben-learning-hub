@@ -48,8 +48,8 @@ export async function GET() {
     
     const { data: allProfiles, error: allError } = await adminClient
       .from('profiles')
-      .select('id, full_name, role')
-      .order('full_name');
+      .select('id, first_name, last_name, role')
+      .order('first_name, last_name');
     
     if (allError) {
       console.error('Error fetching profiles:', allError);

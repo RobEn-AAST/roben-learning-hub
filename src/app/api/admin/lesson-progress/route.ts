@@ -36,7 +36,8 @@ export async function GET(request: NextRequest) {
           module_id
         ),
         profiles!inner (
-          full_name,
+          first_name,
+          last_name,
           email
         )
       `, { count: 'exact' });
@@ -55,8 +56,8 @@ export async function GET(request: NextRequest) {
     }
     
     if (search) {
-      // Search in user's full_name or lesson title
-      query = query.or(`profiles.full_name.ilike.%${search}%,lessons.title.ilike.%${search}%`);
+      // Search in user's first_name, last_name or lesson title
+      query = query.or(`profiles.first_name.ilike.%${search}%,profiles.last_name.ilike.%${search}%,lessons.title.ilike.%${search}%`);
     }
 
     // Order and paginate
@@ -193,7 +194,8 @@ export async function POST(request: NextRequest) {
         ),
         profiles (
           id,
-          full_name,
+          first_name,
+          last_name,
           email,
           avatar_url
         )

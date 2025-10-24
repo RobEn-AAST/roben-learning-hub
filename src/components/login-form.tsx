@@ -1,7 +1,6 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,131 +9,92 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
+
+// Roben.club logo SVG
+const RobenLogo = () => (
+  <svg className="w-6 h-6 mr-2" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 2L2 7v10c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-10-5z" />
+  </svg>
+);
 
 export function LoginForm({
   className,
   ...props
 }: React.ComponentPropsWithoutRef<"div">) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const supabase = createClient();
+  const handleRobenLogin = async () => {
     setIsLoading(true);
-    setError(null);
+    
+    // Build SSO authorization URL
+    const clientId = process.env.NEXT_PUBLIC_ROBEN_SSO_CLIENT_ID || 'qN6vr8SyZJMCb2NX';
+    const redirectUri = process.env.NEXT_PUBLIC_ROBEN_SSO_REDIRECT_URI || 'http://localhost:3000/api/auth/callback/roben-sso';
+    
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      scope: 'roben',
+      response_type: 'code'
+    });
 
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (error) throw error;
-      
-      // After successful login, check if user needs to complete profile
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (user) {
-        // Check if user has completed their profile and get their role
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('full_name, role')
-          .eq('id', user.id)
-          .single();
-        
-        // If profile doesn't exist or full_name is empty, redirect to complete profile
-        if (!profile || !profile.full_name || profile.full_name.trim() === '') {
-          router.push('/complete-profile');
-        } else {
-          // Profile is complete, redirect based on user role
-          const role = profile.role || 'user';
-          switch (role) {
-            case 'admin':
-              router.push('/admin');
-              break;
-            case 'instructor':
-              router.push('/instructor');
-              break;
-            default:
-              router.push('/dashboard');
-          }
-        }
-      } else {
-        router.push('/dashboard');
-      }
-    } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "An error occurred");
-    } finally {
-      setIsLoading(false);
-    }
+    // Redirect to Roben.club SSO
+    window.location.href = `https://roben.club/sso/authorize/?${params.toString()}`;
   };
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">Login</CardTitle>
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl">Welcome to Roben Learning Hub</CardTitle>
           <CardDescription>
-            Enter your email below to login to your account
+            Sign in with your Roben.club account to continue
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLogin}>
-            <div className="flex flex-col gap-6">
-              <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="m@example.com"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
+          <div className="flex flex-col gap-6">
+            <Button 
+              onClick={handleRobenLogin} 
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-6 text-lg"
+              disabled={isLoading}
+            >
+              <RobenLogo />
+              {isLoading ? "Redirecting to Roben.club..." : "Sign in with Roben.club"}
+            </Button>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
               </div>
-              <div className="grid gap-2">
-                <div className="flex items-center">
-                  <Label htmlFor="password">Password</Label>
-                  <Link
-                    href="/auth/forgot-password"
-                    className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
-                  >
-                    Forgot your password?
-                  </Link>
-                </div>
-                <Input
-                  id="password"
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white px-2 text-muted-foreground">
+                  Secure Single Sign-On
+                </span>
               </div>
-              {error && <p className="text-sm text-red-500">{error}</p>}
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Logging in..." : "Login"}
-              </Button>
             </div>
-            <div className="mt-4 text-center text-sm">
-              Don&apos;t have an account?{" "}
-              <Link
-                href="/auth/sign-up"
-                className="underline underline-offset-4"
-              >
-                Sign up
-              </Link>
+
+            <div className="text-center text-sm text-muted-foreground">
+              <p>By signing in, you agree to our Terms of Service</p>
+              <p className="mt-2">
+                Don&apos;t have a Roben.club account?{" "}
+                <a 
+                  href="https://roben.club/register" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline font-medium"
+                >
+                  Create one here
+                </a>
+              </p>
             </div>
-          </form>
+          </div>
         </CardContent>
       </Card>
+
+      <div className="text-center text-xs text-muted-foreground">
+        <p>🔒 Your credentials are securely handled by Roben.club</p>
+        <p className="mt-1">We never see or store your password</p>
+      </div>
     </div>
   );
 }

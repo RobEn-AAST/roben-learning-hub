@@ -64,8 +64,8 @@ class SubmissionService {
         .select(`
           *,
           projects!inner(title),
-          profiles!project_submissions_user_id_fkey(full_name),
-          reviewer:profiles!project_submissions_reviewed_by_fkey(full_name)
+          profiles!project_submissions_user_id_fkey(first_name, last_name),
+          reviewer:profiles!project_submissions_reviewed_by_fkey(first_name, last_name)
         `)
         .order('submitted_at', { ascending: false });
 
@@ -91,8 +91,8 @@ class SubmissionService {
       const submissions = data.map((submission: any) => ({
         ...submission,
         project_title: submission.projects?.title,
-        user_name: submission.profiles?.full_name,
-        reviewer_name: submission.reviewer?.full_name,
+  user_name: `${submission.profiles?.first_name || ''} ${submission.profiles?.last_name || ''}`.trim(),
+  reviewer_name: `${submission.reviewer?.first_name || ''} ${submission.reviewer?.last_name || ''}`.trim(),
       }));
 
       console.log('✅ SubmissionService.getAllSubmissions - Found', submissions.length, 'submissions');
@@ -116,8 +116,8 @@ class SubmissionService {
         .select(`
           *,
           projects!inner(title),
-          profiles!project_submissions_user_id_fkey(full_name),
-          reviewer:profiles!project_submissions_reviewed_by_fkey(full_name)
+          profiles!project_submissions_user_id_fkey(first_name, last_name),
+          reviewer:profiles!project_submissions_reviewed_by_fkey(first_name, last_name)
         `)
         .eq('id', id)
         .single();
@@ -131,8 +131,8 @@ class SubmissionService {
       return {
         ...data,
         project_title: data.projects?.title,
-        user_name: data.profiles?.full_name,
-        reviewer_name: data.reviewer?.full_name,
+  user_name: `${data.profiles?.first_name || ''} ${data.profiles?.last_name || ''}`.trim(),
+  reviewer_name: `${data.reviewer?.first_name || ''} ${data.reviewer?.last_name || ''}`.trim(),
       };
     } catch (error) {
       console.error('❌ SubmissionService.getSubmissionById - Error:', error);
@@ -157,8 +157,8 @@ class SubmissionService {
         .select(`
           *,
           projects!inner(title),
-          profiles!project_submissions_user_id_fkey(full_name),
-          reviewer:profiles!project_submissions_reviewed_by_fkey(full_name)
+          profiles!project_submissions_user_id_fkey(first_name, last_name),
+          reviewer:profiles!project_submissions_reviewed_by_fkey(first_name, last_name)
         `)
         .eq('project_id', projectId)
         .eq('user_id', userId)
@@ -178,8 +178,8 @@ class SubmissionService {
       return {
         ...data,
         project_title: data.projects?.title,
-        user_name: data.profiles?.full_name,
-        reviewer_name: data.reviewer?.full_name,
+  user_name: `${data.profiles?.first_name || ''} ${data.profiles?.last_name || ''}`.trim(),
+  reviewer_name: `${data.reviewer?.first_name || ''} ${data.reviewer?.last_name || ''}`.trim(),
       };
     } catch (error) {
       console.error('❌ SubmissionService.getUserProjectSubmission - Error:', error);

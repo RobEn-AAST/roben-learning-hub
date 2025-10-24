@@ -6,7 +6,8 @@ import Image from 'next/image';
 
 interface Admin {
   id: string;
-  full_name: string;
+  first_name: string;
+  last_name: string;
   email: string;
   avatar_url: string | null;
   bio: string | null;
@@ -92,7 +93,7 @@ export function AdminsSection() {
                       <div className="relative w-24 h-24 mx-auto">
                         <Image
                           src={admin.avatar_url}
-                          alt={admin.full_name}
+                          alt={admin.first_name + ' ' + admin.last_name}
                           fill
                           className="rounded-full object-cover border-4 border-blue-300 transition-colors"
                         />
@@ -100,7 +101,7 @@ export function AdminsSection() {
                     ) : (
                       <div className="w-24 h-24 mx-auto rounded-full bg-gradient-to-br from-blue-500 to-blue-700 flex items-center justify-center border-4 border-blue-300 transition-all">
                         <span className="text-3xl font-bold text-white">
-                          {getInitials(admin.full_name)}
+                          {getInitials((admin.first_name || '') + ' ' + (admin.last_name || ''))}
                         </span>
                       </div>
                     )}
@@ -108,7 +109,7 @@ export function AdminsSection() {
 
                   {/* Info */}
                   <h3 className="text-xl font-bold text-gray-900 mb-2 transition-colors">
-                    {admin.full_name}
+                    {(admin.first_name || '') + ' ' + (admin.last_name || '')}
                   </h3>
                   
                   {admin.bio ? (

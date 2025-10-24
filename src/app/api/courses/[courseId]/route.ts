@@ -187,7 +187,7 @@ export async function GET(
       if (firstLesson.data?.instructor_id) {
         const { data: instructorData } = await supabaseAdmin
           .from('profiles')
-          .select('id, full_name, avatar_url, bio')
+          .select('id, first_name, last_name, avatar_url, bio')
           .eq('id', firstLesson.data.instructor_id)
           .single();
         instructor = instructorData;

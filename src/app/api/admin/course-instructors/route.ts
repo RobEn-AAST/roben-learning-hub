@@ -93,7 +93,8 @@ export async function GET(request: NextRequest) {
           *,
           instructor:instructor_id (
             id,
-            full_name,
+            first_name,
+            last_name,
             email
           )
         `)

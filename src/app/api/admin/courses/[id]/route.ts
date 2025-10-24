@@ -17,7 +17,7 @@ export async function GET(
       .from('courses')
       .select(`
         *,
-        creator:profiles!courses_created_by_fkey (id, full_name, email),
+        creator:profiles!courses_created_by_fkey (id, first_name, last_name, email),
         modules (
           id,
           title,
@@ -29,7 +29,7 @@ export async function GET(
           id,
           role,
           enrolled_at,
-          profiles!course_enrollments_user_id_fkey (full_name, email)
+          profiles!course_enrollments_user_id_fkey (first_name, last_name, email)
         )
       `)
       .eq('id', id)
