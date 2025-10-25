@@ -11,7 +11,7 @@ export interface Course {
   created_by: string;
   created_at: string;
   updated_at: string;
-  creator?: { id: string; full_name: string } | null;
+  creator?: { id: string; first_name: string; last_name: string } | null;
 }
 
 export interface CourseCreateData extends Omit<Course, 'id' | 'slug' | 'created_at' | 'updated_at'> {
@@ -257,7 +257,7 @@ export const coursesService = {
         status,
         created_at,
         updated_at,
-        profiles!courses_created_by_fkey (full_name)
+        profiles!courses_created_by_fkey (first_name, last_name)
       `)
       .order('updated_at', { ascending: false })
       .limit(limit);

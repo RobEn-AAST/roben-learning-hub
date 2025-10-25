@@ -24,7 +24,8 @@ const createAdminClient = () => {
 export interface CombinedUser {
   id: string;
   email: string;
-  full_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
   avatar_url: string | null;
   bio: string | null;
   role: string | null;
@@ -90,7 +91,8 @@ export async function getAllUsersServerAction(): Promise<CombinedUser[]> {
       created_at: authUser.created_at,
       updated_at: authUser.updated_at || authUser.created_at,
       last_sign_in_at: authUser.last_sign_in_at || null,
-      full_name: userProfile?.full_name || null,
+      first_name: userProfile?.first_name || null,
+      last_name: userProfile?.last_name || null,
       avatar_url: userProfile?.avatar_url || null,
       bio: userProfile?.bio || null,
       role: userProfile?.role || null,

@@ -361,9 +361,9 @@ export default function ArticleAdminDashboard() {
   };
 
   const filteredArticles = articles.filter(article => {
-    const matchesSearch = article.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         article.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         article.lesson_title?.toLowerCase().includes(searchTerm.toLowerCase());
+  const matchesSearch = (article.title?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+             (article.content?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+             (article.lesson_title?.toLowerCase() || '').includes(searchTerm.toLowerCase());
     const matchesLesson = !selectedLesson || article.lesson_id === selectedLesson;
     return matchesSearch && matchesLesson;
   });

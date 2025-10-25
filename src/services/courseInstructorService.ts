@@ -15,7 +15,8 @@ export interface CourseInstructor {
   // Optional joined data
   instructor?: {
     id: string;
-    full_name: string;
+    first_name: string;
+    last_name: string;
     email: string;
     avatar_url?: string;
   };
@@ -29,7 +30,8 @@ export interface CourseInstructor {
 // Instructor profile interface
 export interface InstructorProfile {
   id: string;
-  full_name: string;
+  first_name: string;
+  last_name: string;
   email: string;
   avatar_url?: string;
 }
@@ -53,7 +55,8 @@ export const courseInstructorService = {
         *,
         instructor:profiles!instructor_id (
           id,
-          full_name,
+          first_name,
+          last_name,
           email,
           avatar_url
         ),
@@ -246,7 +249,14 @@ export const courseInstructorService = {
       }
       
       const { instructors } = await response.json();
-      return instructors || [];
+      // If backend still returns full_name, map to first_name/last_name
+      return (instructors || []).map((inst: any) => ({
+        id: inst.id,
+        first_name: inst.first_name ?? '',
+        last_name: inst.last_name ?? '',
+        email: inst.email,
+        avatar_url: inst.avatar_url
+      }));
     } catch (error) {
       console.error('Error getting available instructors:', error);
       throw new Error(error instanceof Error ? error.message : 'Failed to get available instructors');

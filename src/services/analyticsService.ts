@@ -271,7 +271,8 @@ export const analyticsService = {
           description,
           created_at,
           profiles!activity_logs_user_id_fkey (
-            full_name
+            first_name,
+            last_name
           )
         `)
         .order('created_at', { ascending: false })
@@ -281,7 +282,7 @@ export const analyticsService = {
 
       return data?.map(log => ({
         id: log.id,
-        user_name: (log.profiles as any)?.full_name || 'Unknown User',
+        user_name: log.profiles ? `${log.profiles.first_name || ''} ${log.profiles.last_name || ''}`.trim() : 'Unknown User',
         action: log.action,
         table_name: log.table_name,
         record_name: log.record_name || '',

@@ -23,7 +23,8 @@ export interface Lesson {
   };
   instructor?: {
     id: string;
-    full_name: string;
+    first_name: string;
+    last_name: string;
   };
   // Content counts
   videos_count?: number;
@@ -78,12 +79,13 @@ const supabase = createClient();
 // Server-side helper functions for API routes
 export const serverLessonService = {
   // Get instructors for select dropdowns (server-side)
-  async getInstructorsForSelect(supabaseClient: ReturnType<typeof createClient>): Promise<{ id: string; full_name: string }[]> {
+  async getInstructorsForSelect(supabaseClient: ReturnType<typeof createClient>): Promise<{ id: string; first_name: string; last_name: string }[]> {
     const { data, error } = await supabaseClient
       .from('profiles')
-      .select('id, full_name')
+      .select('id, first_name, last_name')
       .eq('role', 'instructor')
-      .order('full_name');
+      .order('first_name')
+      .order('last_name');
 
     if (error) throw error;
 
@@ -114,7 +116,8 @@ export const serverLessonService = {
         ),
         profiles!instructor_id(
           id,
-          full_name
+          first_name,
+          last_name
         )
       `, { count: 'exact' })
       .order('created_at', { ascending: false });
@@ -276,7 +279,7 @@ export const lessonService = {
       // Get instructors
       const { data: instructors } = await supabase
         .from('profiles')
-        .select('id, full_name')
+        .select('id, first_name, last_name')
         .in('id', instructorIds);
 
       // Transform lessons with related data
@@ -362,7 +365,8 @@ export const lessonService = {
         ),
         profiles(
           id,
-          full_name
+          first_name,
+          last_name
         )
       `)
       .eq('id', id)
@@ -423,7 +427,8 @@ export const lessonService = {
         ),
         profiles(
           id,
-          full_name
+          first_name,
+          last_name
         )
       `)
       .single();
@@ -463,7 +468,8 @@ export const lessonService = {
         ),
         profiles(
           id,
-          full_name
+          first_name,
+          last_name
         )
       `)
       .single();
@@ -533,14 +539,15 @@ export const lessonService = {
   },
 
   // Get instructors for select dropdowns
-  async getInstructorsForSelect(limit = 200): Promise<{ id: string; full_name: string }[]> {
+  async getInstructorsForSelect(limit = 200): Promise<{ id: string; first_name: string; last_name: string }[]> {
     // PERFORMANCE FIX: Added default limit to prevent fetching unlimited records
     // Default 200 instructors (reasonable for most institutions)
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, full_name')
+      .select('id, first_name, last_name')
       .eq('role', 'instructor')
-      .order('full_name')
+      .order('first_name')
+      .order('last_name')
       .limit(limit);
 
     if (error) throw error;

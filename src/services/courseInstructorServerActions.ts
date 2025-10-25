@@ -43,8 +43,8 @@ export async function removeInstructorServerAction(
   
   console.log('🔍 Checking admin permissions for user:', user.id);
   const { data: userData, error: profileError } = await supabaseAdmin
-    .from('profiles')
-    .select('id, role, full_name, email')
+  .from('profiles')
+  .select('id, role, first_name, last_name, email')
     .eq('id', user.id)
     .single();
 
@@ -96,7 +96,8 @@ export async function removeInstructorServerAction(
  */
 export async function getAvailableInstructorsServerAction(): Promise<Array<{
   id: string;
-  full_name: string;
+  first_name: string;
+  last_name: string;
   email: string;
   avatar_url: string | null;
 }>> {
@@ -125,10 +126,11 @@ export async function getAvailableInstructorsServerAction(): Promise<Array<{
 
   // Get all instructors using admin client to bypass RLS
   const { data: instructors, error: instructorsError } = await supabaseAdmin
-    .from('profiles')
-    .select('id, full_name, email, avatar_url')
+  .from('profiles')
+  .select('id, first_name, last_name, email, avatar_url')
     .eq('role', 'instructor')
-    .order('full_name', { ascending: true });
+    .order('first_name', { ascending: true })
+    .order('last_name', { ascending: true });
 
   if (instructorsError) {
     console.error('❌ Failed to get instructors:', instructorsError);
@@ -149,12 +151,13 @@ export async function getCourseInstructorsServerAction(course_id: string): Promi
   role: string;
   assigned_at: string;
   assigned_by: string;
-  instructor?: {
-    id: string;
-    full_name: string;
-    email: string;
-    avatar_url: string | null;
-  };
+    instructor?: {
+      id: string;
+      first_name: string;
+      last_name: string;
+      email: string;
+      avatar_url: string | null;
+    };
 }>> {
   console.log('📋 GET COURSE INSTRUCTORS SERVER ACTION START for course:', course_id);
   
@@ -186,8 +189,8 @@ export async function getCourseInstructorsServerAction(course_id: string): Promi
   if (courseInstructors) {
     for (const courseInstructor of courseInstructors) {
       const { data: instructorProfile, error: profileError } = await supabaseAdmin
-        .from('profiles')
-        .select('id, full_name, email, avatar_url')
+  .from('profiles')
+  .select('id, first_name, last_name, email, avatar_url')
         .eq('id', courseInstructor.instructor_id)
         .single();
 
@@ -223,8 +226,8 @@ export async function addInstructorServerAction(
   const supabaseAdmin = createAdminClient();
   
   const { data: userData, error: profileError } = await supabaseAdmin
-    .from('profiles')
-    .select('id, role, full_name, email')
+  .from('profiles')
+  .select('id, role, first_name, last_name, email')
     .eq('id', user.id)
     .single();
 
