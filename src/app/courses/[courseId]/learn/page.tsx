@@ -1770,8 +1770,12 @@ export default function CourseLearnPage() {
                         const moduleIndex = courseData.modules.findIndex(m => m.id === module.id);
                         if (moduleIndex > 0 && lessonIndex === 0) {
                           const prevModule = courseData.modules[moduleIndex - 1];
-                          const lastLessonInPrevModule = prevModule.lessons[prevModule.lessons.length - 1];
-                          isAccessible = completedLessons.has(lastLessonInPrevModule.id) || isComplete;
+                          if (prevModule?.lessons && prevModule.lessons.length > 0) {
+                            const lastLessonInPrevModule = prevModule.lessons[prevModule.lessons.length - 1];
+                            if (lastLessonInPrevModule?.id) {
+                              isAccessible = completedLessons.has(lastLessonInPrevModule.id) || isComplete;
+                            }
+                          }
                         }
                         
                         return (
