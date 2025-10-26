@@ -29,7 +29,7 @@ export function LoginForm({
     
     // Build SSO authorization URL
     const clientId = process.env.NEXT_PUBLIC_ROBEN_SSO_CLIENT_ID || 'qN6vr8SyZJMCb2NX';
-    const redirectUri = process.env.NEXT_PUBLIC_ROBEN_SSO_REDIRECT_URI || 'http://roben.club/api/auth/callback/roben-sso';
+    const redirectUri = process.env.NEXT_PUBLIC_ROBEN_SSO_REDIRECT_URI || 'http://localhost:3000/api/auth/callback/roben-sso';
     
     const params = new URLSearchParams({
       client_id: clientId,
