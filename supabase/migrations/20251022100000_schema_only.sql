@@ -1,122 +1,146 @@
-
-
-
-SET statement_timeout = 0;
-SET lock_timeout = 0;
-SET idle_in_transaction_session_timeout = 0;
-SET client_encoding = 'UTF8';
-SET standard_conforming_strings = on;
-SELECT pg_catalog.set_config('search_path', '', false);
-SET check_function_bodies = false;
-SET xmloption = content;
 SET client_min_messages = warning;
 SET row_security = off;
 
 
-CREATE SCHEMA IF NOT EXISTS "public";
-
-
-ALTER SCHEMA "public" OWNER TO "pg_database_owner";
-
-
-COMMENT ON SCHEMA "public" IS 'standard public schema';
-
-
-
-CREATE TYPE "public"."course_status" AS ENUM (
-    'draft',
-    'published',
-    'archived'
-);
-
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'course_status') THEN
+    CREATE TYPE "public"."course_status" AS ENUM (
+      'draft',
+      'published',
+      'archived'
+    );
+  END IF;
+END
+$$;
 
 ALTER TYPE "public"."course_status" OWNER TO "postgres";
 
 
-CREATE TYPE "public"."enrollment_role" AS ENUM (
-    'student',
-    'instructor',
-    'admin'
-);
-
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'enrollment_role') THEN
+    CREATE TYPE "public"."enrollment_role" AS ENUM (
+      'student',
+      'instructor',
+      'admin'
+    );
+  END IF;
+END
+$$;
 
 ALTER TYPE "public"."enrollment_role" OWNER TO "postgres";
 
 
-CREATE TYPE "public"."lesson_type" AS ENUM (
-    'article',
-    'video',
-    'quiz',
-    'project',
-    'other'
-);
-
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'lesson_type') THEN
+    CREATE TYPE "public"."lesson_type" AS ENUM (
+      'article',
+      'video',
+      'quiz',
+      'project',
+      'other'
+    );
+  END IF;
+END
+$$;
 
 ALTER TYPE "public"."lesson_type" OWNER TO "postgres";
 
 
-CREATE TYPE "public"."node_status" AS ENUM (
-    'visible',
-    'hidden'
-);
-
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'node_status') THEN
+    CREATE TYPE "public"."node_status" AS ENUM (
+      'visible',
+      'hidden'
+    );
+  END IF;
+END
+$$;
 
 ALTER TYPE "public"."node_status" OWNER TO "postgres";
 
 
-CREATE TYPE "public"."progress_status" AS ENUM (
-    'not_started',
-    'in_progress',
-    'completed'
-);
-
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'progress_status') THEN
+    CREATE TYPE "public"."progress_status" AS ENUM (
+      'not_started',
+      'in_progress',
+      'completed'
+    );
+  END IF;
+END
+$$;
 
 ALTER TYPE "public"."progress_status" OWNER TO "postgres";
 
 
-CREATE TYPE "public"."quiz_question_type" AS ENUM (
-    'multiple_choice',
-    'short_answer',
-    'true_false'
-);
-
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'quiz_question_type') THEN
+    CREATE TYPE "public"."quiz_question_type" AS ENUM (
+      'multiple_choice',
+      'short_answer',
+      'true_false'
+    );
+  END IF;
+END
+$$;
 
 ALTER TYPE "public"."quiz_question_type" OWNER TO "postgres";
 
 
-CREATE TYPE "public"."submission_platform" AS ENUM (
-    'github',
-    'google_drive',
-    'onedrive',
-    'dropbox',
-    'gitlab',
-    'bitbucket',
-    'other'
-);
-
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'submission_platform') THEN
+    CREATE TYPE "public"."submission_platform" AS ENUM (
+      'github',
+      'google_drive',
+      'onedrive',
+      'dropbox',
+      'gitlab',
+      'bitbucket',
+      'other'
+    );
+  END IF;
+END
+$$;
 
 ALTER TYPE "public"."submission_platform" OWNER TO "postgres";
 
 
-CREATE TYPE "public"."submission_status" AS ENUM (
-    'submitted',
-    'pending_review',
-    'reviewed',
-    'approved',
-    'rejected',
-    'resubmission_required'
-);
-
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'submission_status') THEN
+    CREATE TYPE "public"."submission_status" AS ENUM (
+      'submitted',
+      'pending_review',
+      'reviewed',
+      'approved',
+      'rejected',
+      'resubmission_required'
+    );
+  END IF;
+END
+$$;
 
 ALTER TYPE "public"."submission_status" OWNER TO "postgres";
 
 
-CREATE TYPE "public"."user_role" AS ENUM (
-    'student',
-    'instructor',
-    'admin'
-);
-
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
+    CREATE TYPE "public"."user_role" AS ENUM (
+      'student',
+      'instructor',
+      'admin'
+    );
+  END IF;
+END
+$$;
 
 ALTER TYPE "public"."user_role" OWNER TO "postgres";
 
@@ -1392,452 +1416,693 @@ CREATE TABLE IF NOT EXISTS "public"."videos" (
 ALTER TABLE "public"."videos" OWNER TO "postgres";
 
 
-ALTER TABLE ONLY "public"."activity_logs"
-    ADD CONSTRAINT "activity_logs_pkey" PRIMARY KEY ("id");
+DO $$
+BEGIN
+  -- Only attempt to add the constraint when the table actually exists.
+  IF to_regclass('public.activity_logs') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'activity_logs_pkey' AND conrelid = 'public.activity_logs'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."activity_logs"
+        ADD CONSTRAINT "activity_logs_pkey" PRIMARY KEY ("id");
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.articles') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'articles_lesson_id_key' AND conrelid = 'public.articles'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."articles"
+        ADD CONSTRAINT "articles_lesson_id_key" UNIQUE ("lesson_id");
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.articles') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'articles_pkey' AND conrelid = 'public.articles'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."articles"
+        ADD CONSTRAINT "articles_pkey" PRIMARY KEY ("id");
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.course_enrollments') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'course_enrollments_pkey' AND conrelid = 'public.course_enrollments'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."course_enrollments"
+        ADD CONSTRAINT "course_enrollments_pkey" PRIMARY KEY ("id");
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.course_instructors') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'course_instructors_course_id_instructor_id_key' AND conrelid = 'public.course_instructors'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."course_instructors"
+        ADD CONSTRAINT "course_instructors_course_id_instructor_id_key" UNIQUE ("course_id", "instructor_id");
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.course_instructors') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'course_instructors_pkey' AND conrelid = 'public.course_instructors'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."course_instructors"
+        ADD CONSTRAINT "course_instructors_pkey" PRIMARY KEY ("id");
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.courses') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'courses_pkey' AND conrelid = 'public.courses'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."courses"
+        ADD CONSTRAINT "courses_pkey" PRIMARY KEY ("id");
+    END IF;
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.courses') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'courses_slug_key' AND conrelid = 'public.courses'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."courses"
+        ADD CONSTRAINT "courses_slug_key" UNIQUE ("slug");
+    END IF;
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.lesson_progress') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'lesson_progress_pkey' AND conrelid = 'public.lesson_progress'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."lesson_progress"
+        ADD CONSTRAINT "lesson_progress_pkey" PRIMARY KEY ("id");
+    END IF;
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.lessons') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'lessons_pkey' AND conrelid = 'public.lessons'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."lessons"
+        ADD CONSTRAINT "lessons_pkey" PRIMARY KEY ("id");
+    END IF;
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.modules') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'modules_pkey' AND conrelid = 'public.modules'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."modules"
+        ADD CONSTRAINT "modules_pkey" PRIMARY KEY ("id");
+    END IF;
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.profiles') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'profiles_pkey' AND conrelid = 'public.profiles'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."profiles"
+        ADD CONSTRAINT "profiles_pkey" PRIMARY KEY ("id");
+    END IF;
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.project_submissions') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'project_submissions_pkey' AND conrelid = 'public.project_submissions'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."project_submissions"
+        ADD CONSTRAINT "project_submissions_pkey" PRIMARY KEY ("id");
+    END IF;
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.projects') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'projects_lesson_id_key' AND conrelid = 'public.projects'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."projects"
+        ADD CONSTRAINT "projects_lesson_id_key" UNIQUE ("lesson_id");
+    END IF;
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.projects') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'projects_pkey' AND conrelid = 'public.projects'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."projects"
+        ADD CONSTRAINT "projects_pkey" PRIMARY KEY ("id");
+    END IF;
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.question_options') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'question_options_pkey' AND conrelid = 'public.question_options'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."question_options"
+        ADD CONSTRAINT "question_options_pkey" PRIMARY KEY ("id");
+    END IF;
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.questions') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'questions_pkey' AND conrelid = 'public.questions'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."questions"
+        ADD CONSTRAINT "questions_pkey" PRIMARY KEY ("id");
+    END IF;
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.quiz_attempts') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'quiz_attempts_pkey' AND conrelid = 'public.quiz_attempts'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."quiz_attempts"
+        ADD CONSTRAINT "quiz_attempts_pkey" PRIMARY KEY ("id");
+    END IF;
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.quizzes') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'quizzes_lesson_id_key' AND conrelid = 'public.quizzes'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."quizzes"
+        ADD CONSTRAINT "quizzes_lesson_id_key" UNIQUE ("lesson_id");
+    END IF;
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.quizzes') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'quizzes_pkey' AND conrelid = 'public.quizzes'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."quizzes"
+        ADD CONSTRAINT "quizzes_pkey" PRIMARY KEY ("id");
+    END IF;
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.user_answers') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'user_answers_pkey' AND conrelid = 'public.user_answers'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."user_answers"
+        ADD CONSTRAINT "user_answers_pkey" PRIMARY KEY ("id");
+    END IF;
+  END IF;
+END
+$$;
+
+DO $$
+BEGIN
+  IF to_regclass('public.user_answers') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'user_answers_unique_question_per_attempt' AND conrelid = 'public.user_answers'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."user_answers"
+        ADD CONSTRAINT "user_answers_unique_question_per_attempt" UNIQUE ("attempt_id", "question_id");
+    END IF;
+  END IF;
+END
+$$;
 
+DO $$
+BEGIN
+  IF to_regclass('public.video_questions') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'video_questions_pkey' AND conrelid = 'public.video_questions'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."video_questions"
+        ADD CONSTRAINT "video_questions_pkey" PRIMARY KEY ("id");
+    END IF;
+  END IF;
+END
+$$;
 
 
-ALTER TABLE ONLY "public"."articles"
-    ADD CONSTRAINT "articles_lesson_id_key" UNIQUE ("lesson_id");
 
+DO $$
+BEGIN
+  IF to_regclass('public.videos') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'videos_lesson_id_key' AND conrelid = 'public.videos'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."videos"
+        ADD CONSTRAINT "videos_lesson_id_key" UNIQUE ("lesson_id");
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'videos_pkey' AND conrelid = 'public.videos'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."videos"
+        ADD CONSTRAINT "videos_pkey" PRIMARY KEY ("id");
+    END IF;
+  END IF;
+END
+$$;
 
 
-ALTER TABLE ONLY "public"."articles"
-    ADD CONSTRAINT "articles_pkey" PRIMARY KEY ("id");
 
+CREATE INDEX IF NOT EXISTS "idx_activity_logs_action" ON "public"."activity_logs" USING "btree" ("action");
 
 
-ALTER TABLE ONLY "public"."course_enrollments"
-    ADD CONSTRAINT "course_enrollments_pkey" PRIMARY KEY ("id");
 
 
 
-ALTER TABLE ONLY "public"."course_instructors"
-    ADD CONSTRAINT "course_instructors_course_id_instructor_id_key" UNIQUE ("course_id", "instructor_id");
 
+CREATE INDEX IF NOT EXISTS "idx_activity_logs_action_created" ON "public"."activity_logs" USING "btree" ("action", "created_at" DESC);
 
 
-ALTER TABLE ONLY "public"."course_instructors"
-    ADD CONSTRAINT "course_instructors_pkey" PRIMARY KEY ("id");
 
 
 
-ALTER TABLE ONLY "public"."courses"
-    ADD CONSTRAINT "courses_pkey" PRIMARY KEY ("id");
 
+CREATE INDEX IF NOT EXISTS "idx_activity_logs_action_table_created" ON "public"."activity_logs" USING "btree" ("action", "table_name", "created_at" DESC);
 
 
-ALTER TABLE ONLY "public"."courses"
-    ADD CONSTRAINT "courses_slug_key" UNIQUE ("slug");
 
 
 
-ALTER TABLE ONLY "public"."lesson_progress"
-    ADD CONSTRAINT "lesson_progress_pkey" PRIMARY KEY ("id");
 
+CREATE INDEX IF NOT EXISTS "idx_activity_logs_created_at" ON "public"."activity_logs" USING "btree" ("created_at" DESC);
 
 
-ALTER TABLE ONLY "public"."lessons"
-    ADD CONSTRAINT "lessons_pkey" PRIMARY KEY ("id");
 
 
 
-ALTER TABLE ONLY "public"."modules"
-    ADD CONSTRAINT "modules_pkey" PRIMARY KEY ("id");
 
+CREATE INDEX IF NOT EXISTS "idx_activity_logs_created_at_desc" ON "public"."activity_logs" USING "btree" ("created_at" DESC);
 
 
-ALTER TABLE ONLY "public"."profiles"
-    ADD CONSTRAINT "profiles_pkey" PRIMARY KEY ("id");
 
 
 
-ALTER TABLE ONLY "public"."project_submissions"
-    ADD CONSTRAINT "project_submissions_pkey" PRIMARY KEY ("id");
 
+CREATE INDEX IF NOT EXISTS "idx_activity_logs_table_created" ON "public"."activity_logs" USING "btree" ("table_name", "created_at" DESC);
 
 
-ALTER TABLE ONLY "public"."projects"
-    ADD CONSTRAINT "projects_lesson_id_key" UNIQUE ("lesson_id");
 
 
 
-ALTER TABLE ONLY "public"."projects"
-    ADD CONSTRAINT "projects_pkey" PRIMARY KEY ("id");
 
+CREATE INDEX IF NOT EXISTS "idx_activity_logs_table_name" ON "public"."activity_logs" USING "btree" ("table_name");
 
 
-ALTER TABLE ONLY "public"."question_options"
-    ADD CONSTRAINT "question_options_pkey" PRIMARY KEY ("id");
 
 
 
-ALTER TABLE ONLY "public"."questions"
-    ADD CONSTRAINT "questions_pkey" PRIMARY KEY ("id");
 
+CREATE INDEX IF NOT EXISTS "idx_activity_logs_user_action" ON "public"."activity_logs" USING "btree" ("user_id", "action");
 
 
-ALTER TABLE ONLY "public"."quiz_attempts"
-    ADD CONSTRAINT "quiz_attempts_pkey" PRIMARY KEY ("id");
 
 
 
-ALTER TABLE ONLY "public"."quizzes"
-    ADD CONSTRAINT "quizzes_lesson_id_key" UNIQUE ("lesson_id");
 
+CREATE INDEX IF NOT EXISTS "idx_activity_logs_user_created_recent" ON "public"."activity_logs" USING "btree" ("user_id", "created_at" DESC);
 
 
-ALTER TABLE ONLY "public"."quizzes"
-    ADD CONSTRAINT "quizzes_pkey" PRIMARY KEY ("id");
 
 
 
-ALTER TABLE ONLY "public"."user_answers"
-    ADD CONSTRAINT "user_answers_pkey" PRIMARY KEY ("id");
 
+CREATE INDEX IF NOT EXISTS "idx_activity_logs_user_id" ON "public"."activity_logs" USING "btree" ("user_id");
 
 
-ALTER TABLE ONLY "public"."user_answers"
-    ADD CONSTRAINT "user_answers_unique_question_per_attempt" UNIQUE ("attempt_id", "question_id");
 
 
 
-ALTER TABLE ONLY "public"."video_questions"
-    ADD CONSTRAINT "video_questions_pkey" PRIMARY KEY ("id");
+CREATE INDEX IF NOT EXISTS "idx_articles_lesson_id" ON "public"."articles" USING "btree" ("lesson_id");
 
 
 
-ALTER TABLE ONLY "public"."videos"
-    ADD CONSTRAINT "videos_lesson_id_key" UNIQUE ("lesson_id");
+CREATE INDEX IF NOT EXISTS "idx_course_enrollments_course_role" ON "public"."course_enrollments" USING "btree" ("course_id", "role");
 
 
 
-ALTER TABLE ONLY "public"."videos"
-    ADD CONSTRAINT "videos_pkey" PRIMARY KEY ("id");
+CREATE INDEX IF NOT EXISTS "idx_course_enrollments_user_course" ON "public"."course_enrollments" USING "btree" ("user_id", "course_id");
 
 
 
-CREATE INDEX "idx_activity_logs_action" ON "public"."activity_logs" USING "btree" ("action");
+CREATE INDEX IF NOT EXISTS "idx_course_instructors_active" ON "public"."course_instructors" USING "btree" ("is_active") WHERE ("is_active" = true);
 
 
 
-CREATE INDEX "idx_activity_logs_action_created" ON "public"."activity_logs" USING "btree" ("action", "created_at" DESC);
+CREATE INDEX IF NOT EXISTS "idx_course_instructors_course_active" ON "public"."course_instructors" USING "btree" ("course_id", "is_active");
 
 
 
-CREATE INDEX "idx_activity_logs_action_table_created" ON "public"."activity_logs" USING "btree" ("action", "table_name", "created_at" DESC);
+CREATE INDEX IF NOT EXISTS "idx_course_instructors_course_id" ON "public"."course_instructors" USING "btree" ("course_id");
 
 
 
-CREATE INDEX "idx_activity_logs_created_at" ON "public"."activity_logs" USING "btree" ("created_at" DESC);
+CREATE INDEX IF NOT EXISTS "idx_course_instructors_course_instructor_active" ON "public"."course_instructors" USING "btree" ("course_id", "instructor_id", "is_active");
 
 
 
-CREATE INDEX "idx_activity_logs_created_at_desc" ON "public"."activity_logs" USING "btree" ("created_at" DESC);
+CREATE INDEX IF NOT EXISTS "idx_course_instructors_instructor_active" ON "public"."course_instructors" USING "btree" ("instructor_id", "is_active");
 
 
 
-CREATE INDEX "idx_activity_logs_table_created" ON "public"."activity_logs" USING "btree" ("table_name", "created_at" DESC);
+CREATE INDEX IF NOT EXISTS "idx_course_instructors_instructor_id" ON "public"."course_instructors" USING "btree" ("instructor_id");
 
 
 
-CREATE INDEX "idx_activity_logs_table_name" ON "public"."activity_logs" USING "btree" ("table_name");
+CREATE INDEX IF NOT EXISTS "idx_courses_created_by" ON "public"."courses" USING "btree" ("created_by");
 
 
 
-CREATE INDEX "idx_activity_logs_user_action" ON "public"."activity_logs" USING "btree" ("user_id", "action");
+CREATE INDEX IF NOT EXISTS "idx_courses_slug" ON "public"."courses" USING "btree" ("slug");
 
 
 
-CREATE INDEX "idx_activity_logs_user_created_recent" ON "public"."activity_logs" USING "btree" ("user_id", "created_at" DESC);
+CREATE INDEX IF NOT EXISTS "idx_courses_status_created" ON "public"."courses" USING "btree" ("status", "created_at" DESC);
 
 
 
-CREATE INDEX "idx_activity_logs_user_id" ON "public"."activity_logs" USING "btree" ("user_id");
+CREATE INDEX IF NOT EXISTS "idx_courses_status_created_by" ON "public"."courses" USING "btree" ("status", "created_by");
 
 
 
-CREATE INDEX "idx_articles_lesson_id" ON "public"."articles" USING "btree" ("lesson_id");
+CREATE INDEX IF NOT EXISTS "idx_enrollments_course_enrolled" ON "public"."course_enrollments" USING "btree" ("course_id", "enrolled_at" DESC);
 
 
 
-CREATE INDEX "idx_course_enrollments_course_role" ON "public"."course_enrollments" USING "btree" ("course_id", "role");
+CREATE INDEX IF NOT EXISTS "idx_enrollments_recent" ON "public"."course_enrollments" USING "btree" ("enrolled_at" DESC);
 
 
 
-CREATE INDEX "idx_course_enrollments_user_course" ON "public"."course_enrollments" USING "btree" ("user_id", "course_id");
+CREATE INDEX IF NOT EXISTS "idx_enrollments_role_enrolled" ON "public"."course_enrollments" USING "btree" ("role", "enrolled_at" DESC);
 
 
 
-CREATE INDEX "idx_course_instructors_active" ON "public"."course_instructors" USING "btree" ("is_active") WHERE ("is_active" = true);
+CREATE INDEX IF NOT EXISTS "idx_enrollments_user_course" ON "public"."course_enrollments" USING "btree" ("user_id", "course_id");
 
 
 
-CREATE INDEX "idx_course_instructors_course_active" ON "public"."course_instructors" USING "btree" ("course_id", "is_active");
+CREATE INDEX IF NOT EXISTS "idx_enrollments_user_enrolled" ON "public"."course_enrollments" USING "btree" ("user_id", "enrolled_at" DESC);
 
 
 
-CREATE INDEX "idx_course_instructors_course_id" ON "public"."course_instructors" USING "btree" ("course_id");
 
 
+CREATE INDEX IF NOT EXISTS "idx_lesson_progress_completed" ON "public"."lesson_progress" USING "btree" ("lesson_id", "completed_at", "status");
 
-CREATE INDEX "idx_course_instructors_course_instructor_active" ON "public"."course_instructors" USING "btree" ("course_id", "instructor_id", "is_active");
 
 
+CREATE INDEX IF NOT EXISTS "idx_lesson_progress_completed_at" ON "public"."lesson_progress" USING "btree" ("completed_at" DESC) WHERE ("status" = 'completed'::"public"."progress_status");
 
-CREATE INDEX "idx_course_instructors_instructor_active" ON "public"."course_instructors" USING "btree" ("instructor_id", "is_active");
 
 
+CREATE INDEX IF NOT EXISTS "idx_lesson_progress_lesson_status" ON "public"."lesson_progress" USING "btree" ("lesson_id", "status");
 
-CREATE INDEX "idx_course_instructors_instructor_id" ON "public"."course_instructors" USING "btree" ("instructor_id");
 
 
+CREATE INDEX IF NOT EXISTS "idx_lesson_progress_started_at" ON "public"."lesson_progress" USING "btree" ("started_at" DESC) WHERE ("started_at" IS NOT NULL);
 
-CREATE INDEX "idx_courses_created_by" ON "public"."courses" USING "btree" ("created_by");
 
 
+CREATE INDEX IF NOT EXISTS "idx_lesson_progress_user_lesson" ON "public"."lesson_progress" USING "btree" ("user_id", "lesson_id");
 
-CREATE INDEX "idx_courses_slug" ON "public"."courses" USING "btree" ("slug");
 
 
+CREATE INDEX IF NOT EXISTS "idx_lesson_progress_user_status" ON "public"."lesson_progress" USING "btree" ("user_id", "status");
 
-CREATE INDEX "idx_courses_status_created" ON "public"."courses" USING "btree" ("status", "created_at" DESC);
 
 
+CREATE INDEX IF NOT EXISTS "idx_lessons_module_id" ON "public"."lessons" USING "btree" ("module_id");
 
-CREATE INDEX "idx_courses_status_created_by" ON "public"."courses" USING "btree" ("status", "created_by");
 
 
+CREATE INDEX IF NOT EXISTS "idx_lessons_module_position" ON "public"."lessons" USING "btree" ("module_id", "position");
 
-CREATE INDEX "idx_enrollments_course_enrolled" ON "public"."course_enrollments" USING "btree" ("course_id", "enrolled_at" DESC);
 
 
+CREATE INDEX IF NOT EXISTS "idx_lessons_module_position_status" ON "public"."lessons" USING "btree" ("module_id", "position", "status");
 
-CREATE INDEX "idx_enrollments_recent" ON "public"."course_enrollments" USING "btree" ("enrolled_at" DESC);
 
 
+CREATE INDEX IF NOT EXISTS "idx_lessons_module_status" ON "public"."lessons" USING "btree" ("module_id", "status");
 
-CREATE INDEX "idx_enrollments_role_enrolled" ON "public"."course_enrollments" USING "btree" ("role", "enrolled_at" DESC);
 
 
+CREATE INDEX IF NOT EXISTS "idx_lessons_module_type" ON "public"."lessons" USING "btree" ("module_id", "lesson_type");
 
-CREATE INDEX "idx_enrollments_user_course" ON "public"."course_enrollments" USING "btree" ("user_id", "course_id");
 
 
+CREATE INDEX IF NOT EXISTS "idx_lessons_type" ON "public"."lessons" USING "btree" ("lesson_type");
 
-CREATE INDEX "idx_enrollments_user_enrolled" ON "public"."course_enrollments" USING "btree" ("user_id", "enrolled_at" DESC);
 
 
+CREATE INDEX IF NOT EXISTS "idx_modules_course_id" ON "public"."modules" USING "btree" ("course_id");
 
-CREATE INDEX "idx_lesson_progress_completed" ON "public"."lesson_progress" USING "btree" ("lesson_id", "completed_at", "status");
 
 
+CREATE INDEX IF NOT EXISTS "idx_modules_course_position" ON "public"."modules" USING "btree" ("course_id", "position");
 
-CREATE INDEX "idx_lesson_progress_completed_at" ON "public"."lesson_progress" USING "btree" ("completed_at" DESC) WHERE ("status" = 'completed'::"public"."progress_status");
 
 
+CREATE INDEX IF NOT EXISTS "idx_profiles_email" ON "public"."profiles" USING "btree" ("email") WHERE ("email" IS NOT NULL);
 
-CREATE INDEX "idx_lesson_progress_lesson_status" ON "public"."lesson_progress" USING "btree" ("lesson_id", "status");
 
 
+CREATE INDEX IF NOT EXISTS "idx_profiles_id_role" ON "public"."profiles" USING "btree" ("id") INCLUDE ("role");
 
-CREATE INDEX "idx_lesson_progress_started_at" ON "public"."lesson_progress" USING "btree" ("started_at" DESC) WHERE ("started_at" IS NOT NULL);
 
 
+CREATE INDEX IF NOT EXISTS "idx_profiles_role_active" ON "public"."profiles" USING "btree" ("role", "id");
 
-CREATE INDEX "idx_lesson_progress_user_lesson" ON "public"."lesson_progress" USING "btree" ("user_id", "lesson_id");
 
 
+CREATE INDEX IF NOT EXISTS "idx_profiles_role_id" ON "public"."profiles" USING "btree" ("id", "role");
 
-CREATE INDEX "idx_lesson_progress_user_status" ON "public"."lesson_progress" USING "btree" ("user_id", "status");
 
 
+CREATE INDEX IF NOT EXISTS "idx_project_submissions_platform" ON "public"."project_submissions" USING "btree" ("submission_platform");
 
-CREATE INDEX "idx_lessons_module_id" ON "public"."lessons" USING "btree" ("module_id");
 
 
+CREATE INDEX IF NOT EXISTS "idx_project_submissions_project_id" ON "public"."project_submissions" USING "btree" ("project_id");
 
-CREATE INDEX "idx_lessons_module_position" ON "public"."lessons" USING "btree" ("module_id", "position");
 
 
+CREATE INDEX IF NOT EXISTS "idx_project_submissions_project_status" ON "public"."project_submissions" USING "btree" ("project_id", "status");
 
-CREATE INDEX "idx_lessons_module_position_status" ON "public"."lessons" USING "btree" ("module_id", "position", "status");
 
 
+CREATE INDEX IF NOT EXISTS "idx_project_submissions_project_user" ON "public"."project_submissions" USING "btree" ("project_id", "user_id");
 
-CREATE INDEX "idx_lessons_module_status" ON "public"."lessons" USING "btree" ("module_id", "status");
 
 
+CREATE INDEX IF NOT EXISTS "idx_project_submissions_reviewed_by" ON "public"."project_submissions" USING "btree" ("reviewed_by") WHERE ("reviewed_by" IS NOT NULL);
 
-CREATE INDEX "idx_lessons_module_type" ON "public"."lessons" USING "btree" ("module_id", "lesson_type");
 
 
+CREATE INDEX IF NOT EXISTS "idx_project_submissions_reviewer" ON "public"."project_submissions" USING "btree" ("reviewed_by", "reviewed_at" DESC) WHERE ("reviewed_by" IS NOT NULL);
 
-CREATE INDEX "idx_lessons_type" ON "public"."lessons" USING "btree" ("lesson_type");
 
 
+CREATE INDEX IF NOT EXISTS "idx_project_submissions_status" ON "public"."project_submissions" USING "btree" ("status");
 
-CREATE INDEX "idx_modules_course_id" ON "public"."modules" USING "btree" ("course_id");
 
 
+CREATE INDEX IF NOT EXISTS "idx_project_submissions_status_submitted" ON "public"."project_submissions" USING "btree" ("status", "submitted_at" DESC);
 
-CREATE INDEX "idx_modules_course_position" ON "public"."modules" USING "btree" ("course_id", "position");
 
 
+CREATE UNIQUE INDEX IF NOT EXISTS "idx_project_submissions_unique_user_project" ON "public"."project_submissions" USING "btree" ("project_id", "user_id");
 
-CREATE INDEX "idx_profiles_email" ON "public"."profiles" USING "btree" ("email") WHERE ("email" IS NOT NULL);
 
 
+CREATE INDEX IF NOT EXISTS "idx_project_submissions_user_id" ON "public"."project_submissions" USING "btree" ("user_id");
 
-CREATE INDEX "idx_profiles_id_role" ON "public"."profiles" USING "btree" ("id") INCLUDE ("role");
 
 
+CREATE INDEX IF NOT EXISTS "idx_project_submissions_user_status" ON "public"."project_submissions" USING "btree" ("user_id", "status");
 
-CREATE INDEX "idx_profiles_role_active" ON "public"."profiles" USING "btree" ("role", "id");
 
 
+CREATE INDEX IF NOT EXISTS "idx_projects_lesson_id" ON "public"."projects" USING "btree" ("lesson_id");
 
-CREATE INDEX "idx_profiles_role_id" ON "public"."profiles" USING "btree" ("id", "role");
 
 
+CREATE INDEX IF NOT EXISTS "idx_question_options_question" ON "public"."question_options" USING "btree" ("question_id");
 
-CREATE INDEX "idx_project_submissions_platform" ON "public"."project_submissions" USING "btree" ("submission_platform");
 
 
+CREATE INDEX IF NOT EXISTS "idx_question_options_question_id_lookup" ON "public"."question_options" USING "btree" ("question_id");
 
-CREATE INDEX "idx_project_submissions_project_id" ON "public"."project_submissions" USING "btree" ("project_id");
 
 
+CREATE INDEX IF NOT EXISTS "idx_question_options_question_position" ON "public"."question_options" USING "btree" ("question_id", "position");
 
-CREATE INDEX "idx_project_submissions_project_status" ON "public"."project_submissions" USING "btree" ("project_id", "status");
 
 
+CREATE INDEX IF NOT EXISTS "idx_questions_id_lookup" ON "public"."questions" USING "btree" ("id");
 
-CREATE INDEX "idx_project_submissions_project_user" ON "public"."project_submissions" USING "btree" ("project_id", "user_id");
 
 
+CREATE INDEX IF NOT EXISTS "idx_questions_quiz" ON "public"."questions" USING "btree" ("quiz_id");
 
-CREATE INDEX "idx_project_submissions_reviewed_by" ON "public"."project_submissions" USING "btree" ("reviewed_by") WHERE ("reviewed_by" IS NOT NULL);
 
 
+CREATE INDEX IF NOT EXISTS "idx_questions_quiz_position" ON "public"."questions" USING "btree" ("quiz_id", "position");
 
-CREATE INDEX "idx_project_submissions_reviewer" ON "public"."project_submissions" USING "btree" ("reviewed_by", "reviewed_at" DESC) WHERE ("reviewed_by" IS NOT NULL);
 
 
+CREATE INDEX IF NOT EXISTS "idx_quiz_attempts_completed" ON "public"."quiz_attempts" USING "btree" ("completed_at") WHERE ("completed_at" IS NOT NULL);
 
-CREATE INDEX "idx_project_submissions_status" ON "public"."project_submissions" USING "btree" ("status");
 
 
+CREATE INDEX IF NOT EXISTS "idx_quiz_attempts_quiz_id" ON "public"."quiz_attempts" USING "btree" ("quiz_id");
 
-CREATE INDEX "idx_project_submissions_status_submitted" ON "public"."project_submissions" USING "btree" ("status", "submitted_at" DESC);
 
 
+CREATE INDEX IF NOT EXISTS "idx_quiz_attempts_quiz_user" ON "public"."quiz_attempts" USING "btree" ("quiz_id", "user_id");
 
-CREATE UNIQUE INDEX "idx_project_submissions_unique_user_project" ON "public"."project_submissions" USING "btree" ("project_id", "user_id");
 
 
+CREATE INDEX IF NOT EXISTS "idx_quiz_attempts_started" ON "public"."quiz_attempts" USING "btree" ("started_at" DESC);
 
-CREATE INDEX "idx_project_submissions_user_id" ON "public"."project_submissions" USING "btree" ("user_id");
 
 
+CREATE INDEX IF NOT EXISTS "idx_quiz_attempts_user_completed" ON "public"."quiz_attempts" USING "btree" ("user_id", "completed_at");
 
-CREATE INDEX "idx_project_submissions_user_status" ON "public"."project_submissions" USING "btree" ("user_id", "status");
 
 
+CREATE INDEX IF NOT EXISTS "idx_quiz_attempts_user_id" ON "public"."quiz_attempts" USING "btree" ("user_id");
 
-CREATE INDEX "idx_projects_lesson_id" ON "public"."projects" USING "btree" ("lesson_id");
 
 
+CREATE INDEX IF NOT EXISTS "idx_quiz_attempts_user_quiz" ON "public"."quiz_attempts" USING "btree" ("user_id", "quiz_id", "completed_at" DESC);
 
-CREATE INDEX "idx_question_options_question" ON "public"."question_options" USING "btree" ("question_id");
 
 
+CREATE INDEX IF NOT EXISTS "idx_quizzes_lesson_id" ON "public"."quizzes" USING "btree" ("lesson_id");
 
-CREATE INDEX "idx_question_options_question_id_lookup" ON "public"."question_options" USING "btree" ("question_id");
 
 
+CREATE INDEX IF NOT EXISTS "idx_user_answers_attempt_id" ON "public"."user_answers" USING "btree" ("attempt_id");
 
-CREATE INDEX "idx_question_options_question_position" ON "public"."question_options" USING "btree" ("question_id", "position");
 
 
+CREATE INDEX IF NOT EXISTS "idx_user_answers_attempt_question" ON "public"."user_answers" USING "btree" ("attempt_id", "question_id");
 
-CREATE INDEX "idx_questions_id_lookup" ON "public"."questions" USING "btree" ("id");
 
 
+CREATE INDEX IF NOT EXISTS "idx_user_answers_question_id" ON "public"."user_answers" USING "btree" ("question_id");
 
-CREATE INDEX "idx_questions_quiz" ON "public"."questions" USING "btree" ("quiz_id");
 
 
+CREATE INDEX IF NOT EXISTS "idx_video_questions_video_id" ON "public"."video_questions" USING "btree" ("video_id");
 
-CREATE INDEX "idx_questions_quiz_position" ON "public"."questions" USING "btree" ("quiz_id", "position");
 
 
+CREATE INDEX IF NOT EXISTS "idx_video_questions_video_timestamp" ON "public"."video_questions" USING "btree" ("video_id", "timestamp_seconds");
 
-CREATE INDEX "idx_quiz_attempts_completed" ON "public"."quiz_attempts" USING "btree" ("completed_at") WHERE ("completed_at" IS NOT NULL);
 
 
+CREATE INDEX IF NOT EXISTS "idx_videos_lesson" ON "public"."videos" USING "btree" ("lesson_id");
 
-CREATE INDEX "idx_quiz_attempts_quiz_id" ON "public"."quiz_attempts" USING "btree" ("quiz_id");
 
 
+CREATE INDEX IF NOT EXISTS "idx_videos_lesson_id" ON "public"."videos" USING "btree" ("lesson_id");
 
-CREATE INDEX "idx_quiz_attempts_quiz_user" ON "public"."quiz_attempts" USING "btree" ("quiz_id", "user_id");
 
 
+CREATE INDEX IF NOT EXISTS "idx_videos_provider" ON "public"."videos" USING "btree" ("provider_video_id") WHERE ("provider_video_id" IS NOT NULL);
 
-CREATE INDEX "idx_quiz_attempts_started" ON "public"."quiz_attempts" USING "btree" ("started_at" DESC);
 
 
-
-CREATE INDEX "idx_quiz_attempts_user_completed" ON "public"."quiz_attempts" USING "btree" ("user_id", "completed_at");
-
-
-
-CREATE INDEX "idx_quiz_attempts_user_id" ON "public"."quiz_attempts" USING "btree" ("user_id");
-
-
-
-CREATE INDEX "idx_quiz_attempts_user_quiz" ON "public"."quiz_attempts" USING "btree" ("user_id", "quiz_id", "completed_at" DESC);
-
-
-
-CREATE INDEX "idx_quizzes_lesson_id" ON "public"."quizzes" USING "btree" ("lesson_id");
-
-
-
-CREATE INDEX "idx_user_answers_attempt_id" ON "public"."user_answers" USING "btree" ("attempt_id");
-
-
-
-CREATE INDEX "idx_user_answers_attempt_question" ON "public"."user_answers" USING "btree" ("attempt_id", "question_id");
-
-
-
-CREATE INDEX "idx_user_answers_question_id" ON "public"."user_answers" USING "btree" ("question_id");
-
-
-
-CREATE INDEX "idx_video_questions_video_id" ON "public"."video_questions" USING "btree" ("video_id");
-
-
-
-CREATE INDEX "idx_video_questions_video_timestamp" ON "public"."video_questions" USING "btree" ("video_id", "timestamp_seconds");
-
-
-
-CREATE INDEX "idx_videos_lesson" ON "public"."videos" USING "btree" ("lesson_id");
-
-
-
-CREATE INDEX "idx_videos_lesson_id" ON "public"."videos" USING "btree" ("lesson_id");
-
-
-
-CREATE INDEX "idx_videos_provider" ON "public"."videos" USING "btree" ("provider_video_id") WHERE ("provider_video_id" IS NOT NULL);
-
-
-
-CREATE INDEX "test_activity_logs_created" ON "public"."activity_logs" USING "btree" ("created_at" DESC);
+CREATE INDEX IF NOT EXISTS "test_activity_logs_created" ON "public"."activity_logs" USING "btree" ("created_at" DESC);
 
 
 
@@ -1861,163 +2126,451 @@ CREATE OR REPLACE TRIGGER "validate_course_instructor_assignment_trigger" BEFORE
 
 
 
-ALTER TABLE ONLY "public"."activity_logs"
-    ADD CONSTRAINT "activity_logs_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+DO $$
+BEGIN
+  IF to_regclass('public.activity_logs') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'activity_logs_user_id_fkey' AND conrelid = 'public.activity_logs'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."activity_logs"
+        ADD CONSTRAINT "activity_logs_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id") ON DELETE CASCADE;
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.articles') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'articles_lesson_id_fkey' AND conrelid = 'public.articles'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."articles"
+        ADD CONSTRAINT "articles_lesson_id_fkey" FOREIGN KEY ("lesson_id") REFERENCES "public"."lessons"("id") ON DELETE CASCADE;
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.course_enrollments') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'course_enrollments_course_id_fkey' AND conrelid = 'public.course_enrollments'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."course_enrollments"
+        ADD CONSTRAINT "course_enrollments_course_id_fkey" FOREIGN KEY ("course_id") REFERENCES "public"."courses"("id") ON DELETE CASCADE;
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.course_enrollments') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'course_enrollments_user_id_fkey' AND conrelid = 'public.course_enrollments'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."course_enrollments"
+        ADD CONSTRAINT "course_enrollments_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.course_instructors') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'course_instructors_assigned_by_fkey' AND conrelid = 'public.course_instructors'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."course_instructors"
+        ADD CONSTRAINT "course_instructors_assigned_by_fkey" FOREIGN KEY ("assigned_by") REFERENCES "public"."profiles"("id");
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.course_instructors') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'course_instructors_course_id_fkey' AND conrelid = 'public.course_instructors'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."course_instructors"
+        ADD CONSTRAINT "course_instructors_course_id_fkey" FOREIGN KEY ("course_id") REFERENCES "public"."courses"("id") ON DELETE CASCADE;
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.course_instructors') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'course_instructors_instructor_id_fkey' AND conrelid = 'public.course_instructors'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."course_instructors"
+        ADD CONSTRAINT "course_instructors_instructor_id_fkey" FOREIGN KEY ("instructor_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.courses') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'courses_created_by_fkey' AND conrelid = 'public.courses'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."courses"
+        ADD CONSTRAINT "courses_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.lesson_progress') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'lesson_progress_lesson_id_fkey' AND conrelid = 'public.lesson_progress'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."lesson_progress"
+        ADD CONSTRAINT "lesson_progress_lesson_id_fkey" FOREIGN KEY ("lesson_id") REFERENCES "public"."lessons"("id") ON DELETE CASCADE;
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.lesson_progress') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'lesson_progress_user_id_fkey' AND conrelid = 'public.lesson_progress'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."lesson_progress"
+        ADD CONSTRAINT "lesson_progress_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.lessons') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'lessons_instructor_id_fkey' AND conrelid = 'public.lessons'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."lessons"
+        ADD CONSTRAINT "lessons_instructor_id_fkey" FOREIGN KEY ("instructor_id") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.lessons') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'lessons_module_id_fkey' AND conrelid = 'public.lessons'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."lessons"
+        ADD CONSTRAINT "lessons_module_id_fkey" FOREIGN KEY ("module_id") REFERENCES "public"."modules"("id") ON DELETE CASCADE;
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.modules') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'modules_course_id_fkey' AND conrelid = 'public.modules'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."modules"
+        ADD CONSTRAINT "modules_course_id_fkey" FOREIGN KEY ("course_id") REFERENCES "public"."courses"("id") ON DELETE CASCADE;
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.project_submissions') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'project_submissions_project_id_fkey' AND conrelid = 'public.project_submissions'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."project_submissions"
+        ADD CONSTRAINT "project_submissions_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE CASCADE;
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.project_submissions') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'project_submissions_reviewed_by_fkey' AND conrelid = 'public.project_submissions'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."project_submissions"
+        ADD CONSTRAINT "project_submissions_reviewed_by_fkey" FOREIGN KEY ("reviewed_by") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.project_submissions') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'project_submissions_user_id_fkey' AND conrelid = 'public.project_submissions'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."project_submissions"
+        ADD CONSTRAINT "project_submissions_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.projects') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'projects_lesson_id_fkey' AND conrelid = 'public.projects'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."projects"
+        ADD CONSTRAINT "projects_lesson_id_fkey" FOREIGN KEY ("lesson_id") REFERENCES "public"."lessons"("id") ON DELETE CASCADE;
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.question_options') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'question_options_question_id_fkey' AND conrelid = 'public.question_options'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."question_options"
+        ADD CONSTRAINT "question_options_question_id_fkey" FOREIGN KEY ("question_id") REFERENCES "public"."questions"("id") ON DELETE CASCADE;
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.questions') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'questions_quiz_id_fkey' AND conrelid = 'public.questions'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."questions"
+        ADD CONSTRAINT "questions_quiz_id_fkey" FOREIGN KEY ("quiz_id") REFERENCES "public"."quizzes"("id") ON DELETE CASCADE;
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.quiz_attempts') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'quiz_attempts_quiz_id_fkey' AND conrelid = 'public.quiz_attempts'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."quiz_attempts"
+        ADD CONSTRAINT "quiz_attempts_quiz_id_fkey" FOREIGN KEY ("quiz_id") REFERENCES "public"."quizzes"("id") ON DELETE CASCADE;
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.quiz_attempts') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'quiz_attempts_user_id_fkey' AND conrelid = 'public.quiz_attempts'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."quiz_attempts"
+        ADD CONSTRAINT "quiz_attempts_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.quizzes') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'quizzes_lesson_id_fkey' AND conrelid = 'public.quizzes'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."quizzes"
+        ADD CONSTRAINT "quizzes_lesson_id_fkey" FOREIGN KEY ("lesson_id") REFERENCES "public"."lessons"("id") ON DELETE CASCADE;
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.user_answers') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'user_answers_attempt_id_fkey' AND conrelid = 'public.user_answers'::regclass
+    ) THEN
+      ALTER TABLE ONLY "public"."user_answers"
+        ADD CONSTRAINT "user_answers_attempt_id_fkey" FOREIGN KEY ("attempt_id") REFERENCES "public"."quiz_attempts"("id") ON DELETE CASCADE;
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.user_answers') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'user_answers_question_id_fkey' AND conrelid = 'public.user_answers'::regclass
+    ) THEN
+      BEGIN
+        ALTER TABLE ONLY "public"."user_answers"
+          ADD CONSTRAINT "user_answers_question_id_fkey" FOREIGN KEY ("question_id") REFERENCES "public"."questions"("id") ON DELETE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN
+        NULL;
+      END;
+    END IF;
+  END IF;
+END
+$$;
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.user_answers') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'user_answers_selected_option_id_fkey' AND conrelid = 'public.user_answers'::regclass
+    ) THEN
+      BEGIN
+        ALTER TABLE ONLY "public"."user_answers"
+          ADD CONSTRAINT "user_answers_selected_option_id_fkey" FOREIGN KEY ("selected_option_id") REFERENCES "public"."question_options"("id") ON DELETE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN
+        NULL;
+      END;
+    END IF;
+  END IF;
+END
+$$;
+
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.video_questions') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'video_questions_video_id_fkey' AND conrelid = 'public.video_questions'::regclass
+    ) THEN
+      BEGIN
+        ALTER TABLE ONLY "public"."video_questions"
+          ADD CONSTRAINT "video_questions_video_id_fkey" FOREIGN KEY ("video_id") REFERENCES "public"."videos"("id") ON DELETE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN
+        NULL;
+      END;
+    END IF;
+  END IF;
+END
+$$;
+
+
+DO $$
+BEGIN
+  IF to_regclass('public.video_questions') IS NOT NULL THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_constraint WHERE conname = 'video_questions_video_id_fkey' AND conrelid = 'public.video_questions'::regclass
+    ) THEN
+      BEGIN
+        ALTER TABLE ONLY "public"."videos"
+          ADD CONSTRAINT "videos_lesson_id_fkey" FOREIGN KEY ("lesson_id") REFERENCES "public"."lessons"("id") ON DELETE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN
+        NULL;
+      END;
+    END IF;
+  END IF;
+END
+$$;
 
-
-
-ALTER TABLE ONLY "public"."articles"
-    ADD CONSTRAINT "articles_lesson_id_fkey" FOREIGN KEY ("lesson_id") REFERENCES "public"."lessons"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."course_enrollments"
-    ADD CONSTRAINT "course_enrollments_course_id_fkey" FOREIGN KEY ("course_id") REFERENCES "public"."courses"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."course_enrollments"
-    ADD CONSTRAINT "course_enrollments_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."course_instructors"
-    ADD CONSTRAINT "course_instructors_assigned_by_fkey" FOREIGN KEY ("assigned_by") REFERENCES "public"."profiles"("id");
-
-
-
-ALTER TABLE ONLY "public"."course_instructors"
-    ADD CONSTRAINT "course_instructors_course_id_fkey" FOREIGN KEY ("course_id") REFERENCES "public"."courses"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."course_instructors"
-    ADD CONSTRAINT "course_instructors_instructor_id_fkey" FOREIGN KEY ("instructor_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."courses"
-    ADD CONSTRAINT "courses_created_by_fkey" FOREIGN KEY ("created_by") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
-
-
-
-ALTER TABLE ONLY "public"."lesson_progress"
-    ADD CONSTRAINT "lesson_progress_lesson_id_fkey" FOREIGN KEY ("lesson_id") REFERENCES "public"."lessons"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."lesson_progress"
-    ADD CONSTRAINT "lesson_progress_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."lessons"
-    ADD CONSTRAINT "lessons_instructor_id_fkey" FOREIGN KEY ("instructor_id") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
-
-
-
-ALTER TABLE ONLY "public"."lessons"
-    ADD CONSTRAINT "lessons_module_id_fkey" FOREIGN KEY ("module_id") REFERENCES "public"."modules"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."modules"
-    ADD CONSTRAINT "modules_course_id_fkey" FOREIGN KEY ("course_id") REFERENCES "public"."courses"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."project_submissions"
-    ADD CONSTRAINT "project_submissions_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "public"."projects"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."project_submissions"
-    ADD CONSTRAINT "project_submissions_reviewed_by_fkey" FOREIGN KEY ("reviewed_by") REFERENCES "public"."profiles"("id") ON DELETE SET NULL;
-
-
-
-ALTER TABLE ONLY "public"."project_submissions"
-    ADD CONSTRAINT "project_submissions_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."projects"
-    ADD CONSTRAINT "projects_lesson_id_fkey" FOREIGN KEY ("lesson_id") REFERENCES "public"."lessons"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."question_options"
-    ADD CONSTRAINT "question_options_question_id_fkey" FOREIGN KEY ("question_id") REFERENCES "public"."questions"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."questions"
-    ADD CONSTRAINT "questions_quiz_id_fkey" FOREIGN KEY ("quiz_id") REFERENCES "public"."quizzes"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."quiz_attempts"
-    ADD CONSTRAINT "quiz_attempts_quiz_id_fkey" FOREIGN KEY ("quiz_id") REFERENCES "public"."quizzes"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."quiz_attempts"
-    ADD CONSTRAINT "quiz_attempts_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "public"."profiles"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."quizzes"
-    ADD CONSTRAINT "quizzes_lesson_id_fkey" FOREIGN KEY ("lesson_id") REFERENCES "public"."lessons"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."user_answers"
-    ADD CONSTRAINT "user_answers_attempt_id_fkey" FOREIGN KEY ("attempt_id") REFERENCES "public"."quiz_attempts"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."user_answers"
-    ADD CONSTRAINT "user_answers_question_id_fkey" FOREIGN KEY ("question_id") REFERENCES "public"."questions"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."user_answers"
-    ADD CONSTRAINT "user_answers_selected_option_id_fkey" FOREIGN KEY ("selected_option_id") REFERENCES "public"."question_options"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."video_questions"
-    ADD CONSTRAINT "video_questions_video_id_fkey" FOREIGN KEY ("video_id") REFERENCES "public"."videos"("id") ON DELETE CASCADE;
-
-
-
-ALTER TABLE ONLY "public"."videos"
-    ADD CONSTRAINT "videos_lesson_id_fkey" FOREIGN KEY ("lesson_id") REFERENCES "public"."lessons"("id") ON DELETE CASCADE;
 
 
 
 ALTER TABLE "public"."activity_logs" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "activity_logs_select" ON "public"."activity_logs";
 CREATE POLICY "activity_logs_select" ON "public"."activity_logs" FOR SELECT TO "authenticated" USING ((("user_id" = "auth"."uid"()) OR (EXISTS ( SELECT 1
    FROM "public"."profiles"
   WHERE (("profiles"."id" = "auth"."uid"()) AND ("profiles"."role" = 'admin'::"public"."user_role"))))));
 
 
 
+DROP POLICY IF EXISTS "activity_logs_select_policy" ON "public"."activity_logs";
 CREATE POLICY "activity_logs_select_policy" ON "public"."activity_logs" FOR SELECT USING ((("user_id" = ( SELECT "auth"."uid"() AS "uid")) OR (EXISTS ( SELECT 1
    FROM "public"."profiles"
   WHERE (("profiles"."id" = ( SELECT "auth"."uid"() AS "uid")) AND ("profiles"."role" = 'admin'::"public"."user_role"))))));
 
 
 
+DROP POLICY IF EXISTS "activity_logs_service_role" ON "public"."activity_logs";
 CREATE POLICY "activity_logs_service_role" ON "public"."activity_logs" TO "service_role" USING (true) WITH CHECK (true);
 
 
 
 ALTER TABLE "public"."articles" ENABLE ROW LEVEL SECURITY;
 
-
+DROP POLICY IF EXISTS "articles_comprehensive" ON "public"."articles";
 CREATE POLICY "articles_comprehensive" ON "public"."articles" USING (("public"."is_admin"() OR ("public"."is_instructor"() AND (EXISTS ( SELECT 1
    FROM "public"."lessons" "l"
   WHERE (("l"."id" = "articles"."lesson_id") AND "public"."is_instructor_of_course"(( SELECT "modules"."course_id"
@@ -2040,6 +2593,7 @@ CREATE POLICY "articles_comprehensive" ON "public"."articles" USING (("public"."
 ALTER TABLE "public"."course_enrollments" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "course_enrollments_comprehensive" ON "public"."course_enrollments";
 CREATE POLICY "course_enrollments_comprehensive" ON "public"."course_enrollments" USING (("public"."is_admin"() OR ("user_id" = ( SELECT "auth"."uid"() AS "uid")) OR "public"."is_instructor_of_course"("course_id"))) WITH CHECK (("public"."is_admin"() OR ("user_id" = ( SELECT "auth"."uid"() AS "uid")) OR "public"."is_instructor_of_course"("course_id")));
 
 
@@ -2047,13 +2601,15 @@ CREATE POLICY "course_enrollments_comprehensive" ON "public"."course_enrollments
 ALTER TABLE "public"."course_instructors" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "course_instructors_comprehensive" ON "public"."course_instructors" USING (("public"."is_admin"() OR ("instructor_id" = ( SELECT "auth"."uid"() AS "uid")))) WITH CHECK (("public"."is_admin"() OR ("instructor_id" = ( SELECT "auth"."uid"() AS "uid"))));
+DROP POLICY IF EXISTS "course_instructors_comprehensive" ON "public"."course_instructors";
+CREATE POLICY "course_instructors_comprehensive" ON "public"."course_instructors" USING (("public"."is_admin"() OR ("instructor_id" = ( SELECT "auth"."uid"() AS "uid")) )) WITH CHECK (("public"."is_admin"() OR ("instructor_id" = ( SELECT "auth"."uid"() AS "uid"))));
 
 
 
 ALTER TABLE "public"."courses" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "courses_comprehensive" ON "public"."courses";
 CREATE POLICY "courses_comprehensive" ON "public"."courses" USING (("public"."is_admin"() OR "public"."is_instructor_of_course"("id") OR (("status" = 'published'::"public"."course_status") AND (( SELECT "auth"."role"() AS "role") = 'anon'::"text")) OR "public"."is_enrolled_in_course"("id"))) WITH CHECK (("public"."is_admin"() OR "public"."is_instructor_of_course"("id")));
 
 
@@ -2061,48 +2617,80 @@ CREATE POLICY "courses_comprehensive" ON "public"."courses" USING (("public"."is
 ALTER TABLE "public"."lesson_progress" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "lesson_progress_modify" ON "public"."lesson_progress";
 CREATE POLICY "lesson_progress_modify" ON "public"."lesson_progress" TO "authenticated" USING ((("user_id" = "auth"."uid"()) OR (EXISTS ( SELECT 1
-   FROM "public"."profiles"
+  FROM "public"."profiles"
   WHERE (("profiles"."id" = "auth"."uid"()) AND ("profiles"."role" = 'admin'::"public"."user_role")))))) WITH CHECK ((("user_id" = "auth"."uid"()) OR (EXISTS ( SELECT 1
-   FROM "public"."profiles"
+  FROM "public"."profiles"
   WHERE (("profiles"."id" = "auth"."uid"()) AND ("profiles"."role" = 'admin'::"public"."user_role"))))));
 
 
 
-CREATE POLICY "lesson_progress_select" ON "public"."lesson_progress" FOR SELECT TO "authenticated" USING ((("user_id" = "auth"."uid"()) OR (EXISTS ( SELECT 1
-   FROM "public"."profiles"
-  WHERE (("profiles"."id" = "auth"."uid"()) AND ("profiles"."role" = ANY (ARRAY['admin'::"public"."user_role", 'instructor'::"public"."user_role"])))))));
+DROP POLICY IF EXISTS "lesson_progress_select" ON "public"."lesson_progress";
+CREATE POLICY "lesson_progress_select" ON "public"."lesson_progress"
+  FOR SELECT TO "authenticated"
+  USING (
+    ("user_id" = "auth"."uid"())
+    OR EXISTS (
+      SELECT 1
+      FROM "public"."profiles"
+      WHERE ("profiles"."id" = "auth"."uid"())
+        AND ("profiles"."role" = ANY (ARRAY['admin'::"public"."user_role", 'instructor'::"public"."user_role"]))
+    )
+  );
 
 
 
 ALTER TABLE "public"."lessons" ENABLE ROW LEVEL SECURITY;
 
 
-CREATE POLICY "lessons_comprehensive" ON "public"."lessons" USING (("public"."is_admin"() OR "public"."is_instructor_of_course"(( SELECT "modules"."course_id"
-   FROM "public"."modules"
-  WHERE ("modules"."id" = "lessons"."module_id"))) OR ((( SELECT "auth"."role"() AS "role") = 'anon'::"text") AND (EXISTS ( SELECT 1
-   FROM ("public"."modules" "m"
-     JOIN "public"."courses" "c" ON (("c"."id" = "m"."course_id")))
-  WHERE (("m"."id" = "lessons"."module_id") AND ("c"."status" = 'published'::"public"."course_status"))))) OR ((( SELECT "auth"."role"() AS "role") = 'authenticated'::"text") AND "public"."is_student"() AND "public"."is_enrolled_in_course"(( SELECT "modules"."course_id"
-   FROM "public"."modules"
-  WHERE ("modules"."id" = "lessons"."module_id")))))) WITH CHECK (("public"."is_admin"() OR "public"."is_instructor_of_course"(( SELECT "modules"."course_id"
-   FROM "public"."modules"
-  WHERE ("modules"."id" = "lessons"."module_id")))));
+DROP POLICY IF EXISTS "lessons_comprehensive" ON "public"."lessons";
+CREATE POLICY "lessons_comprehensive" ON "public"."lessons"
+  USING (
+    "public"."is_admin"()
+    OR "public"."is_instructor_of_course"(
+      (SELECT "modules"."course_id" FROM "public"."modules" WHERE "modules"."id" = "lessons"."module_id")
+    )
+    OR (
+      (SELECT "auth"."role"() AS "role") = 'anon'::"text"
+      AND EXISTS (
+        SELECT 1
+        FROM ("public"."modules" "m"
+          JOIN "public"."courses" "c" ON ("c"."id" = "m"."course_id") )
+        WHERE ("m"."id" = "lessons"."module_id") AND ("c"."status" = 'published'::"public"."course_status")
+      )
+    )
+    OR (
+      (SELECT "auth"."role"() AS "role") = 'authenticated'::"text"
+      AND "public"."is_student"()
+      AND "public"."is_enrolled_in_course"(
+        (SELECT "modules"."course_id" FROM "public"."modules" WHERE "modules"."id" = "lessons"."module_id")
+      )
+    )
+  )
+  WITH CHECK (
+    "public"."is_admin"()
+    OR "public"."is_instructor_of_course"(
+      (SELECT "modules"."course_id" FROM "public"."modules" WHERE "modules"."id" = "lessons"."module_id")
+    )
+  );
 
 
 
 ALTER TABLE "public"."modules" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "modules_comprehensive" ON "public"."modules";
 CREATE POLICY "modules_comprehensive" ON "public"."modules" USING (("public"."is_admin"() OR "public"."is_instructor_of_course"("course_id") OR ((( SELECT "auth"."role"() AS "role") = 'anon'::"text") AND (EXISTS ( SELECT 1
-   FROM "public"."courses" "c"
-  WHERE (("c"."id" = "modules"."course_id") AND ("c"."status" = 'published'::"public"."course_status"))))) OR ((( SELECT "auth"."role"() AS "role") = 'authenticated'::"text") AND "public"."is_student"() AND "public"."is_enrolled_in_course"("course_id")))) WITH CHECK (("public"."is_admin"() OR "public"."is_instructor_of_course"("course_id")));
+  FROM "public"."courses" "c"
+  WHERE (("c"."id" = "modules"."course_id") AND ("c"."status" = 'published'::"public"."course_status"))))) OR ((( SELECT "auth"."role"() AS "role") = 'authenticated'::"text") AND "public"."is_student"() AND "public"."is_enrolled_in_course"("course_id")) )) WITH CHECK (("public"."is_admin"() OR "public"."is_instructor_of_course"("course_id")));
 
 
 
 ALTER TABLE "public"."profiles" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "profiles_comprehensive" ON "public"."profiles";
 CREATE POLICY "profiles_comprehensive" ON "public"."profiles" USING (("public"."is_admin"() OR ("id" = ( SELECT "auth"."uid"() AS "uid")))) WITH CHECK (("public"."is_admin"() OR ("id" = ( SELECT "auth"."uid"() AS "uid"))));
 
 
@@ -2110,36 +2698,40 @@ CREATE POLICY "profiles_comprehensive" ON "public"."profiles" USING (("public"."
 ALTER TABLE "public"."project_submissions" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "project_submissions_delete_policy" ON "public"."project_submissions";
 CREATE POLICY "project_submissions_delete_policy" ON "public"."project_submissions" FOR DELETE USING (((("user_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("status" <> ALL (ARRAY['approved'::"public"."submission_status", 'rejected'::"public"."submission_status"]))) OR (EXISTS ( SELECT 1
-   FROM "public"."profiles"
+  FROM "public"."profiles"
   WHERE (("profiles"."id" = ( SELECT "auth"."uid"() AS "uid")) AND ("profiles"."role" = 'admin'::"public"."user_role"))))));
 
 
 
+DROP POLICY IF EXISTS "project_submissions_insert_policy" ON "public"."project_submissions";
 CREATE POLICY "project_submissions_insert_policy" ON "public"."project_submissions" FOR INSERT WITH CHECK ((("user_id" = ( SELECT "auth"."uid"() AS "uid")) OR (EXISTS ( SELECT 1
-   FROM "public"."profiles"
+  FROM "public"."profiles"
   WHERE (("profiles"."id" = ( SELECT "auth"."uid"() AS "uid")) AND ("profiles"."role" = 'admin'::"public"."user_role"))))));
 
 
 
+DROP POLICY IF EXISTS "project_submissions_select_policy" ON "public"."project_submissions";
 CREATE POLICY "project_submissions_select_policy" ON "public"."project_submissions" FOR SELECT USING ((("user_id" = ( SELECT "auth"."uid"() AS "uid")) OR (EXISTS ( SELECT 1
-   FROM ((("public"."projects" "p"
-     JOIN "public"."lessons" "l" ON (("p"."lesson_id" = "l"."id")))
-     JOIN "public"."modules" "m" ON (("l"."module_id" = "m"."id")))
-     JOIN "public"."course_instructors" "ci" ON (("m"."course_id" = "ci"."course_id")))
+  FROM ((("public"."projects" "p"
+    JOIN "public"."lessons" "l" ON (("p"."lesson_id" = "l"."id")))
+    JOIN "public"."modules" "m" ON (("l"."module_id" = "m"."id")))
+    JOIN "public"."course_instructors" "ci" ON (("m"."course_id" = "ci"."course_id")))
   WHERE (("p"."id" = "project_submissions"."project_id") AND ("ci"."instructor_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("ci"."is_active" = true)))) OR (EXISTS ( SELECT 1
-   FROM "public"."profiles"
+  FROM "public"."profiles"
   WHERE (("profiles"."id" = ( SELECT "auth"."uid"() AS "uid")) AND ("profiles"."role" = 'admin'::"public"."user_role"))))));
 
 
 
+DROP POLICY IF EXISTS "project_submissions_update_policy" ON "public"."project_submissions";
 CREATE POLICY "project_submissions_update_policy" ON "public"."project_submissions" FOR UPDATE USING (((("user_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("status" <> ALL (ARRAY['approved'::"public"."submission_status", 'rejected'::"public"."submission_status"]))) OR (EXISTS ( SELECT 1
-   FROM ((("public"."projects" "p"
-     JOIN "public"."lessons" "l" ON (("p"."lesson_id" = "l"."id")))
-     JOIN "public"."modules" "m" ON (("l"."module_id" = "m"."id")))
-     JOIN "public"."course_instructors" "ci" ON (("m"."course_id" = "ci"."course_id")))
+  FROM ((("public"."projects" "p"
+    JOIN "public"."lessons" "l" ON (("p"."lesson_id" = "l"."id")))
+    JOIN "public"."modules" "m" ON (("l"."module_id" = "m"."id")))
+    JOIN "public"."course_instructors" "ci" ON (("m"."course_id" = "ci"."course_id")))
   WHERE (("p"."id" = "project_submissions"."project_id") AND ("ci"."instructor_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("ci"."is_active" = true)))) OR (EXISTS ( SELECT 1
-   FROM "public"."profiles"
+  FROM "public"."profiles"
   WHERE (("profiles"."id" = ( SELECT "auth"."uid"() AS "uid")) AND ("profiles"."role" = 'admin'::"public"."user_role"))))));
 
 
@@ -2147,6 +2739,7 @@ CREATE POLICY "project_submissions_update_policy" ON "public"."project_submissio
 ALTER TABLE "public"."projects" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "projects_comprehensive" ON "public"."projects";
 CREATE POLICY "projects_comprehensive" ON "public"."projects" USING (("public"."is_admin"() OR ("public"."is_instructor"() AND (EXISTS ( SELECT 1
    FROM "public"."lessons" "l"
   WHERE (("l"."id" = "projects"."lesson_id") AND "public"."is_instructor_of_course"(( SELECT "modules"."course_id"
@@ -2169,6 +2762,7 @@ CREATE POLICY "projects_comprehensive" ON "public"."projects" USING (("public"."
 ALTER TABLE "public"."question_options" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "question_options_comprehensive" ON "public"."question_options";
 CREATE POLICY "question_options_comprehensive" ON "public"."question_options" USING (("public"."is_admin"() OR ("public"."is_instructor"() AND (EXISTS ( SELECT 1
    FROM (("public"."questions" "q"
      JOIN "public"."quizzes" "qz" ON (("qz"."id" = "q"."quiz_id")))
@@ -2188,6 +2782,7 @@ CREATE POLICY "question_options_comprehensive" ON "public"."question_options" US
 ALTER TABLE "public"."questions" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "questions_comprehensive" ON "public"."questions";
 CREATE POLICY "questions_comprehensive" ON "public"."questions" USING (("public"."is_admin"() OR ("public"."is_instructor"() AND (EXISTS ( SELECT 1
    FROM ("public"."quizzes" "q"
      JOIN "public"."lessons" "l" ON (("l"."id" = "q"."lesson_id")))
@@ -2205,12 +2800,13 @@ CREATE POLICY "questions_comprehensive" ON "public"."questions" USING (("public"
 ALTER TABLE "public"."quiz_attempts" ENABLE ROW LEVEL SECURITY;
 
 
+DROP POLICY IF EXISTS "quiz_attempts_insert_policy" ON "public"."quiz_attempts";
 CREATE POLICY "quiz_attempts_insert_policy" ON "public"."quiz_attempts" FOR INSERT WITH CHECK ((("user_id" = ( SELECT "auth"."uid"() AS "uid")) OR (EXISTS ( SELECT 1
    FROM "public"."profiles"
   WHERE (("profiles"."id" = ( SELECT "auth"."uid"() AS "uid")) AND ("profiles"."role" = 'admin'::"public"."user_role"))))));
 
 
-
+DROP POLICY IF EXISTS "quiz_attempts_select_policy" ON "public"."quiz_attempts";
 CREATE POLICY "quiz_attempts_select_policy" ON "public"."quiz_attempts" FOR SELECT USING ((("user_id" = ( SELECT "auth"."uid"() AS "uid")) OR (EXISTS ( SELECT 1
    FROM ((("public"."quizzes" "q"
      JOIN "public"."lessons" "l" ON (("q"."lesson_id" = "l"."id")))
@@ -2221,16 +2817,17 @@ CREATE POLICY "quiz_attempts_select_policy" ON "public"."quiz_attempts" FOR SELE
   WHERE (("profiles"."id" = ( SELECT "auth"."uid"() AS "uid")) AND ("profiles"."role" = 'admin'::"public"."user_role"))))));
 
 
-
+DROP POLICY IF EXISTS "quiz_attempts_select_policy" ON "public"."quiz_attempts";
+DROP POLICY IF EXISTS "quiz_attempts_update_policy" ON "public"."quiz_attempts";
 CREATE POLICY "quiz_attempts_update_policy" ON "public"."quiz_attempts" FOR UPDATE USING (((("user_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("completed_at" IS NULL)) OR (EXISTS ( SELECT 1
-   FROM "public"."profiles"
+  FROM "public"."profiles"
   WHERE (("profiles"."id" = ( SELECT "auth"."uid"() AS "uid")) AND ("profiles"."role" = 'admin'::"public"."user_role"))))));
 
 
 
 ALTER TABLE "public"."quizzes" ENABLE ROW LEVEL SECURITY;
 
-
+DROP POLICY IF EXISTS "quizzes_comprehensive" ON "public"."quizzes";
 CREATE POLICY "quizzes_comprehensive" ON "public"."quizzes" USING (("public"."is_admin"() OR ("public"."is_instructor"() AND (EXISTS ( SELECT 1
    FROM "public"."lessons" "l"
   WHERE (("l"."id" = "quizzes"."lesson_id") AND "public"."is_instructor_of_course"(( SELECT "modules"."course_id"
@@ -2252,7 +2849,7 @@ CREATE POLICY "quizzes_comprehensive" ON "public"."quizzes" USING (("public"."is
 
 ALTER TABLE "public"."user_answers" ENABLE ROW LEVEL SECURITY;
 
-
+DROP POLICY IF EXISTS "user_answers_insert_policy" ON "public"."user_answers";
 CREATE POLICY "user_answers_insert_policy" ON "public"."user_answers" FOR INSERT WITH CHECK (((EXISTS ( SELECT 1
    FROM "public"."quiz_attempts" "qa"
   WHERE (("qa"."id" = "user_answers"."attempt_id") AND ("qa"."user_id" = ( SELECT "auth"."uid"() AS "uid"))))) OR (EXISTS ( SELECT 1
@@ -2260,7 +2857,7 @@ CREATE POLICY "user_answers_insert_policy" ON "public"."user_answers" FOR INSERT
   WHERE (("profiles"."id" = ( SELECT "auth"."uid"() AS "uid")) AND ("profiles"."role" = 'admin'::"public"."user_role"))))));
 
 
-
+DROP POLICY IF EXISTS "user_answers_select_policy" ON "public"."user_answers";
 CREATE POLICY "user_answers_select_policy" ON "public"."user_answers" FOR SELECT USING (((EXISTS ( SELECT 1
    FROM "public"."quiz_attempts" "qa"
   WHERE (("qa"."id" = "user_answers"."attempt_id") AND ("qa"."user_id" = ( SELECT "auth"."uid"() AS "uid"))))) OR (EXISTS ( SELECT 1
@@ -2277,14 +2874,14 @@ CREATE POLICY "user_answers_select_policy" ON "public"."user_answers" FOR SELECT
 
 ALTER TABLE "public"."video_questions" ENABLE ROW LEVEL SECURITY;
 
-
+DROP POLICY IF EXISTS "video_questions_comprehensive" ON "public"."video_questions";
 CREATE POLICY "video_questions_comprehensive" ON "public"."video_questions" USING (("public"."is_admin"() OR "public"."is_instructor"() OR (( SELECT "auth"."role"() AS "role") = 'authenticated'::"text"))) WITH CHECK (("public"."is_admin"() OR "public"."is_instructor"()));
 
 
 
 ALTER TABLE "public"."videos" ENABLE ROW LEVEL SECURITY;
 
-
+DROP POLICY IF EXISTS "videos_comprehensive" ON "public"."videos";
 CREATE POLICY "videos_comprehensive" ON "public"."videos" USING (("public"."is_admin"() OR ("public"."is_instructor"() AND (EXISTS ( SELECT 1
    FROM "public"."lessons" "l"
   WHERE (("l"."id" = "videos"."lesson_id") AND "public"."is_instructor_of_course"(( SELECT "modules"."course_id"
@@ -2307,104 +2904,171 @@ CREATE POLICY "videos_comprehensive" ON "public"."videos" USING (("public"."is_a
 GRANT USAGE ON SCHEMA "public" TO "postgres";
 GRANT USAGE ON SCHEMA "public" TO "anon";
 GRANT USAGE ON SCHEMA "public" TO "authenticated";
-GRANT USAGE ON SCHEMA "public" TO "service_role";
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'course_status') THEN
+    CREATE TYPE "public"."course_status" AS ENUM (
+      'draft',
+      'published',
+      'archived'
+    );
+  END IF;
+END
+$$;
 
+ALTER TYPE "public"."course_status" OWNER TO "postgres";
 
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'enrollment_role') THEN
+    CREATE TYPE "public"."enrollment_role" AS ENUM (
+      'student',
+      'instructor',
+      'admin'
+    );
+  END IF;
+END
+$$;
 
-GRANT ALL ON FUNCTION "public"."assign_instructor_to_course"("p_course_id" "uuid", "p_instructor_id" "uuid", "p_assigned_by" "uuid", "p_role" "text") TO "anon";
-GRANT ALL ON FUNCTION "public"."assign_instructor_to_course"("p_course_id" "uuid", "p_instructor_id" "uuid", "p_assigned_by" "uuid", "p_role" "text") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."assign_instructor_to_course"("p_course_id" "uuid", "p_instructor_id" "uuid", "p_assigned_by" "uuid", "p_role" "text") TO "service_role";
+ALTER TYPE "public"."enrollment_role" OWNER TO "postgres";
 
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'lesson_type') THEN
+    CREATE TYPE "public"."lesson_type" AS ENUM (
+      'article',
+      'video',
+      'quiz',
+      'project',
+      'other'
+    );
+  END IF;
+END
+$$;
 
+ALTER TYPE "public"."lesson_type" OWNER TO "postgres";
 
-GRANT ALL ON FUNCTION "public"."calculate_quiz_score"("p_attempt_id" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."calculate_quiz_score"("p_attempt_id" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."calculate_quiz_score"("p_attempt_id" "uuid") TO "service_role";
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'node_status') THEN
+    CREATE TYPE "public"."node_status" AS ENUM (
+      'visible',
+      'hidden'
+    );
+  END IF;
+END
+$$;
 
+ALTER TYPE "public"."node_status" OWNER TO "postgres";
 
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'progress_status') THEN
+    CREATE TYPE "public"."progress_status" AS ENUM (
+      'not_started',
+      'in_progress',
+      'completed'
+    );
+  END IF;
+END
+$$;
 
-GRANT ALL ON FUNCTION "public"."can_access_course_content"("course_uuid" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."can_access_course_content"("course_uuid" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."can_access_course_content"("course_uuid" "uuid") TO "service_role";
+ALTER TYPE "public"."progress_status" OWNER TO "postgres";
 
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'quiz_question_type') THEN
+    CREATE TYPE "public"."quiz_question_type" AS ENUM (
+      'multiple_choice',
+      'short_answer',
+      'true_false'
+    );
+  END IF;
+END
+$$;
 
+ALTER TYPE "public"."quiz_question_type" OWNER TO "postgres";
 
-GRANT ALL ON FUNCTION "public"."can_access_next_lesson"("p_current_lesson_id" "uuid", "p_user_id" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."can_access_next_lesson"("p_current_lesson_id" "uuid", "p_user_id" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."can_access_next_lesson"("p_current_lesson_id" "uuid", "p_user_id" "uuid") TO "service_role";
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'submission_platform') THEN
+    CREATE TYPE "public"."submission_platform" AS ENUM (
+      'github',
+      'google_drive',
+      'onedrive',
+      'dropbox',
+      'gitlab',
+      'bitbucket',
+      'other'
+    );
+  END IF;
+END
+$$;
 
+ALTER TYPE "public"."submission_platform" OWNER TO "postgres";
 
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'submission_status') THEN
+    CREATE TYPE "public"."submission_status" AS ENUM (
+      'submitted',
+      'pending_review',
+      'reviewed',
+      'approved',
+      'rejected',
+      'resubmission_required'
+    );
+  END IF;
+END
+$$;
 
-GRANT ALL ON FUNCTION "public"."can_complete_lesson"("p_lesson_id" "uuid", "p_user_id" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."can_complete_lesson"("p_lesson_id" "uuid", "p_user_id" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."can_complete_lesson"("p_lesson_id" "uuid", "p_user_id" "uuid") TO "service_role";
+ALTER TYPE "public"."submission_status" OWNER TO "postgres";
 
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
+    CREATE TYPE "public"."user_role" AS ENUM (
+      'student',
+      'instructor',
+      'admin'
+    );
+  END IF;
+END
+$$;
 
+ALTER TYPE "public"."user_role" OWNER TO "postgres";
+ALTER TYPE "public"."submission_platform" OWNER TO "postgres";
 
-GRANT ALL ON FUNCTION "public"."can_edit_course"("course_uuid" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."can_edit_course"("course_uuid" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."can_edit_course"("course_uuid" "uuid") TO "service_role";
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'submission_status') THEN
+    CREATE TYPE "public"."submission_status" AS ENUM (
+      'submitted',
+      'pending_review',
+      'reviewed',
+      'approved',
+      'rejected',
+      'resubmission_required'
+    );
+  END IF;
+END
+$$;
 
+ALTER TYPE "public"."submission_status" OWNER TO "postgres";
 
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
+    CREATE TYPE "public"."user_role" AS ENUM (
+      'student',
+      'instructor',
+      'admin'
+    );
+  END IF;
+END
+$$;
 
-GRANT ALL ON FUNCTION "public"."can_enroll_in_course"("course_uuid" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."can_enroll_in_course"("course_uuid" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."can_enroll_in_course"("course_uuid" "uuid") TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."can_manage_courses"() TO "anon";
-GRANT ALL ON FUNCTION "public"."can_manage_courses"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."can_manage_courses"() TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."cleanup_old_activity_logs"() TO "anon";
-GRANT ALL ON FUNCTION "public"."cleanup_old_activity_logs"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."cleanup_old_activity_logs"() TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."get_best_quiz_attempt"("p_quiz_id" "uuid", "p_user_id" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."get_best_quiz_attempt"("p_quiz_id" "uuid", "p_user_id" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_best_quiz_attempt"("p_quiz_id" "uuid", "p_user_id" "uuid") TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."get_course_analytics"() TO "anon";
-GRANT ALL ON FUNCTION "public"."get_course_analytics"() TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_course_analytics"() TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."get_course_id_from_question"("question_id" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."get_course_id_from_question"("question_id" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_course_id_from_question"("question_id" "uuid") TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."get_course_progress"("course_slug" "text", "user_uuid" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."get_course_progress"("course_slug" "text", "user_uuid" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_course_progress"("course_slug" "text", "user_uuid" "uuid") TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."get_courses_with_stats"("user_uuid" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."get_courses_with_stats"("user_uuid" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_courses_with_stats"("user_uuid" "uuid") TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."get_enrollment_status"("course_uuid" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."get_enrollment_status"("course_uuid" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_enrollment_status"("course_uuid" "uuid") TO "service_role";
-
-
-
-GRANT ALL ON FUNCTION "public"."get_latest_quiz_attempt"("p_quiz_id" "uuid", "p_user_id" "uuid") TO "anon";
-GRANT ALL ON FUNCTION "public"."get_latest_quiz_attempt"("p_quiz_id" "uuid", "p_user_id" "uuid") TO "authenticated";
-GRANT ALL ON FUNCTION "public"."get_latest_quiz_attempt"("p_quiz_id" "uuid", "p_user_id" "uuid") TO "service_role";
-
+ALTER TYPE "public"."user_role" OWNER TO "postgres";
 
 
 GRANT ALL ON FUNCTION "public"."get_project_submission_stats"("p_project_id" "uuid") TO "anon";
