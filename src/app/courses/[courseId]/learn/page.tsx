@@ -335,11 +335,12 @@ function ArticleRenderer({ content }: { content?: string | null }) {
   );
 }
 
-function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange }: { 
+function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, isLessonComplete }: { 
   lesson: Lesson;
   onComplete: () => Promise<void>;
   onNavigateNext: () => void;
   onQuizActiveChange?: (isActive: boolean) => void;
+  isLessonComplete: boolean;
 }) {
   const router = useRouter();
   const [quiz, setQuiz] = useState<Quiz | null>(null);
@@ -473,8 +474,13 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange }
             if (latest) {
               setLatestAttempt(latest);
               
-              // If there's a completed attempt, show results
-              if (latest.completed_at) {
+              // Check if user has actually answered any questions
+              const hasAnswers = latest.user_answers && 
+                                Array.isArray(latest.user_answers) && 
+                                latest.user_answers.length > 0;
+              
+              // Only show results if completed AND has answers (actually took the quiz)
+              if (latest.completed_at && hasAnswers) {
                 setScore(latest.score || 0);
                 setEarnedPoints(latest.earned_points || 0);
                 setTotalPoints(latest.total_points || 0);
@@ -490,8 +496,8 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange }
                   });
                 }
                 setUserAnswers(answersMap);
-              } else {
-                // Resume incomplete attempt
+              } else if (!latest.completed_at && hasAnswers) {
+                // Resume incomplete attempt that has some answers
                 setCurrentAttemptId(latest.id);
                 setQuizStarted(true);
                 
@@ -516,6 +522,7 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange }
                   setTimeRemaining(remaining);
                 }
               }
+              // If completed but no answers, or if no attempt at all, show start screen (default state)
             }
           }
         } else {
@@ -567,10 +574,17 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange }
         setTotalPoints(total);
         setShowResults(true);
         
-        // Auto-complete lesson if passed
+        // Auto-complete lesson if passed AND not already completed
+        // This prevents duplicate lesson_progress records when retaking quizzes
         if (passed) {
           try {
-            await onComplete();
+            // Check if lesson is already marked as complete
+            if (!isLessonComplete) {
+              console.log('✅ Quiz passed - marking lesson as complete for the first time');
+              await onComplete();
+            } else {
+              console.log('ℹ️ Quiz passed - lesson already marked complete, skipping duplicate progress record');
+            }
           } catch (error) {
             console.error('Error auto-completing lesson:', error);
           }
@@ -1069,20 +1083,6 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange }
   return (
     <div className="max-w-4xl mx-auto select-none" style={{ userSelect: 'none', WebkitUserSelect: 'none', MozUserSelect: 'none', msUserSelect: 'none' }}>
       <div className="space-y-6">
-        {/* Warning banner for active quiz */}
-        <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4">
-          <div className="flex items-center gap-3">
-            <svg className="w-6 h-6 text-red-600 flex-shrink-0 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
-              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-            </svg>
-            <div className="flex-1">
-              <p className="font-bold text-red-900 text-sm">🚫 Quiz in Progress - Navigation Blocked</p>
-              <p className="text-red-800 text-xs mt-1">
-                Do not use the back button or close this page. Copying, pasting, and right-click are disabled.
-              </p>
-            </div>
-          </div>
-        </div>
 
         <div className="text-center mb-6">
           <h3 className="text-2xl font-bold mb-2">{quiz.title}</h3>
@@ -1366,6 +1366,12 @@ export default function CourseLearnPage() {
         router.push('/auth/login?redirect=/courses/' + courseId + '/learn');
         return;
       }
+      
+      if (!response.ok) {
+        console.error('Failed to fetch course data:', response.status);
+        return;
+      }
+      
       const data = await response.json();
       
       if (!data.isEnrolled) {
@@ -1406,6 +1412,19 @@ export default function CourseLearnPage() {
         const response = await fetch(`/api/lessons/${lesson.id}/progress`, {
           cache: 'no-store' // Ensure we get fresh data, not cached
         });
+        
+        // Check if response is ok and is JSON before parsing
+        if (!response.ok) {
+          console.warn(`Failed to fetch progress for lesson ${lesson.title}: ${response.status}`);
+          continue;
+        }
+        
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+          console.warn(`Invalid content type for lesson ${lesson.title}: ${contentType}`);
+          continue;
+        }
+        
         const data = await response.json();
         if (data.completed) {
           completed.add(lesson.id);
@@ -1444,22 +1463,45 @@ export default function CourseLearnPage() {
   const handleMarkComplete = async () => {
     if (!currentLesson) return;
     
+    // Check if lesson is already completed to prevent duplicate API calls
+    if (completedLessons.has(currentLesson.id)) {
+      console.log('ℹ️ Lesson already marked complete, skipping duplicate progress record');
+      return;
+    }
+    
     setMarkingComplete(true);
     try {
       const response = await fetch(`/api/lessons/${currentLesson.id}/progress`, {
         method: 'POST',
       });
       
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Failed to mark lesson complete:', response.status, errorText);
+        alert('Failed to mark lesson as complete. Please try again.');
+        return;
+      }
+      
       const data = await response.json();
       
       if (response.ok) {
-        setCompletedLessons(prev => new Set([...prev, currentLesson.id]));
+        // Add lesson to completed set
+        const newCompletedLessons = new Set([...completedLessons, currentLesson.id]);
+        setCompletedLessons(newCompletedLessons);
         
-        // Update progress percentage
+        console.log('✅ Lesson marked as complete:', currentLesson.title);
+        
+        // Update progress percentage using the new count
         if (courseData) {
           const totalLessons = courseData.modules.reduce((acc, m) => acc + m.lessons.length, 0);
-          const newCompletedCount = completedLessons.size + 1; // +1 for the newly completed lesson
+          const newCompletedCount = newCompletedLessons.size; // Use the new set size
           const newPercentage = Math.round((newCompletedCount / totalLessons) * 100);
+          
+          console.log('📊 Progress updated:', {
+            completed: newCompletedCount,
+            total: totalLessons,
+            percentage: newPercentage
+          });
           
           setCourseData({
             ...courseData,
@@ -1498,16 +1540,25 @@ export default function CourseLearnPage() {
       const response = await fetch(`/api/lessons/${currentLesson.id}/progress`, {
         cache: 'no-store' // Force fresh data
       });
+      
+      if (!response.ok) {
+        console.error('Failed to check project status:', response.status);
+        alert('❌ Failed to check project status. Please try again.');
+        return;
+      }
+      
       const data = await response.json();
       
       if (data.completed) {
-        setCompletedLessons(prev => new Set([...prev, currentLesson.id]));
+        // Add lesson to completed set
+        const newCompletedLessons = new Set([...completedLessons, currentLesson.id]);
+        setCompletedLessons(newCompletedLessons);
         console.log('🎉 Project has been approved! Lesson is now complete.');
         
-        // Update progress
+        // Update progress using the new count
         if (courseData) {
           const totalLessons = courseData.modules.reduce((acc, m) => acc + m.lessons.length, 0);
-          const newCompletedCount = completedLessons.size + 1;
+          const newCompletedCount = newCompletedLessons.size; // Use the new set size
           const newPercentage = Math.round((newCompletedCount / totalLessons) * 100);
           
           setCourseData({
@@ -1699,6 +1750,7 @@ export default function CourseLearnPage() {
                 }
               }}
               onQuizActiveChange={setIsQuizActive}
+              isLessonComplete={completedLessons.has(currentLesson.id)}
             />
           </div>
         )}
