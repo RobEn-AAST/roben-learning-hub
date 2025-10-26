@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -335,11 +335,13 @@ function ArticleRenderer({ content }: { content?: string | null }) {
   );
 }
 
-function QuizRenderer({ lesson, onComplete, onNavigateNext }: { 
+function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange }: { 
   lesson: Lesson;
   onComplete: () => Promise<void>;
   onNavigateNext: () => void;
+  onQuizActiveChange?: (isActive: boolean) => void;
 }) {
+  const router = useRouter();
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [userAnswers, setUserAnswers] = useState<Record<string, string>>({});
@@ -354,6 +356,89 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext }: {
   const [previousAttempts, setPreviousAttempts] = useState<any[]>([]);
   const [latestAttempt, setLatestAttempt] = useState<any | null>(null);
   const [startTime, setStartTime] = useState<number | null>(null);
+  const [earnedPoints, setEarnedPoints] = useState<number>(0);
+  const [totalPoints, setTotalPoints] = useState<number>(0);
+
+  // Notify parent when quiz active state changes
+  useEffect(() => {
+    if (onQuizActiveChange) {
+      onQuizActiveChange(quizStarted && !showResults);
+    }
+  }, [quizStarted, showResults, onQuizActiveChange]);
+
+  // Prevent copy/paste and text selection during active quiz
+  useEffect(() => {
+    if (!quizStarted || showResults) {
+      return;
+    }
+
+    // Prevent copy
+    const handleCopy = (e: ClipboardEvent) => {
+      e.preventDefault();
+      alert('⚠️ Copying is disabled during the quiz to maintain academic integrity.');
+      return false;
+    };
+
+    // Prevent cut
+    const handleCut = (e: ClipboardEvent) => {
+      e.preventDefault();
+      alert('⚠️ Cutting text is disabled during the quiz to maintain academic integrity.');
+      return false;
+    };
+
+    // Prevent right-click context menu
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      return false;
+    };
+
+    // Prevent keyboard shortcuts for copying
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Prevent Ctrl+C, Ctrl+X, Ctrl+A, Ctrl+U (view source)
+      if (e.ctrlKey || e.metaKey) {
+        if (
+          e.key === 'c' || 
+          e.key === 'C' || 
+          e.key === 'x' || 
+          e.key === 'X' || 
+          e.key === 'a' || 
+          e.key === 'A' ||
+          e.key === 'u' ||
+          e.key === 'U' ||
+          e.key === 's' ||
+          e.key === 'S'
+        ) {
+          e.preventDefault();
+          alert('⚠️ This action is disabled during the quiz to maintain academic integrity.');
+          return false;
+        }
+      }
+      
+      // Prevent F12, Ctrl+Shift+I, Ctrl+Shift+J (DevTools)
+      if (
+        e.key === 'F12' ||
+        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c'))
+      ) {
+        e.preventDefault();
+        alert('⚠️ Developer tools are disabled during the quiz.');
+        return false;
+      }
+    };
+
+    // Add event listeners
+    document.addEventListener('copy', handleCopy);
+    document.addEventListener('cut', handleCut);
+    document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('keydown', handleKeyDown);
+
+    // Cleanup
+    return () => {
+      document.removeEventListener('copy', handleCopy);
+      document.removeEventListener('cut', handleCut);
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [quizStarted, showResults]);
 
   useEffect(() => {
     const loadQuizAndAttempts = async () => {
@@ -391,6 +476,8 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext }: {
               // If there's a completed attempt, show results
               if (latest.completed_at) {
                 setScore(latest.score || 0);
+                setEarnedPoints(latest.earned_points || 0);
+                setTotalPoints(latest.total_points || 0);
                 setShowResults(true);
                 
                 // Restore answers for review
@@ -444,6 +531,62 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext }: {
     loadQuizAndAttempts();
   }, [lesson.quizId]);
 
+  // Submit quiz function (defined early for use in effects)
+  const handleSubmitQuiz = useCallback(async () => {
+    if (!currentAttemptId) return;
+    
+    setSubmitting(true);
+    
+    try {
+      // Calculate time taken
+      const timeTakenSeconds = startTime ? Math.floor((Date.now() - startTime) / 1000) : null;
+
+      // Complete the attempt - this calculates score and marks as complete
+      const response = await fetch(`/api/quiz-attempts/${currentAttemptId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ timeTakenSeconds }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const finalScore = data.attempt.score || 0;
+        const passed = data.attempt.passed || false;
+        const earned = data.attempt.earned_points || 0;
+        const total = data.attempt.total_points || 0;
+        
+        console.log('✅ Quiz submitted successfully:', { 
+          finalScore, 
+          passed, 
+          earnedPoints: earned, 
+          totalPoints: total 
+        });
+        
+        setScore(finalScore);
+        setEarnedPoints(earned);
+        setTotalPoints(total);
+        setShowResults(true);
+        
+        // Auto-complete lesson if passed
+        if (passed) {
+          try {
+            await onComplete();
+          } catch (error) {
+            console.error('Error auto-completing lesson:', error);
+          }
+        }
+      } else {
+        const errorData = await response.json();
+        console.error('❌ Failed to submit quiz:', response.status, errorData);
+        alert(`Failed to submit quiz: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error submitting quiz:', error);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [currentAttemptId, startTime, onComplete]);
+
   // Timer effect - starts when quiz is started
   useEffect(() => {
     if (!quizStarted || !quiz?.timeLimitMinutes || showResults) {
@@ -470,7 +613,76 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext }: {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [quizStarted, quiz?.timeLimitMinutes, showResults, timeRemaining]);
+  }, [quizStarted, quiz?.timeLimitMinutes, showResults, timeRemaining, handleSubmitQuiz]);
+
+  // Prevent back button and handle browser/tab close during active quiz
+  useEffect(() => {
+    if (!quizStarted || showResults) {
+      return;
+    }
+
+    // Prevent browser back button
+    const handlePopState = (e: PopStateEvent) => {
+      e.preventDefault();
+      window.history.pushState(null, '', window.location.href);
+      
+      const shouldLeave = window.confirm(
+        'Are you sure you want to leave? Your quiz will be automatically submitted and graded.'
+      );
+      
+      if (shouldLeave) {
+        // Auto-submit quiz before leaving
+        handleSubmitQuiz().then(() => {
+          window.history.back();
+        });
+      }
+    };
+
+    // Add initial history state
+    window.history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', handlePopState);
+
+    // Prevent page unload/close and auto-submit
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Show confirmation dialog
+      e.preventDefault();
+      e.returnValue = 'Your quiz will be automatically submitted and graded. Are you sure you want to leave?';
+      
+      // Auto-submit quiz when page is being closed
+      if (currentAttemptId && !submitting) {
+        const timeTakenSeconds = startTime ? Math.floor((Date.now() - startTime) / 1000) : null;
+        
+        // Use fetch with keepalive flag for reliable data sending during page unload
+        fetch(`/api/quiz-attempts/${currentAttemptId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ timeTakenSeconds }),
+          keepalive: true, // This ensures the request completes even if page closes
+        }).catch(err => {
+          console.error('Failed to auto-submit quiz:', err);
+        });
+      }
+      
+      return e.returnValue;
+    };
+
+    // Handle visibility change (tab switch, minimize)
+    const handleVisibilityChange = () => {
+      if (document.hidden && currentAttemptId && !submitting && !showResults) {
+        // User switched tabs or minimized - log for awareness
+        console.log('⚠️ User left the quiz tab - answers are already auto-saved');
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [quizStarted, showResults, currentAttemptId, submitting, startTime, handleSubmitQuiz]);
 
   const handleStartQuiz = async () => {
     try {
@@ -546,57 +758,13 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext }: {
     }
   };
 
-  const handleSubmitQuiz = async () => {
-    if (!currentAttemptId) return;
-    
-    setSubmitting(true);
-    
-    try {
-      // Calculate time taken
-      const timeTakenSeconds = startTime ? Math.floor((Date.now() - startTime) / 1000) : null;
-
-      // Complete the attempt - this calculates score and marks as complete
-      const response = await fetch(`/api/quiz-attempts/${currentAttemptId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ timeTakenSeconds }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const finalScore = data.attempt.score || 0;
-        const passed = data.attempt.passed || false;
-        
-        console.log('✅ Quiz submitted successfully:', { finalScore, passed });
-        
-        setScore(finalScore);
-        setShowResults(true);
-        
-        // Auto-complete lesson if passed
-        if (passed) {
-          try {
-            await onComplete();
-          } catch (error) {
-            console.error('Error auto-completing lesson:', error);
-          }
-        }
-      } else {
-        const errorData = await response.json();
-        console.error('❌ Failed to submit quiz:', response.status, errorData);
-        alert(`Failed to submit quiz: ${errorData.error || 'Unknown error'}`);
-      }
-    } catch (error) {
-      console.error('Error submitting quiz:', error);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   const resetQuiz = async () => {
     // Reset state
     setUserAnswers({});
     setShowResults(false);
     setScore(0);
+    setEarnedPoints(0);
+    setTotalPoints(0);
     setQuizStarted(false);
     setTimeRemaining(null);
     setCurrentAttemptId(null);
@@ -625,8 +793,22 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext }: {
   }
 
   if (showResults) {
-    const correctCount = Math.round((score / 100) * questions.length);
-    const incorrectCount = questions.length - correctCount;
+    // Calculate correct/incorrect count based on actual user answers
+    let correctCount = 0;
+    let incorrectCount = 0;
+    
+    questions.forEach(question => {
+      const userAnswer = userAnswers[question.id];
+      const correctOption = question.options.find(opt => opt.isCorrect);
+      if (userAnswer === correctOption?.id) {
+        correctCount++;
+      } else if (userAnswer) {
+        incorrectCount++;
+      }
+    });
+    
+    // Count unanswered questions
+    const unansweredCount = questions.length - correctCount - incorrectCount;
     
     return (
       <div className="space-y-8">
@@ -667,6 +849,9 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext }: {
                     {score}%
                   </div>
                   <div className="text-sm text-gray-500">Score</div>
+                  <div className="text-xs text-gray-400 mt-1">
+                    {earnedPoints}/{totalPoints} points
+                  </div>
                 </div>
               </div>
             </div>
@@ -772,7 +957,7 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext }: {
   // Start Quiz screen - show before quiz begins
   if (!quizStarted) {
     return (
-      <div className="max-w-2xl mx-auto">
+      <div className="max-w-2xl mx-auto select-none" style={{ userSelect: 'none', WebkitUserSelect: 'none', MozUserSelect: 'none', msUserSelect: 'none' }}>
         <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl shadow-lg p-8 border border-blue-100">
           <div className="text-center mb-8">
             <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-blue-100 mb-4">
@@ -840,8 +1025,28 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext }: {
                   <li>You must answer all questions correctly to pass</li>
                   {quiz.timeLimitMinutes && <li>Once started, the timer cannot be paused</li>}
                   <li>You can retake the quiz if you don&apos;t pass</li>
-                  <li>Your answers are automatically saved - you can close and resume anytime</li>
-                  <li>Your progress is preserved even if you reload the page</li>
+                  <li>Your answers are automatically saved as you go</li>
+                  <li><strong>⚠️ DO NOT use the back button or close the page during the quiz</strong></li>
+                  <li><strong>If you leave, your quiz will be automatically submitted and graded</strong></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="flex gap-3">
+              <div className="flex-shrink-0">
+                <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-blue-900 mb-1">Academic Integrity</h4>
+                <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
+                  <li>Copying and pasting text is disabled during the quiz</li>
+                  <li>Right-click context menu is disabled</li>
+                  <li>This is to maintain academic integrity and ensure fair assessment</li>
+                  <li>Complete the quiz using your own knowledge</li>
                 </ul>
               </div>
             </div>
@@ -862,8 +1067,23 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext }: {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto select-none" style={{ userSelect: 'none', WebkitUserSelect: 'none', MozUserSelect: 'none', msUserSelect: 'none' }}>
       <div className="space-y-6">
+        {/* Warning banner for active quiz */}
+        <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4">
+          <div className="flex items-center gap-3">
+            <svg className="w-6 h-6 text-red-600 flex-shrink-0 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            <div className="flex-1">
+              <p className="font-bold text-red-900 text-sm">🚫 Quiz in Progress - Navigation Blocked</p>
+              <p className="text-red-800 text-xs mt-1">
+                Do not use the back button or close this page. Copying, pasting, and right-click are disabled.
+              </p>
+            </div>
+          </div>
+        </div>
+
         <div className="text-center mb-6">
           <h3 className="text-2xl font-bold mb-2">{quiz.title}</h3>
           {quiz.description && (
@@ -1113,6 +1333,7 @@ export default function CourseLearnPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [markingComplete, setMarkingComplete] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(false);
+  const [isQuizActive, setIsQuizActive] = useState(false); // Track if quiz is in progress
 
   useEffect(() => {
     if (courseId) {
@@ -1477,6 +1698,7 @@ export default function CourseLearnPage() {
                   setCurrentModule(next.module);
                 }
               }}
+              onQuizActiveChange={setIsQuizActive}
             />
           </div>
         )}
@@ -1568,9 +1790,9 @@ export default function CourseLearnPage() {
         </Button>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Main Content */}
-        <div className="flex-1 overflow-y-auto bg-gray-50">
+      <div className="flex flex-1">
+        {/* Main Content - Scrolls entire page */}
+        <div className="flex-1 bg-gray-50">
           <div className="max-w-5xl mx-auto p-6">
             <motion.div
               key={currentLesson.id}
@@ -1612,14 +1834,20 @@ export default function CourseLearnPage() {
                       setCurrentModule(prevLesson.module);
                     }
                   }}
-                  disabled={!prevLesson}
+                  disabled={!prevLesson || isQuizActive}
                   variant="outline"
                   className="text-blue-600 border-blue-200 hover:bg-blue-50 disabled:text-gray-400 disabled:border-gray-200 rounded-md"
+                  title={isQuizActive ? "Cannot navigate while quiz is in progress" : "Go to previous lesson"}
                 >
                   <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                   Previous
+                  {isQuizActive && (
+                    <svg className="w-4 h-4 ml-2 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                    </svg>
+                  )}
                 </Button>
 
                 <div className="flex gap-2">
@@ -1721,7 +1949,7 @@ export default function CourseLearnPage() {
           </div>
         </div>
 
-        {/* Sidebar */}
+        {/* Sidebar - Sticky with Internal Scroll */}
         <AnimatePresence>
           {sidebarOpen && (
             <motion.div
@@ -1729,11 +1957,27 @@ export default function CourseLearnPage() {
               animate={{ x: 0 }}
               exit={{ x: 300 }}
               transition={{ duration: 0.3 }}
-              className="w-80 bg-white border-l border-gray-200 overflow-y-auto shadow-inner"
+              className="w-80 bg-white border-l border-gray-200 shadow-inner"
             >
-              <div className="p-4">
-                <div className="border-b border-gray-200 pb-3 mb-4">
-                  <h3 className="text-gray-800 font-bold">Course Content</h3>
+              <div className="sticky top-0 h-screen overflow-y-auto scrollbar-hide">
+                <div className="p-4">
+                  {/* Quiz Active Warning Banner */}
+                  {isQuizActive && (
+                    <div className="mb-4 p-3 bg-red-50 border-2 border-red-300 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <svg className="w-5 h-5 text-red-600 flex-shrink-0 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                        </svg>
+                        <div className="flex-1">
+                          <p className="text-xs font-bold text-red-900">Quiz In Progress</p>
+                          <p className="text-xs text-red-700">Navigation locked</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="border-b border-gray-200 pb-3 mb-4">
+                    <h3 className="text-gray-800 font-bold">Course Content</h3>
                   <div className="flex items-center justify-between text-sm text-gray-500 mt-1">
                     <div>
                       {courseData.modules.length} {courseData.modules.length === 1 ? 'module' : 'modules'} • 
@@ -1782,15 +2026,17 @@ export default function CourseLearnPage() {
                           <button
                             key={lesson.id}
                             onClick={() => {
-                              if (isAccessible) {
+                              if (isAccessible && !isQuizActive) {
                                 handleLessonSelect(lesson, module);
+                              } else if (isQuizActive) {
+                                alert('⚠️ Please complete or exit the current quiz before navigating to another lesson.');
                               }
                             }}
-                            disabled={!isAccessible}
+                            disabled={!isAccessible || isQuizActive}
                             className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
                               isCurrent
                                 ? 'bg-blue-100 text-blue-800 border-l-4 border-blue-600'
-                                : isAccessible
+                                : isAccessible && !isQuizActive
                                   ? 'text-gray-700 hover:bg-gray-100'
                                   : 'text-gray-400 cursor-not-allowed'
                             }`}
@@ -1852,6 +2098,7 @@ export default function CourseLearnPage() {
                   </div>
                 ))}
               </div>
+            </div>
             </motion.div>
           )}
         </AnimatePresence>

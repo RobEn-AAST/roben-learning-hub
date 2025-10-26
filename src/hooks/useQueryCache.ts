@@ -692,7 +692,12 @@ export function useEnrollCourse() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });
-      if (!response.ok) throw new Error('Failed to enroll');
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Failed to enroll' }));
+        throw new Error(errorData.error || `Failed to enroll (${response.status})`);
+      }
+      
       return await response.json();
     },
     onMutate: async (courseId) => {
@@ -712,13 +717,32 @@ export function useEnrollCourse() {
       return { previousCourseDetail };
     },
     onError: (err, courseId, context) => {
-      // Rollback on error
+      // If already enrolled, don't rollback - keep the enrolled state
+      if (err.message?.includes('Already enrolled')) {
+        // Force the enrolled state and refetch to get accurate data
+        queryClient.setQueryData(['course-detail', courseId], (old: any) => ({
+          ...old,
+          isEnrolled: true,
+        }));
+        queryClient.invalidateQueries({ queryKey: ['course-detail', courseId] });
+        return;
+      }
+      
+      // Rollback on other errors
       if (context?.previousCourseDetail) {
         queryClient.setQueryData(['course-detail', courseId], context.previousCourseDetail);
       }
     },
     onSuccess: (data, courseId) => {
-      // Invalidate and refetch
+      console.log('Enrollment successful, invalidating queries...');
+      // Update the cache immediately with enrolled state
+      queryClient.setQueryData(['course-detail', courseId], (old: any) => ({
+        ...old,
+        isEnrolled: true,
+        enrollment: data.enrollment
+      }));
+      
+      // Invalidate and refetch to get accurate data
       queryClient.invalidateQueries({ queryKey: ['course-detail', courseId] });
       queryClient.invalidateQueries({ queryKey: ['my-enrolled-courses'] });
       queryClient.invalidateQueries({ queryKey: ['landing-page'] });

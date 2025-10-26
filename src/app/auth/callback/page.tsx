@@ -12,20 +12,8 @@ export default async function AuthCallbackPage() {
     const { data: { session } } = await supabase.auth.getSession();
     
     if (session?.user) {
-      // User is logged in, check if they need to complete profile
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', session.user.id)
-        .single();
-      
-      if (!profile || !profile.full_name || profile.full_name.trim() === '') {
-        // Redirect to complete profile
-        redirect('/complete-profile');
-      } else {
-        // Profile is complete, redirect to home
-        redirect('/');
-      }
+      // User is logged in, redirect to home
+      redirect('/');
     } else {
       // No session, redirect to login
       redirect('/auth?mode=login');

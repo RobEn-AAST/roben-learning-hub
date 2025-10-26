@@ -16,11 +16,8 @@ export async function AuthButton() {
   if (!user) {
     return (
       <div className="flex gap-2">
-        <Button asChild size="sm" variant={"outline"} className="text-black dark:text-white">
-          <Link href="/auth?mode=login">Sign in</Link>
-        </Button>
         <Button asChild size="sm" variant={"default"}>
-          <Link href="/auth?mode=signup">Sign up</Link>
+          <Link href="/auth">Sign in</Link>
         </Button>
       </div>
     );

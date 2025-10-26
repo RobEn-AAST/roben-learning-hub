@@ -58,38 +58,6 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Check if logged-in user needs to complete their profile
-  if (
-    user && 
-    user.sub && // user.sub is the user ID
-    !request.nextUrl.pathname.startsWith("/complete-profile") &&
-    !request.nextUrl.pathname.startsWith("/auth") &&
-    !request.nextUrl.pathname.startsWith("/api") &&
-    !request.nextUrl.pathname.startsWith("/_next") &&
-    request.nextUrl.pathname !== "/" &&
-    request.nextUrl.pathname !== "/favicon.ico"
-  ) {
-    try {
-      // Check if user has completed their profile
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', user.sub)
-        .single();
-      
-      if (profile && (!profile.full_name || !profile.full_name.trim())) {
-        // User has incomplete profile, redirect to complete profile
-        const url = request.nextUrl.clone();
-        url.pathname = "/complete-profile";
-        return NextResponse.redirect(url);
-      }
-    } catch (error) {
-      // If profile check fails due to RLS, skip the check
-      // This prevents middleware from breaking due to RLS policies
-      console.warn('Profile check failed in middleware:', error);
-    }
-  }
-
   // IMPORTANT: You *must* return the supabaseResponse object as it is.
   // If you're creating a new response object with NextResponse.next() make sure to:
   // 1. Pass the request in it, like so:

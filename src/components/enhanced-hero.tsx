@@ -2,6 +2,8 @@
 
 import { motion } from 'framer-motion';
 import Image from 'next/image';
+import { useAuth } from '@/hooks/useAuth';
+import Link from 'next/link';
 
 function StaticLogo() {
   return (
@@ -50,6 +52,30 @@ function StaticLogo() {
 }
 
 export function EnhancedHero() {
+  const { user, role, isLoading } = useAuth();
+
+  const getDashboardLink = () => {
+    switch (role) {
+      case 'admin':
+        return '/admin';
+      case 'instructor':
+        return '/instructor';
+      default:
+        return '/dashboard';
+    }
+  };
+
+  const getDashboardLabel = () => {
+    switch (role) {
+      case 'admin':
+        return 'Admin Dashboard';
+      case 'instructor':
+        return 'Instructor Dashboard';
+      default:
+        return 'My Learning';
+    }
+  };
+
   return (
     <div className="relative w-full min-h-[80vh] flex items-center justify-center overflow-hidden bg-gradient-to-br from-white via-blue-50 to-blue-100">
       {/* Animated background elements */}
@@ -141,14 +167,27 @@ export function EnhancedHero() {
               >
                 Explore Courses
               </motion.a>
-              <motion.a
-                href="/auth?mode=signup"
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                className="bg-white text-blue-600 border-2 border-blue-600 px-8 py-4 rounded-lg font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300"
-              >
-                Get Started
-              </motion.a>
+              {!isLoading && !user && (
+                <motion.a
+                  href="/auth"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  className="bg-white text-blue-600 border-2 border-blue-600 px-8 py-4 rounded-lg font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300"
+                >
+                  Sign In
+                </motion.a>
+              )}
+              {!isLoading && user && (
+                <Link href={getDashboardLink()}>
+                  <motion.div
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="bg-white text-blue-600 border-2 border-blue-600 px-8 py-4 rounded-lg font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300"
+                  >
+                    {getDashboardLabel()}
+                  </motion.div>
+                </Link>
+              )}
             </motion.div>
           </motion.div>
 

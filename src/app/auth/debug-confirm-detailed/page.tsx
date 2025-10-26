@@ -174,10 +174,10 @@ function DebugConfirmInner() {
             {/* Actions */}
             <div className="flex gap-3 pt-4 border-t">
               <Button asChild>
-                <Link href="/auth/sign-up">Try Sign Up Again</Link>
+                <Link href="/auth">Go to Login</Link>
               </Button>
               <Button asChild variant="outline">
-                <Link href="/auth/login">Go to Login</Link>
+                <Link href="/">Go to Home</Link>
               </Button>
               <Button asChild variant="outline">
                 <Link href="/">Home</Link>

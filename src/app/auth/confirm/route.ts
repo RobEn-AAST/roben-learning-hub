@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   
   const token_hash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
-  const next = searchParams.get("next") ?? "/complete-profile";
+  const next = searchParams.get("next") ?? "/";
   
   // Also check for alternative parameter names that Supabase might use
   const token = searchParams.get("token") || token_hash;
@@ -85,22 +85,19 @@ export async function GET(request: NextRequest) {
             
             if (createError) {
               console.error('Profile creation error:', createError);
-              redirect('/complete-profile');
+              redirect('/');
             } else {
               console.log('Profile created successfully, redirecting to:', next);
-              redirect(next === '/complete-profile' ? '/' : next);
+              redirect(next === '/' ? '/' : next);
             }
           } else {
-            console.log('No name in metadata, redirecting to complete profile');
-            redirect('/complete-profile');
+            console.log('No name in metadata, redirecting to home');
+            redirect('/');
           }
-        } else if (!profile || !profile.full_name || profile.full_name.trim() === '') {
-          console.log('Profile incomplete, redirecting to complete profile');
-          redirect('/complete-profile');
         } else {
-          console.log('Profile complete, redirecting to:', next);
-          // Profile is complete, redirect to home or specified URL
-          redirect(next === '/complete-profile' ? '/' : next);
+          console.log('Profile exists, redirecting to:', next);
+          // Profile exists, redirect to home or specified URL
+          redirect(next === '/' ? '/' : next);
         }
       } else {
         console.log('No user found after verification, redirecting to login');

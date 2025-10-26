@@ -26,11 +26,14 @@ export async function POST(
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
+      console.error('Authentication error in enrollment:', authError);
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Unauthorized - Please sign in to enroll' },
         { status: 401 }
       );
     }
+
+    console.log('User enrolling:', user.id, 'in course:', courseId);
 
     // Check if course exists and is published (use service role to bypass RLS)
     const { data: course, error: courseError } = await supabaseAdmin
@@ -41,11 +44,14 @@ export async function POST(
       .single();
 
     if (courseError || !course) {
+      console.error('Course verification error:', courseError);
       return NextResponse.json(
         { error: 'Course not found or not available' },
         { status: 404 }
       );
     }
+
+    console.log('Course found:', course.title);
 
     // Check if already enrolled
     const { data: existingEnrollment } = await supabase
@@ -56,11 +62,14 @@ export async function POST(
       .single();
 
     if (existingEnrollment) {
+      console.log('User already enrolled in course');
       return NextResponse.json(
         { error: 'Already enrolled in this course' },
         { status: 400 }
       );
     }
+
+    console.log('Creating enrollment...');
 
     // Create enrollment
     const { data: enrollment, error: enrollmentError } = await supabase
@@ -74,12 +83,14 @@ export async function POST(
       .single();
 
     if (enrollmentError) {
-      console.error('Enrollment error:', enrollmentError);
+      console.error('Enrollment database error:', enrollmentError);
       return NextResponse.json(
-        { error: 'Failed to enroll in course' },
+        { error: `Failed to enroll in course: ${enrollmentError.message}` },
         { status: 500 }
       );
     }
+
+    console.log('Enrollment successful:', enrollment.id);
 
     return NextResponse.json({
       success: true,

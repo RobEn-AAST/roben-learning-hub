@@ -221,7 +221,7 @@ export default function ContactPage() {
               <Link href="/courses">Browse Courses</Link>
             </Button>
             <Button asChild size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-blue-600">
-              <Link href="/auth?mode=signup">Sign Up Free</Link>
+              <Link href="/auth">Sign In</Link>
             </Button>
           </div>
         </div>

@@ -3,113 +3,17 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { LogoutButton } from '@/components/logout-button';
-import { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
-import { User } from '@supabase/supabase-js';
+import { useAuth } from '@/hooks/useAuth';
 
 interface NavigationProps {
-  user?: User | null;
-  userRole?: string;
   className?: string;
 }
 
 export function Navigation({ className = '' }: NavigationProps) {
-  const [user, setUser] = useState<User | null>(null);
-  const [userRole, setUserRole] = useState<string | null>(null); // Start as null to prevent flickering
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const supabase = createClient();
-    let isMounted = true;
-    
-    // Timeout to prevent infinite loading
-    const timeoutId = setTimeout(() => {
-      if (isMounted) {
-        setIsLoading(false);
-      }
-    }, 2000);
-    
-    // Get initial user and role together
-    const fetchUserAndRole = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        if (isMounted) {
-          setUser(user);
-          
-          if (user) {
-            // Fetch role immediately with user
-            const { data } = await supabase
-              .from('profiles')
-              .select('role')
-              .eq('id', user.id)
-              .maybeSingle();
-            
-            if (isMounted) {
-              setUserRole(data?.role || 'user');
-            }
-          } else {
-            setUserRole('user');
-          }
-          
-          setIsLoading(false);
-          clearTimeout(timeoutId);
-        }
-      } catch {
-        if (isMounted) {
-          setUser(null);
-          setUserRole('user');
-          setIsLoading(false);
-          clearTimeout(timeoutId);
-        }
-      }
-    };
-
-    fetchUserAndRole();
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!isMounted) return;
-      
-      if (event === 'SIGNED_OUT') {
-        setUser(null);
-        setUserRole('user');
-      } else if (event === 'SIGNED_IN' && session?.user) {
-        setUser(session.user);
-        setUserRole(null); // Reset to null while fetching
-        
-        // Fetch role for new user
-        const fetchNewRole = async () => {
-          try {
-            const { data } = await supabase
-              .from('profiles')
-              .select('role')
-              .eq('id', session.user.id)
-              .maybeSingle();
-            
-            if (isMounted) {
-              setUserRole(data?.role || 'user');
-            }
-          } catch {
-            if (isMounted) {
-              setUserRole('user');
-            }
-          }
-        };
-        
-        fetchNewRole();
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timeoutId);
-      subscription.unsubscribe();
-    };
-  }, []);
+  const { user, role, isLoading } = useAuth();
 
   const getDashboardLink = () => {
-    switch (userRole) {
+    switch (role) {
       case 'admin':
         return '/admin';
       case 'instructor':
@@ -120,7 +24,7 @@ export function Navigation({ className = '' }: NavigationProps) {
   };
 
   const getDashboardLabel = () => {
-    switch (userRole) {
+    switch (role) {
       case 'admin':
         return 'Admin Dashboard';
       case 'instructor':
@@ -129,9 +33,6 @@ export function Navigation({ className = '' }: NavigationProps) {
         return 'My Learning';
     }
   };
-
-  // Don't show dashboard button until role is determined
-  const shouldShowDashboard = user && userRole !== null;
 
   return (
     <nav className={`w-full flex justify-center h-20 shadow-md bg-gradient-to-r from-blue-600 via-blue-500 to-blue-700 sticky top-0 z-50 backdrop-blur-lg bg-opacity-95 ${className}`}>
@@ -174,20 +75,15 @@ export function Navigation({ className = '' }: NavigationProps) {
             </div>
           ) : user ? (
             <div className="flex items-center gap-4">
-              {shouldShowDashboard && (
-                <Button asChild size="sm" variant="outline" className="bg-white text-blue-600 border-white hover:bg-blue-50">
-                  <Link href={getDashboardLink()}>{getDashboardLabel()}</Link>
-                </Button>
-              )}
+              <Button asChild size="sm" variant="outline" className="bg-white text-blue-600 border-white hover:bg-blue-50">
+                <Link href={getDashboardLink()}>{getDashboardLabel()}</Link>
+              </Button>
               <LogoutButton />
             </div>
           ) : (
             <div className="flex gap-2">
-              <Button asChild size="sm" variant="outline" className="bg-white text-blue-600 border-white hover:bg-blue-50">
-                <Link href="/auth?mode=login">Sign in</Link>
-              </Button>
               <Button asChild size="sm" className="bg-white text-blue-600 hover:bg-blue-50">
-                <Link href="/auth?mode=signup">Sign up</Link>
+                <Link href="/auth">Sign in</Link>
               </Button>
             </div>
           )}

@@ -48,7 +48,7 @@ export default function Home() {
                   <Link href="/courses" className="text-blue-200 hover:text-white transition-colors">Courses</Link>
                   <Link href="/about" className="text-blue-200 hover:text-white transition-colors">About Us</Link>
                   <Link href="/contact" className="text-blue-200 hover:text-white transition-colors">Contact</Link>
-                  <Link href="/auth?mode=signup" className="text-blue-200 hover:text-white transition-colors">Get Started</Link>
+                  <Link href="/auth" className="text-blue-200 hover:text-white transition-colors">Sign In</Link>
                 </div>
               </div>
 

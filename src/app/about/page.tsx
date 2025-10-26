@@ -222,7 +222,7 @@ export default function AboutPage() {
               <Link href="/courses">Explore Courses</Link>
             </Button>
             <Button asChild size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-blue-600">
-              <Link href="/auth?mode=signup">Get Started Today</Link>
+              <Link href="/auth">Sign In</Link>
             </Button>
           </div>
         </div>

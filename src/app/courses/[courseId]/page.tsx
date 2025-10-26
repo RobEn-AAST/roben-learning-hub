@@ -84,15 +84,37 @@ export default function CourseDetailPage() {
   const isAuthenticated = courseData?.isAuthenticated || false;
 
   const handleEnroll = async () => {
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      toast.error('Please sign in to enroll in this course');
+      router.push('/auth/sign-in');
+      return;
+    }
+
+    // If already enrolled, just redirect to the course
+    if (isEnrolled) {
+      router.push(`/courses/${courseId}/learn`);
+      return;
+    }
+
     try {
       // PERFORMANCE: Optimistic update - shows enrolled instantly
       await enrollMutation.mutateAsync(courseId);
       toast.success('Successfully enrolled in course!');
       // Redirect to learning page
       router.push(`/courses/${courseId}/learn`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error enrolling:', error);
-      toast.error('Failed to enroll in course. Please try again.');
+      
+      // If already enrolled error, just redirect them
+      if (error?.message?.includes('Already enrolled')) {
+        toast.info('You are already enrolled in this course!');
+        router.push(`/courses/${courseId}/learn`);
+        return;
+      }
+      
+      const errorMessage = error?.message || 'Failed to enroll in course. Please try again.';
+      toast.error(errorMessage);
     }
   };
 
@@ -282,13 +304,10 @@ export default function CourseDetailPage() {
                   )
                 ) : (
                   <div className="text-center">
-                    <p className="text-gray-600 mb-4">Sign up to enroll in this course and start learning!</p>
+                    <p className="text-gray-600 mb-4">Sign in to enroll in this course and start learning!</p>
                     <div className="space-y-2">
                       <Button asChild className="w-full bg-blue-600 hover:bg-blue-700 text-white">
-                        <Link href="/auth/sign-up">Sign Up to Enroll</Link>
-                      </Button>
-                      <Button asChild variant="outline" className="w-full">
-                        <Link href="/auth/login">Already have an account? Sign In</Link>
+                        <Link href="/auth">Sign In to Enroll</Link>
                       </Button>
                     </div>
                   </div>
