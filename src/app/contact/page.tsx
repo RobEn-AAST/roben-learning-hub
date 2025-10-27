@@ -127,37 +127,6 @@ export default function ContactPage() {
                     <p className="text-gray-600">info@robenlearning.com</p>
                   </div>
                 </div>
-
-                <div className="flex items-start space-x-4">
-                  <Phone className="h-6 w-6 text-blue-600 mt-1" />
-                  <div>
-                    <h3 className="font-semibold text-gray-900">Phone</h3>
-                    <p className="text-gray-600">+1 (555) 123-4567</p>
-                    <p className="text-sm text-gray-500">Mon-Fri, 9AM-6PM EST</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-4">
-                  <MapPin className="h-6 w-6 text-blue-600 mt-1" />
-                  <div>
-                    <h3 className="font-semibold text-gray-900">Address</h3>
-                    <p className="text-gray-600">
-                      123 Learning Street<br />
-                      Education District<br />
-                      Cairo, Egypt 12345
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-4">
-                  <Clock className="h-6 w-6 text-blue-600 mt-1" />
-                  <div>
-                    <h3 className="font-semibold text-gray-900">Business Hours</h3>
-                    <p className="text-gray-600">Monday - Friday: 9:00 AM - 6:00 PM</p>
-                    <p className="text-gray-600">Saturday: 10:00 AM - 4:00 PM</p>
-                    <p className="text-gray-600">Sunday: Closed</p>
-                  </div>
-                </div>
               </CardContent>
             </Card>
 
@@ -191,19 +160,13 @@ export default function ContactPage() {
                 <CardTitle>Follow Us</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex space-x-4">
-                  <Button variant="outline" size="sm">
-                    Facebook
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    Instagram
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    LinkedIn
-                  </Button>
-                  <Button variant="outline" size="sm">
-                    YouTube
-                  </Button>
+                <div className="flex gap-4 justify-center">
+                  <a href="https://www.facebook.com/profile.php?id=61556141393823" target="_blank" rel="noopener noreferrer" aria-label="Facebook" className="w-10 h-10 rounded-full bg-blue-700 hover:bg-blue-600 flex items-center justify-center transition-colors text-white">
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18 2h-3a5 5 0 0 0-5 5v3H6v4h4v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" /></svg>
+                  </a>
+                  <a href="https://www.instagram.com/roben_aast" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="w-10 h-10 rounded-full bg-blue-700 hover:bg-blue-600 flex items-center justify-center transition-colors text-white">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect width="20" height="20" x="2" y="2" rx="5" /><circle cx="12" cy="12" r="5" /><path d="M17 7h.01" /></svg>
+                  </a>
                 </div>
               </CardContent>
             </Card>
@@ -220,7 +183,7 @@ export default function ContactPage() {
             <Button asChild size="lg" variant="outline" className="bg-white text-blue-600 hover:bg-gray-100">
               <Link href="/courses">Browse Courses</Link>
             </Button>
-            <Button asChild size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-blue-600">
+            <Button asChild size="lg" variant="outline" className="bg-white text-blue-600 hover:bg-gray-100 hover:text-black">
               <Link href="/auth">Sign In</Link>
             </Button>
           </div>

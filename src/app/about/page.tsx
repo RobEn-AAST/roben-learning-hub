@@ -221,7 +221,7 @@ export default function AboutPage() {
             <Button asChild size="lg" variant="outline" className="bg-white text-blue-600 hover:bg-gray-100">
               <Link href="/courses">Explore Courses</Link>
             </Button>
-            <Button asChild size="lg" variant="outline" className="border-white text-white hover:bg-white hover:text-blue-600">
+            <Button asChild size="lg" variant="outline" className="bg-white text-blue-600 hover:bg-gray-100 hover:text-black">
               <Link href="/auth">Sign In</Link>
             </Button>
           </div>
