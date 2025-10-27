@@ -6,10 +6,14 @@ import Image from 'next/image';
 
 interface Instructor {
   id: string;
-  full_name: string;
-  email: string;
-  avatar_url: string | null;
-  bio: string | null;
+  // New schema fields
+  first_name?: string | null;
+  last_name?: string | null;
+  // Keep full_name for backward compatibility
+  full_name?: string | null;
+  email?: string | null;
+  avatar_url?: string | null;
+  bio?: string | null;
 }
 
 export function DynamicInstructorsSection() {
@@ -78,13 +82,30 @@ export function DynamicInstructorsSection() {
     );
   }
 
-  const getInitials = (name: string) => {
+  const getInitials = (name?: string | null) => {
+    if (!name) return '';
     return name
-      .split(' ')
-      .map((n) => n[0])
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((n) => n[0] || '')
       .join('')
       .toUpperCase()
       .slice(0, 2);
+  };
+
+  const getDisplayName = (instructor: Instructor) => {
+    // Prefer full_name (backwards compatibility), otherwise combine first and last name
+    const full = instructor.full_name;
+    if (full && full.trim()) return full.trim();
+
+    const first = instructor.first_name?.trim() || '';
+    const last = instructor.last_name?.trim() || '';
+    const combined = `${first} ${last}`.trim();
+    if (combined) return combined;
+
+    // fallback to email or empty string
+    return instructor.email || '';
   };
 
   return (
@@ -122,19 +143,19 @@ export function DynamicInstructorsSection() {
                 <div className="bg-white rounded-xl shadow-lg p-8 text-center transition-all duration-300 border border-gray-100">
                   {/* Avatar */}
                   <div className="relative mb-6">
-                    {instructor.avatar_url ? (
+                          {instructor.avatar_url ? (
                       <div className="relative w-32 h-32 mx-auto">
                         <Image
                           src={instructor.avatar_url}
-                          alt={instructor.full_name}
+                          alt={getDisplayName(instructor) || 'Instructor'}
                           fill
                           className="rounded-full object-cover border-4 border-blue-200 transition-colors"
                         />
                       </div>
                     ) : (
                       <div className="w-32 h-32 mx-auto rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center border-4 border-blue-200 transition-all">
-                        <span className="text-4xl font-bold text-white">
-                          {getInitials(instructor.full_name)}
+                          <span className="text-4xl font-bold text-white">
+                          {getInitials(getDisplayName(instructor))}
                         </span>
                       </div>
                     )}
@@ -159,7 +180,7 @@ export function DynamicInstructorsSection() {
 
                   {/* Info */}
                   <h3 className="text-2xl font-bold text-gray-900 mb-2 transition-colors">
-                    {instructor.full_name}
+                    {getDisplayName(instructor) || 'Instructor'}
                   </h3>
                   
                   {instructor.bio ? (
