@@ -25,6 +25,7 @@ import {
   useAssignInstructor,
   useRemoveInstructor
 } from '@/hooks/useQueryCache';
+import { uploadImageUrlToImgbb } from '@/lib/imgbb';
 
 interface CourseFormData {
   title: string;
@@ -172,12 +173,14 @@ function InstructorsList({ courseId, instructors, currentUserId, onUpdate }: Ins
                     <div className="flex items-center space-x-3">
                       <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                         <span className="text-sm font-medium text-blue-600">
-                          {instructor.instructor?.full_name?.charAt(0)?.toUpperCase() || '?'}
+                          {(
+                            (instructor.instructor?.first_name?.charAt(0) || instructor.instructor?.last_name?.charAt(0) || ((instructor.instructor as any)?.full_name?.charAt(0)) || '?')
+                          ).toString().toUpperCase()}
                         </span>
                       </div>
                       <div className="flex-1">
                         <div className="text-sm font-medium text-gray-900">
-                          {instructor.instructor?.full_name || 'Unknown Instructor'}
+                          {`${instructor.instructor?.first_name || ''} ${instructor.instructor?.last_name || ''}`.trim() || (instructor.instructor as any)?.full_name || 'Unknown Instructor'}
                         </div>
                         <div className="text-xs text-gray-500">
                           {instructor.instructor?.email}
@@ -185,7 +188,7 @@ function InstructorsList({ courseId, instructors, currentUserId, onUpdate }: Ins
                       </div>
                     </div>
                     <button
-                      onClick={() => handleRemoveInstructor(instructor.instructor_id, instructor.instructor?.full_name || '')}
+                      onClick={() => handleRemoveInstructor(instructor.instructor_id, `${instructor.instructor?.first_name || ''} ${instructor.instructor?.last_name || ''}`.trim() || '')}
                       disabled={loading}
                       className="ml-2 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
                       title="Remove instructor"
@@ -218,13 +221,13 @@ function InstructorsList({ courseId, instructors, currentUserId, onUpdate }: Ins
                     disabled={loading}
                     className="w-full text-left p-2 hover:bg-blue-50 rounded-md disabled:opacity-50 transition-colors flex items-center space-x-3"
                   >
-                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                      <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
                       <span className="text-sm font-medium text-green-600">
-                        {instructor.full_name?.charAt(0)?.toUpperCase() || '?'}
+                        {( (instructor.first_name?.charAt(0) || instructor.last_name?.charAt(0) || '?') ).toString().toUpperCase()}
                       </span>
                     </div>
                     <div className="flex-1">
-                      <div className="text-sm font-medium text-gray-900">{instructor.full_name}</div>
+                      <div className="text-sm font-medium text-gray-900">{`${instructor.first_name || ''} ${instructor.last_name || ''}`.trim() || 'Unknown Instructor'}</div>
                       <div className="text-xs text-gray-500">{instructor.email}</div>
                     </div>
                     <div className="text-blue-500">
@@ -463,7 +466,7 @@ interface CourseFormProps {
 function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [userLoading, setUserLoading] = useState(true);
-  const [availableInstructors, setAvailableInstructors] = useState<{ id: string; full_name: string; email: string }[]>([]);
+  const [availableInstructors, setAvailableInstructors] = useState<{ id: string; first_name?: string; last_name?: string; full_name?: string; email: string; avatar_url?: string }[]>([]);
   const [selectedInstructorIds, setSelectedInstructorIds] = useState<string[]>([]);
   const supabase = createClient();
 
@@ -533,6 +536,9 @@ function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
     status: course?.status || 'draft',
     created_by: course?.created_by || currentUserId
   });
+
+  const [imgbbUploading, setImgbbUploading] = useState(false);
+  const [imgbbError, setImgbbError] = useState<string | null>(null);
 
   // Update created_by when currentUserId is available and we're creating a new course
   useEffect(() => {
@@ -629,6 +635,54 @@ function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
     }
   };
 
+  const handleUploadToImgbb = async () => {
+    setImgbbError(null);
+    const url = formData.cover_image?.trim();
+    if (!url) {
+      setImgbbError('Please provide a valid image URL first');
+      return;
+    }
+
+    try {
+      setImgbbUploading(true);
+      const result = await uploadImageUrlToImgbb(url);
+      if (!result.ok) {
+        setImgbbError(result.error || 'Upload failed');
+        toast.error('imgbb upload failed: ' + (result.error || 'Unknown'));
+        return;
+      }
+
+      if (result.url) {
+        // Update the form field so the admin sees the new URL immediately
+        setFormData(prev => ({ ...prev, cover_image: result.url || '' }));
+
+        // If we're editing an existing course, persist the new cover_image immediately
+        // so the rest of the application (course lists, public pages) will use the
+        // direct imgbb image URL instead of the original viewer page URL.
+        if (course && course.id) {
+          try {
+            await coursesService.updateCourse(course.id, { cover_image: result.url });
+            toast.success('Image uploaded to imgbb and saved to course');
+          } catch (err: any) {
+            // Persist failed; still keep the URL in the form so the admin can save later
+            console.error('Failed to persist imgbb URL:', err);
+            toast.error('Image uploaded but failed to save to course. Please save manually.');
+          }
+        } else {
+          // Creating a new course: leave the value in the form and let the user save
+          toast.success('Image uploaded to imgbb and URL updated (remember to save the course)');
+        }
+      } else {
+        setImgbbError('No URL returned from imgbb');
+      }
+    } catch (err: any) {
+      setImgbbError(err?.message || String(err));
+      toast.error('imgbb upload error: ' + (err?.message || String(err)));
+    } finally {
+      setImgbbUploading(false);
+    }
+  };
+
   const handleInstructorToggle = (instructorId: string) => {
     setSelectedInstructorIds(prev => {
       if (prev.includes(instructorId)) {
@@ -706,6 +760,7 @@ function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
             </p>
           </div>
 
+
           {/* Description */}
           <div>
             <Label htmlFor="description" className="text-black">Description *</Label>
@@ -723,17 +778,28 @@ function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
           {/* Cover Image URL */}
           <div>
             <Label htmlFor="cover_image" className="text-black">Cover Image URL</Label>
-            <Input
-              id="cover_image"
-              value={formData.cover_image}
-              onChange={(e) => handleInputChange('cover_image', e.target.value)}
-              placeholder="https://example.com/image.jpg"
-              type="url"
-              className="text-black"
-            />
+            <div className="flex items-center gap-2">
+              <Input
+                id="cover_image"
+                value={formData.cover_image}
+                onChange={(e) => handleInputChange('cover_image', e.target.value)}
+                placeholder="https://example.com/image.jpg"
+                type="url"
+                className="text-black flex-1"
+              />
+              <button
+                type="button"
+                onClick={handleUploadToImgbb}
+                disabled={imgbbUploading || !formData.cover_image}
+                className="inline-flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+              >
+                {imgbbUploading ? 'Uploading...' : 'Upload to imgbb'}
+              </button>
+            </div>
             <p className="text-sm text-gray-500 mt-1">
-              Optional: URL to the course cover image
+              Optional: URL to the course cover image. Use "Upload to imgbb" to copy external images into your imgbb account (server-side API key required).
             </p>
+            {imgbbError && <p className="text-sm text-red-500 mt-1">{imgbbError}</p>}
           </div>
 
           {/* Status */}
@@ -765,7 +831,7 @@ function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
                       key={instructor.id}
                       className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 border border-blue-200"
                     >
-                      <span className="font-medium">{instructor.full_name}</span>
+                      <span className="font-medium">{`${instructor.first_name || ''} ${instructor.last_name || ''}`.trim() || instructor.full_name}</span>
                       <button
                         type="button"
                         onClick={() => handleInstructorToggle(instructor.id)}
@@ -801,11 +867,11 @@ function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
                       <div className="flex items-center space-x-3">
                         <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                           <span className="text-sm font-medium text-blue-600">
-                            {instructor.full_name?.charAt(0)?.toUpperCase() || '?'}
+                            {( (instructor.first_name?.charAt(0) || instructor.last_name?.charAt(0) || instructor.full_name?.charAt(0) || '?') ).toString().toUpperCase()}
                           </span>
                         </div>
                         <div>
-                          <div className="text-sm font-medium text-gray-900">{instructor.full_name}</div>
+                          <div className="text-sm font-medium text-gray-900">{`${instructor.first_name || ''} ${instructor.last_name || ''}`.trim() || instructor.full_name}</div>
                           <div className="text-xs text-gray-500">{instructor.email}</div>
                         </div>
                       </div>
@@ -1140,12 +1206,12 @@ export function CoursesAdminDashboard() {
                       <div key={instructor.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
                         <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
                           <span className="text-sm font-medium text-blue-600">
-                            {instructor.instructor?.full_name?.charAt(0)?.toUpperCase() || '?'}
+                            {( (instructor.instructor?.first_name?.charAt(0) || instructor.instructor?.last_name?.charAt(0) || ((instructor.instructor as any)?.full_name?.charAt(0)) || '?') ).toString().toUpperCase()}
                           </span>
                         </div>
                         <div className="flex-1">
                           <div className="font-medium text-gray-900">
-                            {instructor.instructor?.full_name || 'Unknown Instructor'}
+                            {`${instructor.instructor?.first_name || ''} ${instructor.instructor?.last_name || ''}`.trim() || (instructor.instructor as any)?.full_name || 'Unknown Instructor'}
                           </div>
                           <div className="text-sm text-gray-500">
                             {instructor.instructor?.email}
