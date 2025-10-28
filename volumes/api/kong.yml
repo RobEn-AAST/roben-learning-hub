@@ -451,20 +451,38 @@ services:
     url: http://studio:3000/
     routes:
       - name: dashboard-all
-        strip_path: true
+        strip_path: false   # don't strip "/" from dashboard paths
         paths:
           - /
     plugins:
+      - name: basic-auth
+        config:
+          hide_credentials: true
       - name: cors
         config:
           origins:
             - "https://supabase.roben.club"
-            - "http://learning-hub.roben.club"
+            - "https://learning-hub.roben.club"
             - "http://localhost:3000"
-          methods: [GET, HEAD, OPTIONS]
-          headers: [Content-Type, Accept, Origin]
+          methods:
+            - GET
+            - POST
+            - PUT
+            - PATCH
+            - DELETE
+            - OPTIONS
+          headers:
+            - Accept
+            - Accept-Language
+            - Content-Language
+            - Content-Type
+            - Authorization
+            - apikey
+            - x-api-key
+          exposed_headers:
+            - Content-Range
+            - Content-Profile
+            - Content-Location
           credentials: true
           max_age: 3600
-      - name: basic-auth
-        config:
-          hide_credentials: true
+
