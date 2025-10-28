@@ -58,11 +58,16 @@ export function useAuth() {
       
       const { data } = await supabase
         .from('profiles')
-        .select('id, role, full_name, email')
+        .select('id, role, first_name, last_name, email')
         .eq('id', user.id)
         .maybeSingle();
-      
-      return data;
+
+      if (!data) return null;
+      // Compose full_name for backward compatibility
+      return {
+        ...data,
+        full_name: [data.first_name, data.last_name].filter(Boolean).join(' ') || data.email || null
+      };
     },
     enabled: !!user?.id,
     staleTime: 5 * 60 * 1000,

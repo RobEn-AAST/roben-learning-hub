@@ -370,12 +370,17 @@ export function useInstructors() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, full_name, email')
+        .select('id, first_name, last_name, email')
         .eq('role', 'instructor')
-        .order('full_name', { ascending: true });
+        .order('first_name', { ascending: true })
+        .order('last_name', { ascending: true });
       
       if (error) throw error;
-      return data || [];
+      // Ensure backward compatibility: include a composed `full_name` property
+      return (data || []).map((d: any) => ({
+        ...d,
+        full_name: [d.first_name, d.last_name].filter(Boolean).join(' ') || d.email || null
+      }));
     },
     staleTime: 5 * 60 * 1000, // Instructors don't change frequently
   });
