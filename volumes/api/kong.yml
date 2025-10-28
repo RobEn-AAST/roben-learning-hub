@@ -34,7 +34,8 @@ basicauth_credentials:
 ### API Routes
 ###
 services:
-  ## Open Auth routes (keep simple CORS)
+
+  ## Open Auth routes (simple CORS)
   - name: auth-v1-open
     url: http://auth:9999/verify
     routes:
@@ -47,19 +48,11 @@ services:
         config:
           origins:
             - "https://supabase.roben.club"
-            - "http://learning-hub.roben.club"
+            - "https://learning-hub.roben.club"
             - "http://localhost:3000"
-          methods:
-            - GET
-            - HEAD
-            - POST
-            - OPTIONS
-          headers:
-            - Content-Type
-            - Accept
-            - Origin
-          exposed_headers:
-            - Location
+          methods: ["GET","HEAD","POST","OPTIONS"]
+          headers: ["Content-Type","Accept","Origin"]
+          exposed_headers: ["Location"]
           credentials: true
           max_age: 3600
 
@@ -75,10 +68,10 @@ services:
         config:
           origins:
             - "https://supabase.roben.club"
-            - "http://learning-hub.roben.club"
+            - "https://learning-hub.roben.club"
             - "http://localhost:3000"
-          methods: [GET, POST, OPTIONS]
-          headers: [Content-Type, Accept, Origin]
+          methods: ["GET","POST","OPTIONS"]
+          headers: ["Content-Type","Accept","Origin"]
           credentials: true
           max_age: 3600
 
@@ -94,14 +87,14 @@ services:
         config:
           origins:
             - "https://supabase.roben.club"
-            - "http://learning-hub.roben.club"
+            - "https://learning-hub.roben.club"
             - "http://localhost:3000"
-          methods: [GET, POST, OPTIONS]
-          headers: [Content-Type, Accept, Origin]
+          methods: ["GET","POST","OPTIONS"]
+          headers: ["Content-Type","Accept","Origin"]
           credentials: true
           max_age: 3600
 
-  ## Secure Auth routes (allow API-key headers)
+  ## Secure Auth routes (CORS first, then key-auth)
   - name: auth-v1
     _comment: 'GoTrue: /auth/v1/* -> http://auth:9999/*'
     url: http://auth:9999/
@@ -115,31 +108,20 @@ services:
         config:
           origins:
             - "https://supabase.roben.club"
-            - "http://learning-hub.roben.club"
+            - "https://learning-hub.roben.club"
             - "http://localhost:3000"
-          methods:
-            - GET
-            - HEAD
-            - POST
-            - PUT
-            - PATCH
-            - DELETE
-            - OPTIONS
-          headers:
-            - apikey
-            - x-api-key
-            - Authorization
-            - Content-Type
-            - Accept
-            - Origin
-          exposed_headers:
-            - Location
-            - Content-Type
+          methods: ["GET","HEAD","POST","PUT","PATCH","DELETE","OPTIONS"]
+          headers: ["apikey","x-api-key","Authorization","Content-Type","Accept","Origin"]
+          exposed_headers: ["Content-Profile","Content-Range","Content-Location"]
           credentials: true
           max_age: 3600
       - name: key-auth
         config:
+          key_names: ["apikey"]
+          key_in_header: true
+          key_in_query: true
           hide_credentials: false
+          run_on_preflight: true    # <<-- allow OPTIONS through so CORS plugin can respond
       - name: acl
         config:
           hide_groups_header: true
@@ -147,7 +129,7 @@ services:
             - admin
             - anon
 
-  ## Secure REST routes (PostgREST) — allow apikey header and CORS
+  ## Secure REST routes (PostgREST)
   - name: rest-v1
     _comment: 'PostgREST: /rest/v1/* -> http://rest:3000/*'
     url: http://rest:3000/
@@ -161,32 +143,20 @@ services:
         config:
           origins:
             - "https://supabase.roben.club"
-            - "http://learning-hub.roben.club"
+            - "https://learning-hub.roben.club"
             - "http://localhost:3000"
-          methods:
-            - GET
-            - HEAD
-            - POST
-            - PUT
-            - PATCH
-            - DELETE
-            - OPTIONS
-          headers:
-            - apikey
-            - x-api-key
-            - Authorization
-            - Content-Type
-            - Accept
-            - Origin
-          exposed_headers:
-            - Content-Profile
-            - Content-Range
-            - Content-Location
+          methods: ["GET","HEAD","POST","PUT","PATCH","DELETE","OPTIONS"]
+          headers: ["apikey","x-api-key","Authorization","Content-Type","Accept","Origin"]
+          exposed_headers: ["Content-Profile","Content-Range","Content-Location"]
           credentials: true
           max_age: 3600
       - name: key-auth
         config:
-          hide_credentials: true
+          key_names: ["apikey"]
+          key_in_header: true
+          key_in_query: true
+          hide_credentials: false
+          run_on_preflight: true
       - name: acl
         config:
           hide_groups_header: true
@@ -208,25 +178,19 @@ services:
         config:
           origins:
             - "https://supabase.roben.club"
-            - "http://learning-hub.roben.club"
+            - "https://learning-hub.roben.club"
             - "http://localhost:3000"
-          methods:
-            - GET
-            - HEAD
-            - POST
-            - OPTIONS
-          headers:
-            - apikey
-            - x-api-key
-            - Authorization
-            - Content-Type
-            - Accept
-            - Origin
+          methods: ["GET","HEAD","POST","OPTIONS"]
+          headers: ["apikey","x-api-key","Authorization","Content-Type","Accept","Origin"]
           credentials: true
           max_age: 3600
       - name: key-auth
         config:
+          key_names: ["apikey"]
+          key_in_header: true
+          key_in_query: true
           hide_credentials: true
+          run_on_preflight: true
       - name: request-transformer
         config:
           add:
@@ -239,9 +203,9 @@ services:
             - admin
             - anon
 
-  ## Secure Realtime routes (ws + http)
+  ## Realtime (ws + http)
   - name: realtime-v1-ws
-    _comment: 'Realtime: /realtime/v1/* -> ws://realtime:4000/socket/*'
+    _comment: 'Realtime WS: /realtime/v1/* -> ws://realtime:4000/socket/*'
     url: http://realtime-dev.supabase-realtime:4000/socket
     protocol: ws
     routes:
@@ -254,21 +218,18 @@ services:
         config:
           origins:
             - "https://supabase.roben.club"
-            - "http://learning-hub.roben.club"
-          methods:
-            - GET
-            - HEAD
-            - OPTIONS
-          headers:
-            - apikey
-            - x-api-key
-            - Authorization
-            - Origin
+            - "https://learning-hub.roben.club"
+          methods: ["GET","HEAD","OPTIONS"]
+          headers: ["apikey","x-api-key","Authorization","Origin"]
           credentials: true
           max_age: 3600
       - name: key-auth
         config:
+          key_names: ["apikey"]
+          key_in_header: true
+          key_in_query: true
           hide_credentials: false
+          run_on_preflight: true
       - name: acl
         config:
           hide_groups_header: true
@@ -277,7 +238,7 @@ services:
             - anon
 
   - name: realtime-v1-rest
-    _comment: 'Realtime: /realtime/v1/* -> http://realtime:4000/api'
+    _comment: 'Realtime REST: /realtime/v1/api -> http://realtime:4000/api'
     url: http://realtime-dev.supabase-realtime:4000/api
     protocol: http
     routes:
@@ -290,24 +251,18 @@ services:
         config:
           origins:
             - "https://supabase.roben.club"
-            - "http://learning-hub.roben.club"
-          methods:
-            - GET
-            - HEAD
-            - POST
-            - OPTIONS
-          headers:
-            - apikey
-            - x-api-key
-            - Authorization
-            - Content-Type
-            - Accept
-            - Origin
+            - "https://learning-hub.roben.club"
+          methods: ["GET","HEAD","POST","OPTIONS"]
+          headers: ["apikey","x-api-key","Authorization","Content-Type","Accept","Origin"]
           credentials: true
           max_age: 3600
       - name: key-auth
         config:
+          key_names: ["apikey"]
+          key_in_header: true
+          key_in_query: true
           hide_credentials: false
+          run_on_preflight: true
       - name: acl
         config:
           hide_groups_header: true
@@ -315,7 +270,7 @@ services:
             - admin
             - anon
 
-  ## Storage routes: the storage server manages its own auth — still allow CORS from studio origin
+  ## Storage (storage has its own auth but still allow CORS)
   - name: storage-v1
     _comment: 'Storage: /storage/v1/* -> http://storage:5000/*'
     url: http://storage:5000/
@@ -329,27 +284,15 @@ services:
         config:
           origins:
             - "https://supabase.roben.club"
-            - "http://learning-hub.roben.club"
+            - "https://learning-hub.roben.club"
             - "http://localhost:3000"
-          methods:
-            - GET
-            - HEAD
-            - POST
-            - PUT
-            - PATCH
-            - DELETE
-            - OPTIONS
-          headers:
-            - Content-Type
-            - Accept
-            - Origin
-            - Authorization
+          methods: ["GET","HEAD","POST","PUT","PATCH","DELETE","OPTIONS"]
+          headers: ["Content-Type","Accept","Origin","Authorization"]
           credentials: true
           max_age: 3600
 
-  ## Edge Functions routes
+  ## Functions / Analytics / Meta / MCP (kept minimal)
   - name: functions-v1
-    _comment: 'Edge Functions: /functions/v1/* -> http://functions:9000/*'
     url: http://functions:9000/
     routes:
       - name: functions-v1-all
@@ -359,26 +302,13 @@ services:
     plugins:
       - name: cors
         config:
-          origins:
-            - "https://supabase.roben.club"
-            - "http://learning-hub.roben.club"
-            - "http://localhost:3000"
-          methods:
-            - GET
-            - HEAD
-            - POST
-            - OPTIONS
-          headers:
-            - Content-Type
-            - Accept
-            - Origin
-            - Authorization
+          origins: ["https://supabase.roben.club","https://learning-hub.roben.club","http://localhost:3000"]
+          methods: ["GET","HEAD","POST","OPTIONS"]
+          headers: ["Content-Type","Accept","Origin","Authorization"]
           credentials: true
           max_age: 3600
 
-  ## Analytics routes
   - name: analytics-v1
-    _comment: 'Analytics: /analytics/v1/* -> http://logflare:4000/*'
     url: http://analytics:4000/
     routes:
       - name: analytics-v1-all
@@ -388,17 +318,13 @@ services:
     plugins:
       - name: cors
         config:
-          origins:
-            - "https://supabase.roben.club"
-            - "http://learning-hub.roben.club"
-          methods: [GET, POST, OPTIONS]
-          headers: [Content-Type, Accept, Origin]
+          origins: ["https://supabase.roben.club","https://learning-hub.roben.club"]
+          methods: ["GET","POST","OPTIONS"]
+          headers: ["Content-Type","Accept","Origin"]
           credentials: true
           max_age: 3600
 
-  ## Secure Database routes
   - name: meta
-    _comment: 'pg-meta: /pg/* -> http://pg-meta:8080/*'
     url: http://meta:8080/
     routes:
       - name: meta-all
@@ -409,15 +335,14 @@ services:
       - name: key-auth
         config:
           hide_credentials: false
+          run_on_preflight: true
       - name: acl
         config:
           hide_groups_header: true
           allow:
             - admin
 
-  ## Block access to /api/mcp
   - name: mcp-blocker
-    _comment: 'Block direct access to /api/mcp'
     url: http://studio:3000/api/mcp
     routes:
       - name: mcp-blocker-route
@@ -430,9 +355,7 @@ services:
           status_code: 403
           message: "Access is forbidden."
 
-  ## MCP endpoint - local access
   - name: mcp
-    _comment: 'MCP: /mcp -> http://studio:3000/api/mcp (local access)'
     url: http://studio:3000/api/mcp
     routes:
       - name: mcp
@@ -445,13 +368,13 @@ services:
           status_code: 403
           message: "Access is forbidden."
 
-  ## Protected Dashboard - catch all remaining routes
+  ## Protected Dashboard (Studio)
   - name: dashboard
     _comment: 'Studio: /* -> http://studio:3000/*'
     url: http://studio:3000/
     routes:
       - name: dashboard-all
-        strip_path: false   # don't strip "/" from dashboard paths
+        strip_path: false
         paths:
           - /
     plugins:
@@ -464,25 +387,8 @@ services:
             - "https://supabase.roben.club"
             - "https://learning-hub.roben.club"
             - "http://localhost:3000"
-          methods:
-            - GET
-            - POST
-            - PUT
-            - PATCH
-            - DELETE
-            - OPTIONS
-          headers:
-            - Accept
-            - Accept-Language
-            - Content-Language
-            - Content-Type
-            - Authorization
-            - apikey
-            - x-api-key
-          exposed_headers:
-            - Content-Range
-            - Content-Profile
-            - Content-Location
+          methods: ["GET","HEAD","POST","PUT","PATCH","DELETE","OPTIONS"]
+          headers: ["Accept","Accept-Language","Content-Language","Content-Type","Authorization","apikey","x-api-key","Origin"]
+          exposed_headers: ["Content-Range","Content-Profile","Content-Location"]
           credentials: true
           max_age: 3600
-
