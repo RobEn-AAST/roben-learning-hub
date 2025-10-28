@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { RobenSSO } from '@/lib/roben-sso';
 import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { normalizeEgyptianPhone } from '@/lib/phone';
 
 export async function GET(request: NextRequest) {
   try {
@@ -48,6 +49,9 @@ export async function GET(request: NextRequest) {
 
     let userId: string;
 
+    // Normalize phone once for use below
+    const normalizedPhone = normalizeEgyptianPhone(userInfo.phone_number);
+
     if (existingAuthUser) {
       // User exists in auth, just update their profile
       userId = existingAuthUser.id;
@@ -61,7 +65,7 @@ export async function GET(request: NextRequest) {
           first_name: userInfo.first_name,
           last_name: userInfo.last_name,
           email: userInfo.email,
-          phone_number: userInfo.phone_number,
+          phone_number: normalizedPhone || userInfo.phone_number || null,
           metadata: {
             member_id: userInfo.member_id,
             major: userInfo.major,
@@ -80,6 +84,8 @@ export async function GET(request: NextRequest) {
       } else {
         console.log('Updated existing user profile:', userId);
       }
+
+      // Phone is persisted to profiles.phone_number only; do not update auth.users.phone
     } else {
       // Create new user in Supabase Auth using admin client
       console.log('Creating new user with email:', userInfo.email);
@@ -111,7 +117,7 @@ export async function GET(request: NextRequest) {
           email: userInfo.email,
           first_name: userInfo.first_name,
           last_name: userInfo.last_name,
-          phone_number: userInfo.phone_number,
+          phone_number: normalizedPhone || userInfo.phone_number || null,
           role: 'student', // Default role as specified
           metadata: {
             member_id: userInfo.member_id,

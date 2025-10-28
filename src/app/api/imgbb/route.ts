@@ -8,9 +8,10 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const imageUrl = body?.imageUrl;
+    const imageBase64 = body?.imageBase64; // optional raw base64 image string (without data: prefix)
 
-    if (!imageUrl) {
-      return NextResponse.json({ ok: false, error: 'imageUrl is required' }, { status: 400 });
+    if (!imageUrl && !imageBase64) {
+      return NextResponse.json({ ok: false, error: 'imageUrl or imageBase64 is required' }, { status: 400 });
     }
 
     const apiKey = process.env.IMGBB_API_KEY;
@@ -18,52 +19,59 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: 'IMGBB_API_KEY not configured on server' }, { status: 500 });
     }
 
-    // Fetch the remote URL
-    let res = await fetch(imageUrl);
-    if (!res.ok) {
-      return NextResponse.json({ ok: false, error: `Failed to fetch image URL: ${res.status}` }, { status: 400 });
-    }
+    let base64: string | null = null;
 
-    const contentType = res.headers.get('content-type') || '';
-
-    // If the resource is HTML (e.g. an ibb.co page), try to extract a direct image URL from the page
-    if (!contentType.startsWith('image/')) {
-      const text = await res.text();
-
-      // Try common places: og:image, link rel=image_src, and any <img src="..."> pointing to i.ibb.co or i.imgbb.com
-      const ogMatch = text.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["'][^>]*>/i);
-      const linkMatch = text.match(/<link[^>]*rel=["']image_src["'][^>]*href=["']([^"']+)["'][^>]*>/i);
-      const imgMatch = text.match(/<img[^>]*src=["']([^"']*(?:i\.ibb\.co|i\.imgbb\.com)[^"']*)["'][^>]*>/i);
-
-      const extracted = ogMatch?.[1] || linkMatch?.[1] || imgMatch?.[1] || null;
-
-      if (!extracted) {
-        return NextResponse.json({ ok: false, error: `Provided URL is not an image and no direct image could be found on the page` }, { status: 400 });
-      }
-
-      // Resolve relative URLs if necessary
-      let directUrl = extracted;
-      try {
-        directUrl = new URL(extracted, imageUrl).toString();
-      } catch (e) {
-        // fallback - use extracted as-is
-      }
-
-      // Fetch the direct image URL
-      res = await fetch(directUrl);
+    if (imageBase64) {
+      // Client has supplied a base64 string directly
+      base64 = imageBase64;
+    } else {
+      // Fetch the remote URL
+      let res = await fetch(imageUrl);
       if (!res.ok) {
-        return NextResponse.json({ ok: false, error: `Failed to fetch extracted image: ${res.status}` }, { status: 400 });
+        return NextResponse.json({ ok: false, error: `Failed to fetch image URL: ${res.status}` }, { status: 400 });
       }
-    }
 
-    // Now res should point to an image resource
-    const arrayBuffer = await res.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const base64 = buffer.toString('base64');
+      const contentType = res.headers.get('content-type') || '';
+
+      // If the resource is HTML (e.g. an ibb.co page), try to extract a direct image URL from the page
+      if (!contentType.startsWith('image/')) {
+        const text = await res.text();
+
+        // Try common places: og:image, link rel=image_src, and any <img src="..."> pointing to i.ibb.co or i.imgbb.com
+        const ogMatch = text.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["'][^>]*>/i);
+        const linkMatch = text.match(/<link[^>]*rel=["']image_src["'][^>]*href=["']([^"']+)["'][^>]*>/i);
+        const imgMatch = text.match(/<img[^>]*src=["']([^"']*(?:i\.ibb\.co|i\.imgbb\.com)[^"']*)["'][^>]*>/i);
+
+        const extracted = ogMatch?.[1] || linkMatch?.[1] || imgMatch?.[1] || null;
+
+        if (!extracted) {
+          return NextResponse.json({ ok: false, error: `Provided URL is not an image and no direct image could be found on the page` }, { status: 400 });
+        }
+
+        // Resolve relative URLs if necessary
+        let directUrl = extracted;
+        try {
+          directUrl = new URL(extracted, imageUrl).toString();
+        } catch (e) {
+          // fallback - use extracted as-is
+        }
+
+        // Fetch the direct image URL
+        res = await fetch(directUrl);
+        if (!res.ok) {
+          return NextResponse.json({ ok: false, error: `Failed to fetch extracted image: ${res.status}` }, { status: 400 });
+        }
+      }
+
+      // Now res should point to an image resource
+      const arrayBuffer = await res.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      base64 = buffer.toString('base64');
+    }
 
     // Upload to imgbb using form data
     const formData = new FormData();
-    formData.append('image', base64);
+    formData.append('image', base64 as string);
 
     const uploadRes = await fetch(`https://api.imgbb.com/1/upload?key=${encodeURIComponent(apiKey)}`, {
       method: 'POST',

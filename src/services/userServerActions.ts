@@ -97,7 +97,8 @@ export async function getAllUsersServerAction(): Promise<CombinedUser[]> {
       bio: userProfile?.bio || null,
       role: userProfile?.role || null,
       is_anonymous: false,
-      phone: null,
+      // Prefer phone stored on auth.users, otherwise check profile fields
+      phone: authUser.phone || userProfile?.phone || userProfile?.phone_number || null,
     };
   });
 

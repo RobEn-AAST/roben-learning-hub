@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import Image from 'next/image';
+import { isDirectImageUrl } from '@/lib/imageUtils';
 import { usePublicCourses } from '@/hooks/useQueryCache';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
@@ -35,7 +36,7 @@ function CourseCard({ course, isEnrolled, isAuthenticated }: {
     <Link href={`/courses/${course.id}`} className="block h-full">
       <div className="group bg-white rounded-xl shadow-lg overflow-hidden transition-all duration-300 hover:shadow-2xl border border-gray-100 h-full flex flex-col hover:-translate-y-2 hover:scale-[1.02] cursor-pointer">
         <div className="relative h-48 bg-gradient-to-br from-blue-400 to-blue-600 overflow-hidden">
-          {course.cover_image ? (
+          {course.cover_image && isDirectImageUrl(course.cover_image) ? (
             <Image 
               src={course.cover_image} 
               alt={course.title} 

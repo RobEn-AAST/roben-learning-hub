@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { isDirectImageUrl } from '@/lib/imageUtils';
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useParams, useRouter } from "next/navigation";
@@ -236,7 +237,7 @@ export default function CourseDetailPage() {
               {instructor && (
                 <div className="flex items-center gap-3 mb-6">
                   <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center overflow-hidden">
-                    {instructor.avatar_url ? (
+                    {instructor.avatar_url && isDirectImageUrl(instructor.avatar_url) ? (
                       <Image src={instructor.avatar_url} alt={instructor.full_name} width={48} height={48} className="object-cover" />
                     ) : (
                       <svg className="w-8 h-8 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
@@ -254,7 +255,7 @@ export default function CourseDetailPage() {
 
             <div className="md:col-span-1">
               <div className="bg-white rounded-xl shadow-xl p-6 text-gray-900">
-                {course.cover_image && (
+                {course.cover_image && isDirectImageUrl(course.cover_image) && (
                   <div className="relative h-40 mb-4 rounded-lg overflow-hidden">
                     <Image src={course.cover_image} alt={course.title} fill className="object-cover" />
                   </div>

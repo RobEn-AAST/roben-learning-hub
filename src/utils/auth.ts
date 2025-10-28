@@ -182,12 +182,17 @@ export async function ensureUserProfile(userId: string, userData?: { full_name?:
     .single();
   
   if (checkError && checkError.code === 'PGRST116') {
-    // Profile doesn't exist, create it
+    // Profile doesn't exist, create it. Prefer splitting provided full_name into first/last.
+    const names = (userData?.full_name || '').trim().split(/\s+/).filter(Boolean);
+    const first_name = names.length ? names.shift() as string : '';
+    const last_name = names.length ? names.join(' ') : '';
+
     const { error: createError } = await supabase
       .from('profiles')
       .insert({
         id: userId,
-        full_name: userData?.full_name || '',
+        first_name: first_name || null,
+        last_name: last_name || null,
         email: userData?.email || '',
         role: 'student',
         created_at: new Date().toISOString(),

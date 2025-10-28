@@ -1,67 +1,37 @@
  'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function ImgbbTestPage() {
-  const [url, setUrl] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<any>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [url, setUrl] = useState<string | null>(null);
 
-  const handleUpload = async () => {
-    setError(null);
-    setResult(null);
-    if (!url.trim()) {
-      setError('Please provide an image or page URL');
-      return;
-    }
-
+  // Read `url` from query string so this page becomes view-only: /imgbb-test?url=...
+  useEffect(() => {
     try {
-      setLoading(true);
-      const res = await fetch('/api/imgbb', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageUrl: url.trim() }),
-      });
-      const json = await res.json();
-      setResult(json);
-      if (!json.ok) setError(json.error || 'Upload failed');
-    } catch (err: any) {
-      setError(err?.message || String(err));
-    } finally {
-      setLoading(false);
+      const params = new URLSearchParams(window.location.search);
+      const q = params.get('url');
+      setUrl(q);
+    } catch (e) {
+      setUrl(null);
     }
-  };
+  }, []);
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">imgbb upload test</h1>
-      <p className="text-sm text-gray-600 mb-4">Paste an image URL or an ibb.co page URL and click Upload.</p>
+      <h1 className="text-2xl font-bold mb-4">imgbb - View Image</h1>
+      <p className="text-sm text-gray-600 mb-4">View-only mode: provide a direct image URL via the <code>?url=</code> query parameter.</p>
 
-      <div className="flex gap-2 mb-4">
-        <input
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://example.com/image.jpg or https://ibb.co/xxxxx"
-          className="flex-1 p-2 border rounded"
-        />
-        <button onClick={handleUpload} disabled={loading} className="px-4 py-2 bg-blue-600 text-white rounded">
-          {loading ? 'Uploading...' : 'Upload'}
-        </button>
-      </div>
+      {!url && (
+        <div className="p-4 border rounded bg-yellow-50 text-yellow-800">
+          No image URL provided. Example: <code>/imgbb-test?url=https://i.ibb.co/your-image.jpg</code>
+        </div>
+      )}
 
-      {error && <div className="mb-4 text-red-600">Error: {error}</div>}
-
-      {result && (
-        <div className="space-y-4">
-          <pre className="bg-gray-100 p-3 rounded overflow-auto max-h-72">{JSON.stringify(result, null, 2)}</pre>
-          {result.ok && result.url && (
-            <div>
-              <p className="text-sm text-gray-700 mb-2">Preview:</p>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={result.url} alt="uploaded" className="max-w-full rounded border" />
-            </div>
-          )}
+      {url && (
+        <div className="mt-4">
+          <p className="text-sm text-gray-700 mb-2">Preview:</p>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt="preview" className="max-w-full rounded border" />
         </div>
       )}
     </div>

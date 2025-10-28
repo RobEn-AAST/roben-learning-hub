@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import Image from 'next/image';
+import { isDirectImageUrl } from '@/lib/imageUtils';
 import Link from 'next/link';
 import { useLandingPageData } from '@/hooks/useQueryCache';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -113,7 +114,7 @@ export function DynamicCoursesSection() {
                     <div className="bg-white rounded-xl shadow-lg overflow-hidden transition-all duration-300 border border-gray-100 hover:shadow-xl cursor-pointer">
                       {/* Course Image */}
                       <div className="relative h-48 bg-gradient-to-br from-blue-400 to-blue-600 overflow-hidden">
-                        {course.cover_image ? (
+                        {course.cover_image && isDirectImageUrl(course.cover_image) ? (
                           <Image
                             src={course.cover_image}
                             alt={course.title}

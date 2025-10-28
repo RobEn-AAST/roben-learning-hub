@@ -26,7 +26,8 @@ export interface AuthUser {
 export interface CombinedUser {
   id: string;
   email: string;
-  full_name: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
   avatar_url: string | null;
   bio: string | null;
   role: 'user' | 'student' | 'instructor' | 'admin' | null;
@@ -42,7 +43,8 @@ export interface CreateUserData {
   email: string;
   password: string;
   phone?: string;
-  full_name: string;
+  first_name?: string;
+  last_name?: string;
   role?: 'student' | 'instructor' | 'admin';
   bio?: string;
   avatar_url?: string;
@@ -51,7 +53,8 @@ export interface CreateUserData {
 export interface UpdateUserData {
   email?: string;
   phone?: string;
-  full_name?: string;
+  first_name?: string;
+  last_name?: string;
   role?: 'student' | 'instructor' | 'admin';
   bio?: string;
   avatar_url?: string;
@@ -110,7 +113,8 @@ class UserService {
       const combinedUsers: CombinedUser[] = data.users.map((user: any) => ({
         id: user.id,
         email: user.email || '',
-        full_name: user.full_name || null,
+        first_name: user.first_name || null,
+        last_name: user.last_name || null,
         avatar_url: user.avatar_url || null,
         bio: user.bio || null,
         role: user.role || 'user', // Use role field from API
@@ -147,7 +151,8 @@ class UserService {
       return {
         id: profile.id,
         email: profile.email || '',
-        full_name: profile.full_name || null,
+        first_name: profile.first_name || null,
+        last_name: profile.last_name || null,
         avatar_url: profile.avatar_url || null,
         bio: profile.bio || null,
         role: profile.role || 'user',
@@ -174,11 +179,13 @@ class UserService {
           'Content-Type': 'application/json',
         },
         credentials: 'include', // This is crucial for including cookies
-        body: JSON.stringify({
-          email: userData.email,
-          password: userData.password,
-          full_name: userData.full_name,
-          is_admin: userData.role === 'admin'
+    body: JSON.stringify({
+      email: userData.email,
+      password: userData.password,
+      phone: userData.phone,
+      first_name: userData.first_name,
+      last_name: userData.last_name,
+      is_admin: userData.role === 'admin'
         }),
       });
 
@@ -193,7 +200,8 @@ class UserService {
       const createdUser: CombinedUser = {
         id: data.user.id,
         email: data.user.email || '',
-        full_name: data.user.full_name || null,
+        first_name: data.user.first_name || null,
+        last_name: data.user.last_name || null,
         avatar_url: data.user.avatar_url || null,
         bio: null,
         role: data.user.role || 'user', // Use role from API response
@@ -208,7 +216,7 @@ class UserService {
       // Log the activity with new method
       await activityLogService.logUserRegistration(
         data.user.id,
-        userData.full_name
+        ((userData.first_name || '') + ' ' + (userData.last_name || '')).trim()
       );
 
       return createdUser;
@@ -230,7 +238,9 @@ class UserService {
         credentials: 'include', // This is crucial for including cookies
         body: JSON.stringify({
           email: updateData.email,
-          full_name: updateData.full_name,
+          phone: updateData.phone,
+          first_name: updateData.first_name,
+          last_name: updateData.last_name,
           role: updateData.role
         }),
       });
@@ -252,7 +262,8 @@ class UserService {
       const updatedUser: CombinedUser = {
         id: data.user.id,
         email: data.user.email || '',
-        full_name: data.user.full_name || null,
+        first_name: data.user.first_name || null,
+        last_name: data.user.last_name || null,
         avatar_url: data.user.avatar_url || null,
         bio: data.user.bio || null,
         role: data.user.role || 'student', // Use role from API response
@@ -267,7 +278,7 @@ class UserService {
       // Log the activity with new method
       await activityLogService.logProfileUpdate(
         userId,
-        updateData.full_name || 'User',
+        ((updateData.first_name || '') + ' ' + (updateData.last_name || '')).trim() || 'User',
         'profile',
         undefined,
         'Updated user profile'

@@ -23,11 +23,10 @@ export async function PUT(
     const updateData = await request.json();
     const adminClient = createAdminClient();
 
-    // Update auth user if email or phone changed
-    if (updateData.email || updateData.phone) {
+    // Update auth user if email changed (do not write phone to auth; keep phone in profiles.phone_number)
+    if (updateData.email) {
       const authUpdateData: any = {};
-      if (updateData.email) authUpdateData.email = updateData.email;
-      if (updateData.phone) authUpdateData.phone = updateData.phone;
+      authUpdateData.email = updateData.email;
       
       const { error: authError } = await adminClient.auth.admin.updateUserById(id, authUpdateData);
       if (authError) {
@@ -39,9 +38,16 @@ export async function PUT(
       }
     }
 
-    // Update profile data
+    // Update profile data (no full_name column; split into first_name/last_name)
     const profileUpdates: any = {};
-    if (updateData.full_name !== undefined) profileUpdates.full_name = updateData.full_name;
+    if (updateData.full_name !== undefined) {
+      const names = (updateData.full_name || '').trim().split(/\s+/).filter(Boolean);
+      profileUpdates.first_name = names.length ? names.shift() as string : null;
+      profileUpdates.last_name = names.length ? names.join(' ') : null;
+    }
+    if (updateData.first_name !== undefined) profileUpdates.first_name = updateData.first_name;
+    if (updateData.last_name !== undefined) profileUpdates.last_name = updateData.last_name;
+  if (updateData.phone !== undefined) profileUpdates.phone_number = updateData.phone;
     if (updateData.role !== undefined) profileUpdates.role = updateData.role;
     if (updateData.bio !== undefined) profileUpdates.bio = updateData.bio;
     if (updateData.avatar_url !== undefined) profileUpdates.avatar_url = updateData.avatar_url;
@@ -87,11 +93,12 @@ export async function PUT(
     }
 
     // Return the updated user data in the expected format
+    const computedFullName = [profile.first_name, profile.last_name].filter(Boolean).join(' ') || null;
     const updatedUser = {
       id: authUser.user.id,
       email: authUser.user.email || '',
-      phone: authUser.user.phone || null,
-      full_name: profile.full_name || null,
+      phone: profile.phone_number || null,
+      full_name: computedFullName,
       avatar_url: profile.avatar_url || null,
       bio: profile.bio || null,
       role: profile.role || 'student',

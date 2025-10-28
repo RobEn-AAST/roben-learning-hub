@@ -120,6 +120,7 @@ export async function GET(request: NextRequest) {
     // Merge auth users with profiles
     const users = authUsers.users.map(authUser => {
       const profile = profiles.find(p => p.id === authUser.id);
+      const computedFullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || null;
       const combinedUser = {
         id: authUser.id,
         email: authUser.email,
@@ -127,9 +128,10 @@ export async function GET(request: NextRequest) {
         created_at: authUser.created_at,
         updated_at: authUser.updated_at,
         last_sign_in_at: authUser.last_sign_in_at,
-        phone: authUser.phone,
+  // Phone is stored on profiles.phone_number (use that)
+  phone: profile?.phone_number || profile?.phone || authUser.phone || null,
         // Profile data
-        full_name: profile?.full_name || null,
+        full_name: computedFullName,
         avatar_url: profile?.avatar_url || null,
         role: profile?.role || 'student',
         bio: profile?.bio || null
@@ -158,14 +160,13 @@ export async function POST(request: NextRequest) {
     // Create admin client
     const supabaseAdmin = createAdminClient();
 
-    const body = await request.json();
-    const { email, password, phone, full_name, role, bio, avatar_url } = body;
+  const body = await request.json();
+  const { email, password, phone, full_name, first_name, last_name, role, bio, avatar_url } = body;
 
     // Create user in auth.users
     const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
-      phone: phone || undefined,
       email_confirm: true
     });
 
@@ -175,14 +176,28 @@ export async function POST(request: NextRequest) {
     }
 
     // Update profile (should be created by trigger)
+    const profileUpdates: any = {
+      role: role || 'student',
+      bio: bio || null,
+      avatar_url: avatar_url || null
+    };
+    // Include phone in profile if provided
+    if (phone !== undefined) {
+      profileUpdates.phone_number = phone || null;
+    }
+    // Prefer explicit first_name/last_name if provided, otherwise split full_name
+    if (first_name !== undefined || last_name !== undefined) {
+      profileUpdates.first_name = first_name || null;
+      profileUpdates.last_name = last_name || null;
+    } else if (full_name) {
+      const names = full_name.trim().split(/\s+/).filter(Boolean);
+      profileUpdates.first_name = names.length ? names.shift() as string : null;
+      profileUpdates.last_name = names.length ? names.join(' ') : null;
+    }
+
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
-      .update({
-        full_name: full_name || null,
-        role: role || 'student',
-        bio: bio || null,
-        avatar_url: avatar_url || null
-      })
+      .update(profileUpdates)
       .eq('id', authUser.user.id)
       .select()
       .single();
@@ -194,14 +209,14 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       user: {
-        id: authUser.user.id,
+    id: authUser.user.id,
         email: authUser.user.email,
         email_confirmed_at: authUser.user.email_confirmed_at,
         created_at: authUser.user.created_at,
         updated_at: authUser.user.updated_at,
         last_sign_in_at: authUser.user.last_sign_in_at,
-        phone: authUser.user.phone,
-        full_name: profile?.full_name || full_name || null,
+    phone: profile?.phone_number || null,
+  full_name: profile?.first_name || profile?.last_name ? [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') : (full_name || null),
         avatar_url: profile?.avatar_url || avatar_url || null,
         role: profile?.role || role || 'student',
         bio: profile?.bio || bio || null

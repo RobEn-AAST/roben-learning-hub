@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -25,7 +25,7 @@ import {
   useAssignInstructor,
   useRemoveInstructor
 } from '@/hooks/useQueryCache';
-import { uploadImageUrlToImgbb } from '@/lib/imgbb';
+import { uploadImageUrlToImgbb, uploadImageFileToImgbb } from '@/lib/imgbb';
 
 interface CourseFormData {
   title: string;
@@ -466,6 +466,12 @@ interface CourseFormProps {
 function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
   const [currentUserId, setCurrentUserId] = useState<string>('');
   const [userLoading, setUserLoading] = useState(true);
+  const [dragOver, setDragOver] = useState(false);
+  const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
+  const [stagedBase64, setStagedBase64] = useState<string | null>(null);
+  const [stagedFileName, setStagedFileName] = useState<string | null>(null);
+  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB limit
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [availableInstructors, setAvailableInstructors] = useState<{ id: string; first_name?: string; last_name?: string; full_name?: string; email: string; avatar_url?: string }[]>([]);
   const [selectedInstructorIds, setSelectedInstructorIds] = useState<string[]>([]);
   const supabase = createClient();
@@ -568,6 +574,18 @@ function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Only accept imgbb / i.ibb.co direct image URLs in the cover image bar
+  const isImgbbUrl = (url?: string | null) => {
+    if (!url) return false;
+    try {
+      const u = new URL(url);
+      const host = u.hostname.toLowerCase();
+      return host.includes('imgbb.com') || host === 'i.ibb.co' || host === 'i.imgbb.com' || host.endsWith('ibb.co');
+    } catch (e) {
+      return false;
+    }
+  };
+
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
@@ -577,6 +595,11 @@ function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
 
     if (!formData.description.trim()) {
       newErrors.description = 'Description is required';
+    }
+
+    // If a cover image is provided, ensure it is an imgbb link
+    if (formData.cover_image && formData.cover_image.trim() !== '' && !isImgbbUrl(formData.cover_image.trim())) {
+      newErrors.cover_image = 'Cover image must be a direct imgbb image URL (i.ibb.co or imgbb.com)';
     }
 
     // Check if created_by is set for new courses (only check if user loading is complete)
@@ -633,6 +656,15 @@ function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
+
+    // Additional immediate validation for cover_image: only allow imgbb links
+    if (field === 'cover_image') {
+      if (value && value.trim() !== '' && !isImgbbUrl(value.trim())) {
+        setErrors(prev => ({ ...prev, cover_image: 'Only imgbb direct image URLs are allowed (i.ibb.co or imgbb.com)' }));
+      } else {
+        setErrors(prev => ({ ...prev, cover_image: '' }));
+      }
+    }
   };
 
   const handleUploadToImgbb = async () => {
@@ -681,6 +713,89 @@ function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
     } finally {
       setImgbbUploading(false);
     }
+  };
+
+  // Shared file processing (used by drop and file picker) — stage the image but don't upload yet
+  const processFile = async (file: File) => {
+    setImgbbError(null);
+    // Accept only images
+    if (!file.type.startsWith('image/')) {
+      setImgbbError('Please select an image file');
+      return;
+    }
+
+    // File size limit
+    if (file.size > MAX_FILE_SIZE) {
+      setImgbbError(`File too large. Max size is ${Math.round(MAX_FILE_SIZE / 1024 / 1024)} MB`);
+      return;
+    }
+
+    try {
+      // Read file as data URL for preview and staging (no upload here)
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      const { base64, dataUrl } = await new Promise<{ base64: string; dataUrl: string }>((resolve, reject) => {
+        reader.onload = () => {
+          const result = reader.result as string;
+          const commaIndex = result.indexOf(',');
+          resolve({ base64: result.slice(commaIndex + 1), dataUrl: result });
+        };
+        reader.onerror = () => reject(reader.error);
+      });
+
+      // Stage preview and base64 for later upload
+      setPreviewDataUrl(dataUrl);
+      setStagedBase64(base64);
+      setStagedFileName(file.name || 'staged-image');
+    } catch (err: any) {
+      setImgbbError(err?.message || String(err));
+    }
+  };
+
+  // Upload the staged image to imgbb (triggered by "Use this photo")
+  const uploadStagedImage = async () => {
+    if (!stagedBase64) {
+      setImgbbError('No image selected to upload');
+      return;
+    }
+
+    try {
+      setImgbbError(null);
+      setImgbbUploading(true);
+      const uploadRes = await uploadImageFileToImgbb(stagedBase64);
+      if (!uploadRes.ok) {
+        setImgbbError(uploadRes.error || 'Upload failed');
+        toast.error('imgbb upload failed: ' + (uploadRes.error || 'Unknown'));
+      } else if (uploadRes.url) {
+        setFormData(prev => ({ ...prev, cover_image: uploadRes.url || '' }));
+        if (course && course.id) {
+          try {
+            await coursesService.updateCourse(course.id, { cover_image: uploadRes.url });
+            toast.success('Image uploaded to imgbb and saved to course');
+          } catch (err: any) {
+            console.error('Failed to persist imgbb URL:', err);
+            toast.error('Image uploaded but failed to save to course. Please save manually.');
+          }
+        } else {
+          toast.success('Image uploaded to imgbb and URL updated (remember to save the course)');
+        }
+        // clear staged data after successful upload
+        setStagedBase64(null);
+        setStagedFileName(null);
+      }
+    } catch (err: any) {
+      setImgbbError(err?.message || String(err));
+      toast.error('imgbb upload error: ' + (err?.message || String(err)));
+    } finally {
+      setImgbbUploading(false);
+    }
+  };
+
+  const clearStagedImage = () => {
+    setPreviewDataUrl(null);
+    setStagedBase64(null);
+    setStagedFileName(null);
+    setImgbbError(null);
   };
 
   const handleInstructorToggle = (instructorId: string) => {
@@ -778,27 +893,120 @@ function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
           {/* Cover Image URL */}
           <div>
             <Label htmlFor="cover_image" className="text-black">Cover Image URL</Label>
-            <div className="flex items-center gap-2">
+            <div>
               <Input
                 id="cover_image"
                 value={formData.cover_image}
                 onChange={(e) => handleInputChange('cover_image', e.target.value)}
-                placeholder="https://example.com/image.jpg"
+                placeholder="https://i.ibb.co/your-image.jpg"
                 type="url"
-                className="text-black flex-1"
+                className="text-black w-full"
               />
+            </div>
+            {errors.cover_image && <p className="text-sm text-red-500 mt-1">{errors.cover_image}</p>}
+            <p className="text-sm text-gray-500 mt-1">
+              Only direct imgbb image URLs are accepted (i.ibb.co or imgbb.com). Alternatively, drag & drop an image below or use the link to import an external URL.
+            </p>
+
+            <div className="mt-2">
               <button
                 type="button"
                 onClick={handleUploadToImgbb}
                 disabled={imgbbUploading || !formData.cover_image}
-                className="inline-flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                className="text-sm text-blue-600 hover:underline disabled:opacity-50"
               >
-                {imgbbUploading ? 'Uploading...' : 'Upload to imgbb'}
+                Import external URL → imgbb
               </button>
             </div>
-            <p className="text-sm text-gray-500 mt-1">
-              Optional: URL to the course cover image. Use "Upload to imgbb" to copy external images into your imgbb account (server-side API key required).
-            </p>
+
+            {/* Drag & drop area (moved under the cover image bar) */}
+            {/* Hidden file input for clickable drop area */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) processFile(f);
+                // clear the value so same file can be re-selected later
+                (e.target as HTMLInputElement).value = '';
+              }}
+            />
+
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => fileInputRef.current?.click()}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click(); }}
+              className={`mt-3 w-full h-48 flex items-center justify-center border-2 border-dashed rounded-md text-center text-gray-600 cursor-pointer transition-colors ${dragOver ? 'border-blue-500 bg-blue-50' : 'border-gray-300 bg-white'}`}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragEnter={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={(e) => { e.preventDefault(); setDragOver(false); }}
+              onDrop={async (e) => {
+                e.preventDefault();
+                setDragOver(false);
+                const file = e.dataTransfer?.files?.[0];
+                if (!file) return;
+                await processFile(file);
+              }}
+            >
+              {previewDataUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <div className="w-full h-full relative">
+                  <div className="w-full h-full flex items-center justify-center p-2">
+                    <img src={previewDataUrl} alt="preview" className="max-w-full max-h-full object-contain rounded-md shadow-sm" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); clearStagedImage(); }}
+                    onKeyDown={(e) => { e.stopPropagation(); }}
+                    disabled={imgbbUploading}
+                    aria-label="Remove staged image"
+                    className="absolute top-2 right-2 z-20 w-7 h-7 rounded-full bg-black bg-opacity-50 text-white flex items-center justify-center hover:bg-opacity-75"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 20 20" fill="none" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 6l8 8M6 14L14 6" />
+                    </svg>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center pointer-events-none">
+                  <svg className="w-10 h-10 mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16v-4a4 4 0 014-4h2a4 4 0 014 4v4" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 20h18" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8l-4-4-4 4" />
+                  </svg>
+                  <div className="text-sm font-medium">Drag & drop image here</div>
+                  <div className="text-xs text-gray-500">or click to select a file — max 5 MB</div>
+                </div>
+              )}
+            </div>
+
+            {/* Actions for staged image: upload or clear */}
+            {stagedBase64 && (
+              <div className="mt-3 flex items-center">
+                <button
+                  type="button"
+                  onClick={uploadStagedImage}
+                  disabled={imgbbUploading}
+                  className="inline-flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {imgbbUploading ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                      </svg>
+                      Uploading...
+                    </>
+                  ) : (
+                    'Use this photo'
+                  )}
+                </button>
+              </div>
+            )}
+
             {imgbbError && <p className="text-sm text-red-500 mt-1">{imgbbError}</p>}
           </div>
 

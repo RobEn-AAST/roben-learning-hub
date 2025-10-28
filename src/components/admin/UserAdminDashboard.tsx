@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { normalizeEgyptianPhone } from '@/lib/phone';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,7 +17,8 @@ import { useUsersAdmin } from '@/hooks/useQueryCache';
 interface CombinedUser {
   id: string;
   email: string;
-  full_name: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
   avatar_url: string | null;
   bio: string | null;
   role: 'user' | 'student' | 'instructor' | 'admin' | null;
@@ -82,7 +84,8 @@ interface UserFormData {
   email: string;
   password: string;
   phone: string;
-  full_name: string;
+  first_name: string;
+  last_name: string;
     role: 'user' | 'student' | 'instructor' | 'admin' | null;
   bio: string;
   avatar_url: string;
@@ -103,7 +106,8 @@ function UserForm({ user, onSave, onCancel, mode, loading }: UserFormProps) {
     email: user?.email || '',
     password: '',
     phone: user?.phone || '',
-    full_name: user?.full_name || '',
+    first_name: (user as any)?.first_name || '',
+    last_name: (user as any)?.last_name || '',
     role: (user?.role as 'student' | 'instructor' | 'admin') || 'student',
     bio: user?.bio || '',
     avatar_url: user?.avatar_url || ''
@@ -111,13 +115,19 @@ function UserForm({ user, onSave, onCancel, mode, loading }: UserFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    // Normalize & validate phone client-side
+    const normalizedPhone = normalizeEgyptianPhone(formData.phone);
+    if (formData.phone && !normalizedPhone) {
+      toast.error('Invalid phone number. Expected Egyptian mobile starting with 010/011/012/015 and 11 digits.');
+      return;
+    }
     if (mode === 'create') {
-      await onSave({
+        await onSave({
         email: formData.email,
         password: formData.password,
-        phone: formData.phone,
-        full_name: formData.full_name,
+            phone: normalizedPhone || undefined,
+        first_name: formData.first_name,
+        last_name: formData.last_name,
         role: formData.role === 'user' ? 'student' : (formData.role || 'student'),
         bio: formData.bio,
         avatar_url: formData.avatar_url
@@ -125,8 +135,9 @@ function UserForm({ user, onSave, onCancel, mode, loading }: UserFormProps) {
     } else {
       const updateData: UpdateUserData = {};
       if (formData.email !== user?.email) updateData.email = formData.email;
-      if (formData.phone !== user?.phone) updateData.phone = formData.phone;
-      if (formData.full_name !== user?.full_name) updateData.full_name = formData.full_name;
+  if (formData.phone !== user?.phone) updateData.phone = normalizedPhone || undefined;
+      if (formData.first_name !== (user as any)?.first_name) updateData.first_name = formData.first_name;
+      if (formData.last_name !== (user as any)?.last_name) updateData.last_name = formData.last_name;
       if (formData.role !== user?.role) {
         updateData.role = formData.role === 'user' ? 'student' : (formData.role || 'student');
       }
@@ -171,9 +182,10 @@ function UserForm({ user, onSave, onCancel, mode, loading }: UserFormProps) {
                 type="tel"
                 value={formData.phone}
                 onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-                placeholder="+1234567890"
+                placeholder="e.g. 01012345678"
                 className="bg-white text-black border-gray-300"
               />
+              <p className="mt-1 text-sm text-gray-500">Example: 01012345678 — Egyptian mobile (11 digits) starting with 010, 011, 012, or 015.</p>
             </div>
             
             {mode === 'create' && (
@@ -193,15 +205,29 @@ function UserForm({ user, onSave, onCancel, mode, loading }: UserFormProps) {
             )}
             
             <div>
-              <Label htmlFor="full_name" className="text-black">Full Name *</Label>
-              <Input
-                id="full_name"
-                value={formData.full_name}
-                onChange={(e) => setFormData(prev => ({ ...prev, full_name: e.target.value }))}
-                placeholder="John Doe"
-                className="bg-white text-black border-gray-300"
-                required
-              />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label htmlFor="first_name" className="text-black">First Name *</Label>
+                  <Input
+                    id="first_name"
+                    value={formData.first_name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
+                    placeholder="John"
+                    className="bg-white text-black border-gray-300"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="last_name" className="text-black">Last Name</Label>
+                  <Input
+                    id="last_name"
+                    value={formData.last_name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
+                    placeholder="Doe"
+                    className="bg-white text-black border-gray-300"
+                  />
+                </div>
+              </div>
             </div>
             
             <div>
@@ -322,7 +348,7 @@ function UserTable({ users, onEdit, onView, onDelete, onResetPassword }: UserTab
                       {user.avatar_url ? (
                         <img
                           src={user.avatar_url}
-                          alt={user.full_name || 'User avatar'}
+                          alt={((user as any).first_name || (user as any).last_name) ? `${(user as any).first_name || ''} ${(user as any).last_name || ''}`.trim() : 'User avatar'}
                           className="w-10 h-10 rounded-full object-cover"
                         />
                       ) : (
@@ -332,7 +358,7 @@ function UserTable({ users, onEdit, onView, onDelete, onResetPassword }: UserTab
                       )}
                       <div>
                         <div className="font-medium text-black">
-                          {user.full_name || 'No Name'}
+                            {((user as any).first_name || '') + ' ' + ((user as any).last_name || '') || 'No Name'}
                         </div>
                         <div className="text-sm text-gray-600">{user.email}</div>
                         {user.bio && (
@@ -536,8 +562,9 @@ export function UserAdminDashboard() {
   };
 
   const filteredUsers = users.filter(user => {
-    const matchesSearch = user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         user.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const full = (((user as any).first_name || '') + ' ' + ((user as any).last_name || '')).toLowerCase();
+    const matchesSearch = full.includes(searchTerm.toLowerCase()) ||
+      user.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesRole = filterRole === 'all' || user.role === filterRole;
     return matchesSearch && matchesRole;
   });
@@ -593,7 +620,7 @@ export function UserAdminDashboard() {
                 {selectedUser.avatar_url ? (
                   <img
                     src={selectedUser.avatar_url}
-                    alt={selectedUser.full_name || 'User avatar'}
+                    alt={((selectedUser as any).first_name || (selectedUser as any).last_name) ? `${(selectedUser as any).first_name || ''} ${(selectedUser as any).last_name || ''}`.trim() : 'User avatar'}
                     className="w-16 h-16 rounded-full object-cover"
                   />
                 ) : (
@@ -602,7 +629,7 @@ export function UserAdminDashboard() {
                   </div>
                 )}
                 <div>
-                  <CardTitle className="text-2xl text-black">{selectedUser.full_name || 'No Name'}</CardTitle>
+                  <CardTitle className="text-2xl text-black">{(((selectedUser as any).first_name || '') + ' ' + ((selectedUser as any).last_name || '')).trim() || 'No Name'}</CardTitle>
                   <p className="text-gray-600">{selectedUser.email}</p>
                 </div>
               </div>
@@ -623,7 +650,7 @@ export function UserAdminDashboard() {
                 <div className="space-y-2">
                   <div>
                     <span className="font-medium text-gray-700">Full Name:</span>
-                    <span className="ml-2 text-gray-900">{selectedUser.full_name || 'Not set'}</span>
+                    <span className="ml-2 text-gray-900">{(((selectedUser as any).first_name || '') + ' ' + ((selectedUser as any).last_name || '')).trim() || 'Not set'}</span>
                   </div>
                   <div>
                     <span className="font-medium text-gray-700">Email:</span>

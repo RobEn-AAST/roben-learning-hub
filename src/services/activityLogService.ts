@@ -47,12 +47,13 @@ class ActivityLogService {
       if (!userName) {
         const { data: profile } = await this.supabase
           .from('profiles')
-          .select('full_name')
+          .select('first_name, last_name')
           .eq('id', user.id)
           .single();
-        // Ensure we always have a string value
-        const fullName = profile?.full_name;
-        userName = typeof fullName === 'string' ? fullName : 'Unknown User';
+        // Compose a display name from first_name + last_name, fallback to Unknown User
+        const first = profile?.first_name;
+        const last = profile?.last_name;
+        userName = [first, last].filter(Boolean).join(' ') || 'Unknown User';
         this.userNameCache.set(user.id, userName);
       }
 

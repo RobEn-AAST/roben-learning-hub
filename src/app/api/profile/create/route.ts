@@ -32,13 +32,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ profile: existingProfile });
     }
     
-    // Create new profile
+    // Create new profile (use first_name/last_name — no full_name column in schema)
     const { data: profile, error: createError } = await adminClient
       .from('profiles')
       .insert([{
         id: user.id,
         email: user.email || '',
-        full_name: '',
+        first_name: null,
+        last_name: null,
+        phone_number: null,
         bio: null,
         avatar_url: null,
         role: 'student' // Default role
