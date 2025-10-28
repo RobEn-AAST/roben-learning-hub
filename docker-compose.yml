@@ -4,7 +4,7 @@
 #   Stop:           docker compose down
 #   Destroy:        docker compose -f docker-compose.yml -f ./dev/docker-compose.dev.yml down -v --remove-orphans
 
-version: "3.8"
+name: supabase
 
 services:
   studio:
@@ -22,6 +22,8 @@ services:
       timeout: 5s
       interval: 5s
       retries: 3
+    ports:
+      - ${STUDIO_PORT}:3000/tcp
     environment:
       # Binds nestjs listener to both IPv4 and IPv6 network interfaces
       HOSTNAME: "::"
@@ -234,3 +236,5 @@ services:
       - db-config:/etc/postgresql-custom
 
 # If you want to use logging, please run with `docker compose -f docker-compose.yml -f docker-compose-logging.yml up`
+volumes:
+  db-config:
