@@ -5,7 +5,7 @@ import { activityLogService } from '@/services/activityLogService';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: any
 ) {
   try {
     const supabase = await createClient();
@@ -44,7 +44,7 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: any
 ) {
   try {
     const supabase = await createClient();
@@ -71,10 +71,9 @@ export async function PUT(
     // Log activity
     await activityLogService.logActivity({
       action: 'update_video',
-      resource_type: 'video',
-      resource_id: video.id,
-      details: `Updated video: ${video.url}`,
-      metadata: { changes: videoData }
+      table_name: 'videos',
+      record_id: video.id,
+      description: `Updated video: ${video.url}`
     });
 
     return NextResponse.json(video);
@@ -89,7 +88,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: any
 ) {
   try {
     const supabase = await createClient();
@@ -118,10 +117,9 @@ export async function DELETE(
     // Log activity
     await activityLogService.logActivity({
       action: 'delete_video',
-      resource_type: 'video',
-      resource_id: params.id,
-      details: `Deleted video: ${video?.url || 'Unknown'}`,
-      metadata: { deleted_video: video }
+      table_name: 'videos',
+      record_id: params.id,
+      description: `Deleted video: ${video?.url || 'Unknown'}`
     });
 
     return NextResponse.json({ success: true });

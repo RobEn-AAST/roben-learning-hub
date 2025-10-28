@@ -152,7 +152,7 @@ export default async function AllCoursesPage() {
   return (
     <main className="min-h-screen flex flex-col items-center relative overflow-hidden bg-white">
       <div className="flex-1 w-full flex flex-col items-center relative z-10">
-        <Navigation user={data.user} userRole={data.userRole} />
+  <Navigation />
 
         <div className="w-full max-w-7xl px-6 py-12">
           <div className="animate-in fade-in duration-700">

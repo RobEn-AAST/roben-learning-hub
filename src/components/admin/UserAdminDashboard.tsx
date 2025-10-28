@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { userService, CreateUserData, UpdateUserData, UserStats } from '@/services/userService';
 import { activityLogService } from '@/services/activityLogService';
 import { useUsersAdmin } from '@/hooks/useQueryCache';
+import { uploadImageUrlToImgbb, uploadImageFileToImgbb } from '@/lib/imgbb';
 
 // Define CombinedUser interface for this component
 interface CombinedUser {
@@ -112,6 +113,128 @@ function UserForm({ user, onSave, onCancel, mode, loading }: UserFormProps) {
     bio: user?.bio || '',
     avatar_url: user?.avatar_url || ''
   });
+  
+  // imgbb / avatar upload state (mirrors CoursesAdminDashboard flow)
+  const [avatarPreviewDataUrl, setAvatarPreviewDataUrl] = useState<string | null>(null);
+  const [stagedAvatarBase64, setStagedAvatarBase64] = useState<string | null>(null);
+  const [stagedAvatarFileName, setStagedAvatarFileName] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+  const avatarFileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const MAX_AVATAR_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+
+  const isImgbbUrl = (url?: string | null) => {
+    if (!url) return false;
+    try {
+      const u = new URL(url);
+      const host = u.hostname.toLowerCase();
+      return host.includes('imgbb.com') || host === 'i.ibb.co' || host === 'i.imgbb.com' || host.endsWith('ibb.co');
+    } catch (e) {
+      return false;
+    }
+  };
+
+  const handleAvatarImportToImgbb = async () => {
+    setAvatarError(null);
+    const url = formData.avatar_url?.trim();
+    if (!url) {
+      setAvatarError('Please provide a valid image URL first');
+      return;
+    }
+
+    try {
+      setAvatarUploading(true);
+      const result = await uploadImageUrlToImgbb(url);
+      if (!result.ok) {
+        setAvatarError(result.error || 'Upload failed');
+        toast.error('imgbb upload failed: ' + (result.error || 'Unknown'));
+        return;
+      }
+
+      if (result.url) {
+        setFormData(prev => ({ ...prev, avatar_url: result.url || '' }));
+        // If editing an existing user, persist immediately
+        // Update the form value; defer persistence until the admin presses Save
+        toast.success('Image uploaded to imgbb and URL updated (remember to save the user)');
+      } else {
+        setAvatarError('No URL returned from imgbb');
+      }
+    } catch (err: any) {
+      setAvatarError(err?.message || String(err));
+      toast.error('imgbb upload error: ' + (err?.message || String(err)));
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const processAvatarFile = async (file: File) => {
+    setAvatarError(null);
+    if (!file.type.startsWith('image/')) {
+      setAvatarError('Please select an image file');
+      return;
+    }
+    if (file.size > MAX_AVATAR_FILE_SIZE) {
+      setAvatarError(`File too large. Max size is ${Math.round(MAX_AVATAR_FILE_SIZE / 1024 / 1024)} MB`);
+      return;
+    }
+
+    try {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      const { base64, dataUrl } = await new Promise<{ base64: string; dataUrl: string }>((resolve, reject) => {
+        reader.onload = () => {
+          const result = reader.result as string;
+          const commaIndex = result.indexOf(',');
+          resolve({ base64: result.slice(commaIndex + 1), dataUrl: result });
+        };
+        reader.onerror = () => reject(reader.error);
+      });
+
+      setAvatarPreviewDataUrl(dataUrl);
+      setStagedAvatarBase64(base64);
+      setStagedAvatarFileName(file.name || 'staged-avatar');
+    } catch (err: any) {
+      setAvatarError(err?.message || String(err));
+    }
+  };
+
+  const uploadStagedAvatar = async () => {
+    if (!stagedAvatarBase64) {
+      setAvatarError('No image selected to upload');
+      return;
+    }
+
+    try {
+      setAvatarError(null);
+      setAvatarUploading(true);
+      const uploadRes = await uploadImageFileToImgbb(stagedAvatarBase64);
+      if (!uploadRes.ok) {
+        setAvatarError(uploadRes.error || 'Upload failed');
+        toast.error('imgbb upload failed: ' + (uploadRes.error || 'Unknown'));
+      } else if (uploadRes.url) {
+        setFormData(prev => ({ ...prev, avatar_url: uploadRes.url || '' }));
+        // Update the form value; defer persistence until the admin presses Save
+        toast.success('Image uploaded to imgbb and URL updated (remember to save the user)');
+
+        // clear staged data after successful upload
+        setStagedAvatarBase64(null);
+        setStagedAvatarFileName(null);
+        setAvatarPreviewDataUrl(null);
+      }
+    } catch (err: any) {
+      setAvatarError(err?.message || String(err));
+      toast.error('imgbb upload error: ' + (err?.message || String(err)));
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  const clearStagedAvatar = () => {
+    setAvatarPreviewDataUrl(null);
+    setStagedAvatarBase64(null);
+    setStagedAvatarFileName(null);
+    setAvatarError(null);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -266,6 +389,100 @@ function UserForm({ user, onSave, onCancel, mode, loading }: UserFormProps) {
               placeholder="https://example.com/avatar.jpg"
               className="bg-white text-black border-gray-300"
             />
+            <p className="text-sm text-gray-500 mt-2">You can paste a direct image URL (imgbb preferred) or upload an image below.</p>
+
+            <div className="mt-2">
+              <button
+                type="button"
+                onClick={handleAvatarImportToImgbb}
+                disabled={avatarUploading || !formData.avatar_url}
+                className="text-sm text-blue-600 hover:underline disabled:opacity-50"
+              >
+                Import external URL → imgbb
+              </button>
+            </div>
+
+            {/* Hidden file input for avatar drag/drop */}
+            <input
+              ref={avatarFileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) processAvatarFile(f);
+                (e.target as HTMLInputElement).value = '';
+              }}
+            />
+
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => avatarFileInputRef.current?.click()}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') avatarFileInputRef.current?.click(); }}
+              className={`mt-3 w-full h-36 flex items-center justify-center border-2 border-dashed rounded-md text-center text-gray-600 cursor-pointer transition-colors bg-white`}
+              onDragOver={(e) => { e.preventDefault(); }}
+              onDrop={async (e) => {
+                e.preventDefault();
+                const file = e.dataTransfer?.files?.[0];
+                if (!file) return;
+                await processAvatarFile(file);
+              }}
+            >
+              {avatarPreviewDataUrl ? (
+                <div className="w-full h-full relative">
+                  <div className="w-full h-full flex items-center justify-center p-2">
+                    <img src={avatarPreviewDataUrl} alt="preview" className="max-w-full max-h-full object-contain rounded-md shadow-sm" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); e.preventDefault(); clearStagedAvatar(); }}
+                    disabled={avatarUploading}
+                    aria-label="Remove staged avatar"
+                    className="absolute top-2 right-2 z-20 w-7 h-7 rounded-full bg-black bg-opacity-50 text-white flex items-center justify-center hover:bg-opacity-75"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 20 20" fill="none" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 6l8 8M6 14L14 6" />
+                    </svg>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center pointer-events-none">
+                  <svg className="w-8 h-8 mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16v-4a4 4 0 014-4h2a4 4 0 014 4v4" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 20h18" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8l-4-4-4 4" />
+                  </svg>
+                  <div className="text-sm font-medium">Drag & drop avatar here</div>
+                  <div className="text-xs text-gray-500">or click to select a file — max 5 MB</div>
+                </div>
+              )}
+            </div>
+
+            {stagedAvatarBase64 && (
+              <div className="mt-3 flex items-center">
+                <button
+                  type="button"
+                  onClick={uploadStagedAvatar}
+                  disabled={avatarUploading}
+                  className="inline-flex items-center px-3 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {avatarUploading ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                      </svg>
+                      Uploading...
+                    </>
+                  ) : (
+                    'Use this photo'
+                  )}
+                </button>
+              </div>
+            )}
+
+            {avatarError && <p className="text-sm text-red-500 mt-1">{avatarError}</p>}
           </div>
           
           <div className="flex space-x-2 pt-4">

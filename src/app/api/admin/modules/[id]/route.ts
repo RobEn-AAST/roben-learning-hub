@@ -135,9 +135,9 @@ export async function PUT(
     // Log the action
     await activityLogService.logActivity({
       action: 'UPDATE',
-      resource_type: 'modules',
-      resource_id: id,
-      details: `Updated module: ${updatedModule.title}`
+      table_name: 'modules',
+      record_id: id,
+      description: `Updated module: ${updatedModule.title}`
     });
 
     // Get lesson count
@@ -209,9 +209,9 @@ export async function DELETE(
     // Log the action
     await activityLogService.logActivity({
       action: 'DELETE',
-      resource_type: 'modules',
-      resource_id: id,
-      details: `Deleted module: ${module.title}`
+      table_name: 'modules',
+      record_id: id,
+      description: `Deleted module: ${module.title}`
     });
 
     return NextResponse.json({ message: 'Module deleted successfully' });

@@ -5,7 +5,7 @@ import { activityLogService } from '@/services/activityLogService';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: any
 ) {
   try {
     const supabase = await createClient();
@@ -39,7 +39,7 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: any
 ) {
   try {
     const supabase = await createClient();
@@ -69,10 +69,9 @@ export async function POST(
     // Log activity
     await activityLogService.logActivity({
       action: 'create_video_question',
-      resource_type: 'video_question',
-      resource_id: question.id,
-      details: `Created question for video ${params.id}`,
-      metadata: { question: question.question, timestamp: question.timestamp_seconds }
+      table_name: 'video_questions',
+      record_id: question.id,
+      description: `Created question for video ${params.id}`
     });
 
     return NextResponse.json(question, { status: 201 });

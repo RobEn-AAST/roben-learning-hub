@@ -280,15 +280,18 @@ export const analyticsService = {
 
       if (error) throw error;
 
-      return data?.map(log => ({
-        id: log.id,
-        user_name: log.profiles ? `${log.profiles.first_name || ''} ${log.profiles.last_name || ''}`.trim() : 'Unknown User',
-        action: log.action,
-        table_name: log.table_name,
-        record_name: log.record_name || '',
-        created_at: log.created_at,
-        description: log.description || ''
-      })) || [];
+      return data?.map(log => {
+        const profile = Array.isArray(log.profiles) ? log.profiles[0] : log.profiles;
+        return {
+          id: log.id,
+          user_name: profile ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim() : 'Unknown User',
+          action: log.action,
+          table_name: log.table_name,
+          record_name: log.record_name || '',
+          created_at: log.created_at,
+          description: log.description || ''
+        };
+      }) || [];
     } catch (error) {
       console.error('Error fetching recent activity:', error);
       return [];

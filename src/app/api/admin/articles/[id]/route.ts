@@ -100,9 +100,9 @@ export async function PUT(
     // Log the action
     await activityLogService.logActivity({
       action: 'UPDATE',
-      resource_type: 'articles',
-      resource_id: id,
-      details: `Updated article: ${updatedArticle.title}`
+      table_name: 'articles',
+      record_id: id,
+      description: `Updated article: ${updatedArticle.title}`
     });
 
     console.log('✅ PUT /api/admin/articles/[id] - Article updated successfully:', updatedArticle.title);
@@ -161,9 +161,9 @@ export async function DELETE(
     // Log the action
     await activityLogService.logActivity({
       action: 'DELETE',
-      resource_type: 'articles',
-      resource_id: id,
-      details: `Deleted article: ${article.title}`
+      table_name: 'articles',
+      record_id: id,
+      description: `Deleted article: ${article.title}`
     });
 
     console.log('✅ DELETE /api/admin/articles/[id] - Article deleted successfully:', article.title);

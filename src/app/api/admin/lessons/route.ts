@@ -114,9 +114,9 @@ export async function POST(request: NextRequest) {
     // Log the action
     await activityLogService.logActivity({
       action: 'CREATE',
-      resource_type: 'lessons',
-      resource_id: newLesson.id,
-      details: `Created lesson: ${title} (${lesson_type})`
+      table_name: 'lessons',
+      record_id: newLesson.id,
+      description: `Created lesson: ${title} (${lesson_type})`
     });
 
     return NextResponse.json(newLesson, { status: 201 });

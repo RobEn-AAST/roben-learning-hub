@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
     const supabaseAdmin = createAdminClient();
 
   const body = await request.json();
-  const { email, password, phone, full_name, first_name, last_name, role, bio, avatar_url } = body;
+  const { email, password, phone, first_name, last_name, role, bio, avatar_url } = body;
 
     // Create user in auth.users
     const { data: authUser, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -185,14 +185,10 @@ export async function POST(request: NextRequest) {
     if (phone !== undefined) {
       profileUpdates.phone_number = phone || null;
     }
-    // Prefer explicit first_name/last_name if provided, otherwise split full_name
+    // Prefer explicit first_name/last_name if provided. We no longer accept `full_name` in the API body.
     if (first_name !== undefined || last_name !== undefined) {
       profileUpdates.first_name = first_name || null;
       profileUpdates.last_name = last_name || null;
-    } else if (full_name) {
-      const names = full_name.trim().split(/\s+/).filter(Boolean);
-      profileUpdates.first_name = names.length ? names.shift() as string : null;
-      profileUpdates.last_name = names.length ? names.join(' ') : null;
     }
 
     const { data: profile, error: profileError } = await supabaseAdmin

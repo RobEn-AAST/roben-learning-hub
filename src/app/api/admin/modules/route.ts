@@ -199,9 +199,9 @@ export async function POST(request: NextRequest) {
     // Log the action
     await activityLogService.logActivity({
       action: 'CREATE',
-      resource_type: 'modules',
-      resource_id: newModule.id,
-      details: `Created module: ${title}`
+      table_name: 'modules',
+      record_id: newModule.id,
+      description: `Created module: ${title}`
     });
 
     const result = {

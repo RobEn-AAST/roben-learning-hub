@@ -39,9 +39,9 @@ export async function PUT(request: NextRequest) {
     // Log the action
     await activityLogService.logActivity({
       action: 'UPDATE',
-      resource_type: 'lessons',
-      resource_id: module_id,
-      details: `Reordered ${lesson_ids.length} lessons in module`
+      table_name: 'lessons',
+      record_id: module_id,
+      description: `Reordered ${lesson_ids.length} lessons in module`
     });
 
     return NextResponse.json({ message: 'Lessons reordered successfully' });

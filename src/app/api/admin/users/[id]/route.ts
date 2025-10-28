@@ -38,15 +38,10 @@ export async function PUT(
       }
     }
 
-    // Update profile data (no full_name column; split into first_name/last_name)
+    // Update profile data (use first_name/last_name directly; do not accept full_name)
     const profileUpdates: any = {};
-    if (updateData.full_name !== undefined) {
-      const names = (updateData.full_name || '').trim().split(/\s+/).filter(Boolean);
-      profileUpdates.first_name = names.length ? names.shift() as string : null;
-      profileUpdates.last_name = names.length ? names.join(' ') : null;
-    }
-    if (updateData.first_name !== undefined) profileUpdates.first_name = updateData.first_name;
-    if (updateData.last_name !== undefined) profileUpdates.last_name = updateData.last_name;
+  if (updateData.first_name !== undefined) profileUpdates.first_name = updateData.first_name;
+  if (updateData.last_name !== undefined) profileUpdates.last_name = updateData.last_name;
   if (updateData.phone !== undefined) profileUpdates.phone_number = updateData.phone;
     if (updateData.role !== undefined) profileUpdates.role = updateData.role;
     if (updateData.bio !== undefined) profileUpdates.bio = updateData.bio;

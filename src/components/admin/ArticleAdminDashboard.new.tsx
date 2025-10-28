@@ -96,8 +96,8 @@ export default function ArticleAdminDashboard() {
     // Log dashboard access
     activityLogService.logActivity({
       action: 'VIEW',
-      resource_type: 'articles',
-      details: 'Accessed article management dashboard'
+      table_name: 'articles',
+      description: 'Accessed article management dashboard'
     });
   }, []);
 

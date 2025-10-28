@@ -172,7 +172,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
 /**
  * Ensure a profile exists for a user, create if missing
  */
-export async function ensureUserProfile(userId: string, userData?: { first_name?: string; last_name?: string; full_name?: string; email?: string }): Promise<boolean> {
+export async function ensureUserProfile(userId: string, userData?: { first_name?: string; last_name?: string; email?: string }): Promise<boolean> {
   const supabase = createClient();
   
   // Check if profile exists
@@ -184,20 +184,16 @@ export async function ensureUserProfile(userId: string, userData?: { first_name?
   
   if (checkError && checkError.code === 'PGRST116') {
     // Profile doesn't exist, create it. Prefer explicit first_name/last_name, otherwise split provided full_name.
-    let first_name = userData?.first_name || '';
-    let last_name = userData?.last_name || '';
-    if (!first_name && !last_name) {
-      const names = (userData?.full_name || '').trim().split(/\s+/).filter(Boolean);
-      first_name = names.length ? names.shift() as string : '';
-      last_name = names.length ? names.join(' ') : '';
-    }
+    // Prefer explicit first_name/last_name. If not provided, leave them null.
+    const first_name = userData?.first_name || null;
+    const last_name = userData?.last_name || null;
 
     const { error: createError } = await supabase
       .from('profiles')
       .insert({
         id: userId,
-  first_name: first_name || null,
-  last_name: last_name || null,
+  first_name: first_name,
+  last_name: last_name,
         email: userData?.email || '',
         role: 'student',
         created_at: new Date().toISOString(),
