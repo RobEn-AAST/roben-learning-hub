@@ -8,10 +8,10 @@ consumers:
   - username: DASHBOARD
   - username: anon
     keyauth_credentials:
-      - key: $SUPABASE_ANON_KEY
+      - key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE
   - username: service_role
     keyauth_credentials:
-      - key: $SUPABASE_SERVICE_KEY
+      - key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJzZXJ2aWNlX3JvbGUiLAogICAgImlzcyI6ICJzdXBhYmFzZS1kZW1vIiwKICAgICJpYXQiOiAxNjQxNzY5MjAwLAogICAgImV4cCI6IDE3OTk1MzU2MDAKfQ.DaYlNEoUrrEn2Ig7tqibS-PHK5vgusbcbo7X36XVt4Q
 
 ###
 ### Access Control List
@@ -34,7 +34,7 @@ basicauth_credentials:
 ### API Routes
 ###
 services:
-  ## Open Auth routes
+  ## Open Auth routes (keep simple CORS)
   - name: auth-v1-open
     url: http://auth:9999/verify
     routes:
@@ -44,6 +44,24 @@ services:
           - /auth/v1/verify
     plugins:
       - name: cors
+        config:
+          origins:
+            - "https://supabase.roben.club"
+            - "http://localhost:3000"
+          methods:
+            - GET
+            - HEAD
+            - POST
+            - OPTIONS
+          headers:
+            - Content-Type
+            - Accept
+            - Origin
+          exposed_headers:
+            - Location
+          credentials: true
+          max_age: 3600
+
   - name: auth-v1-open-callback
     url: http://auth:9999/callback
     routes:
@@ -53,6 +71,15 @@ services:
           - /auth/v1/callback
     plugins:
       - name: cors
+        config:
+          origins:
+            - "https://supabase.roben.club"
+            - "http://localhost:3000"
+          methods: [GET, POST, OPTIONS]
+          headers: [Content-Type, Accept, Origin]
+          credentials: true
+          max_age: 3600
+
   - name: auth-v1-open-authorize
     url: http://auth:9999/authorize
     routes:
@@ -62,8 +89,16 @@ services:
           - /auth/v1/authorize
     plugins:
       - name: cors
+        config:
+          origins:
+            - "https://supabase.roben.club"
+            - "http://localhost:3000"
+          methods: [GET, POST, OPTIONS]
+          headers: [Content-Type, Accept, Origin]
+          credentials: true
+          max_age: 3600
 
-  ## Secure Auth routes
+  ## Secure Auth routes (allow API-key headers)
   - name: auth-v1
     _comment: 'GoTrue: /auth/v1/* -> http://auth:9999/*'
     url: http://auth:9999/
@@ -74,6 +109,30 @@ services:
           - /auth/v1/
     plugins:
       - name: cors
+        config:
+          origins:
+            - "https://supabase.roben.club"
+            - "http://localhost:3000"
+          methods:
+            - GET
+            - HEAD
+            - POST
+            - PUT
+            - PATCH
+            - DELETE
+            - OPTIONS
+          headers:
+            - apikey
+            - x-api-key
+            - Authorization
+            - Content-Type
+            - Accept
+            - Origin
+          exposed_headers:
+            - Location
+            - Content-Type
+          credentials: true
+          max_age: 3600
       - name: key-auth
         config:
           hide_credentials: false
@@ -84,7 +143,7 @@ services:
             - admin
             - anon
 
-  ## Secure REST routes
+  ## Secure REST routes (PostgREST) — allow apikey header and CORS
   - name: rest-v1
     _comment: 'PostgREST: /rest/v1/* -> http://rest:3000/*'
     url: http://rest:3000/
@@ -95,6 +154,31 @@ services:
           - /rest/v1/
     plugins:
       - name: cors
+        config:
+          origins:
+            - "https://supabase.roben.club"
+            - "http://localhost:3000"
+          methods:
+            - GET
+            - HEAD
+            - POST
+            - PUT
+            - PATCH
+            - DELETE
+            - OPTIONS
+          headers:
+            - apikey
+            - x-api-key
+            - Authorization
+            - Content-Type
+            - Accept
+            - Origin
+          exposed_headers:
+            - Content-Profile
+            - Content-Range
+            - Content-Location
+          credentials: true
+          max_age: 3600
       - name: key-auth
         config:
           hide_credentials: true
@@ -116,6 +200,24 @@ services:
           - /graphql/v1
     plugins:
       - name: cors
+        config:
+          origins:
+            - "https://supabase.roben.club"
+            - "http://localhost:3000"
+          methods:
+            - GET
+            - HEAD
+            - POST
+            - OPTIONS
+          headers:
+            - apikey
+            - x-api-key
+            - Authorization
+            - Content-Type
+            - Accept
+            - Origin
+          credentials: true
+          max_age: 3600
       - name: key-auth
         config:
           hide_credentials: true
@@ -131,7 +233,7 @@ services:
             - admin
             - anon
 
-  ## Secure Realtime routes
+  ## Secure Realtime routes (ws + http)
   - name: realtime-v1-ws
     _comment: 'Realtime: /realtime/v1/* -> ws://realtime:4000/socket/*'
     url: http://realtime-dev.supabase-realtime:4000/socket
@@ -143,6 +245,20 @@ services:
           - /realtime/v1/
     plugins:
       - name: cors
+        config:
+          origins:
+            - "https://supabase.roben.club"
+          methods:
+            - GET
+            - HEAD
+            - OPTIONS
+          headers:
+            - apikey
+            - x-api-key
+            - Authorization
+            - Origin
+          credentials: true
+          max_age: 3600
       - name: key-auth
         config:
           hide_credentials: false
@@ -152,8 +268,9 @@ services:
           allow:
             - admin
             - anon
+
   - name: realtime-v1-rest
-    _comment: 'Realtime: /realtime/v1/* -> ws://realtime:4000/socket/*'
+    _comment: 'Realtime: /realtime/v1/* -> http://realtime:4000/api'
     url: http://realtime-dev.supabase-realtime:4000/api
     protocol: http
     routes:
@@ -163,6 +280,23 @@ services:
           - /realtime/v1/api
     plugins:
       - name: cors
+        config:
+          origins:
+            - "https://supabase.roben.club"
+          methods:
+            - GET
+            - HEAD
+            - POST
+            - OPTIONS
+          headers:
+            - apikey
+            - x-api-key
+            - Authorization
+            - Content-Type
+            - Accept
+            - Origin
+          credentials: true
+          max_age: 3600
       - name: key-auth
         config:
           hide_credentials: false
@@ -172,7 +306,8 @@ services:
           allow:
             - admin
             - anon
-  ## Storage routes: the storage server manages its own auth
+
+  ## Storage routes: the storage server manages its own auth — still allow CORS from studio origin
   - name: storage-v1
     _comment: 'Storage: /storage/v1/* -> http://storage:5000/*'
     url: http://storage:5000/
@@ -183,6 +318,25 @@ services:
           - /storage/v1/
     plugins:
       - name: cors
+        config:
+          origins:
+            - "https://supabase.roben.club"
+            - "http://localhost:3000"
+          methods:
+            - GET
+            - HEAD
+            - POST
+            - PUT
+            - PATCH
+            - DELETE
+            - OPTIONS
+          headers:
+            - Content-Type
+            - Accept
+            - Origin
+            - Authorization
+          credentials: true
+          max_age: 3600
 
   ## Edge Functions routes
   - name: functions-v1
@@ -195,6 +349,22 @@ services:
           - /functions/v1/
     plugins:
       - name: cors
+        config:
+          origins:
+            - "https://supabase.roben.club"
+            - "http://localhost:3000"
+          methods:
+            - GET
+            - HEAD
+            - POST
+            - OPTIONS
+          headers:
+            - Content-Type
+            - Accept
+            - Origin
+            - Authorization
+          credentials: true
+          max_age: 3600
 
   ## Analytics routes
   - name: analytics-v1
@@ -205,6 +375,15 @@ services:
         strip_path: true
         paths:
           - /analytics/v1/
+    plugins:
+      - name: cors
+        config:
+          origins:
+            - "https://supabase.roben.club"
+          methods: [GET, POST, OPTIONS]
+          headers: [Content-Type, Accept, Origin]
+          credentials: true
+          max_age: 3600
 
   ## Secure Database routes
   - name: meta
@@ -250,22 +429,10 @@ services:
         paths:
           - /mcp
     plugins:
-      # Block access to /mcp by default
       - name: request-termination
         config:
           status_code: 403
           message: "Access is forbidden."
-      # Enable local access (danger zone!)
-      # 1. Comment out the 'request-termination' section above
-      # 2. Uncomment the entire section below, including 'deny'
-      # 3. Add your local IPs to the 'allow' list
-      #- name: cors
-      #- name: ip-restriction
-      #  config:
-      #    allow:
-      #      - 127.0.0.1
-      #      - ::1
-      #    deny: []
 
   ## Protected Dashboard - catch all remaining routes
   - name: dashboard
@@ -278,6 +445,14 @@ services:
           - /
     plugins:
       - name: cors
+        config:
+          origins:
+            - "https://supabase.roben.club"
+            - "http://localhost:3000"
+          methods: [GET, HEAD, OPTIONS]
+          headers: [Content-Type, Accept, Origin]
+          credentials: true
+          max_age: 3600
       - name: basic-auth
         config:
           hide_credentials: true
