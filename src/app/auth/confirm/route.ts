@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
         // Check if user has completed their profile
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .select('full_name')
+          .select('first_name, last_name')
           .eq('id', user.id)
           .single();
         
@@ -67,18 +67,17 @@ export async function GET(request: NextRequest) {
           console.log('Profile does not exist, creating from user metadata');
           
           // Try to get name from user metadata
-          const fullName = user.user_metadata?.full_name || 
-                          (user.user_metadata?.first_name && user.user_metadata?.last_name 
-                            ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`.trim() 
-                            : '');
+          const firstName = user.user_metadata?.first_name || null;
+          const lastName = user.user_metadata?.last_name || null;
           
-          if (fullName) {
-            // Create profile with metadata
+          if (firstName || lastName) {
+            // Create profile with metadata (first_name, last_name)
             const { error: createError } = await supabase
               .from('profiles')
               .insert({
                 id: user.id,
-                full_name: fullName,
+                first_name: firstName,
+                last_name: lastName,
                 email: user.email,
                 updated_at: new Date().toISOString(),
               });

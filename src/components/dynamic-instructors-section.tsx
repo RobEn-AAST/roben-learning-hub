@@ -9,8 +9,6 @@ interface Instructor {
   // New schema fields
   first_name?: string | null;
   last_name?: string | null;
-  // Keep full_name for backward compatibility
-  full_name?: string | null;
   email?: string | null;
   avatar_url?: string | null;
   bio?: string | null;
@@ -95,10 +93,7 @@ export function DynamicInstructorsSection() {
   };
 
   const getDisplayName = (instructor: Instructor) => {
-    // Prefer full_name (backwards compatibility), otherwise combine first and last name
-    const full = instructor.full_name;
-    if (full && full.trim()) return full.trim();
-
+    // Prefer first_name/last_name, otherwise fallback to email
     const first = instructor.first_name?.trim() || '';
     const last = instructor.last_name?.trim() || '';
     const combined = `${first} ${last}`.trim();

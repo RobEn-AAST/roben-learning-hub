@@ -292,13 +292,13 @@ export default async function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navigation user={data.user} userRole="user" />
+      <Navigation />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Welcome Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">
-            Welcome back, {data.user.user_metadata?.full_name || data.user.email}!
+            Welcome back, {([data.user.user_metadata?.first_name, data.user.user_metadata?.last_name].filter(Boolean).join(' ') || data.user.email)}!
           </h1>
           <p className="text-gray-600 mt-2">Continue your learning journey</p>
         </div>

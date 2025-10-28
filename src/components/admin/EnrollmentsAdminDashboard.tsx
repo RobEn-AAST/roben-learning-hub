@@ -371,7 +371,7 @@ export default function EnrollmentsAdminDashboard() {
                       <div className="flex-1 space-y-2">
                         <div className="flex items-center gap-3">
                           <div>
-                            <h3 className="font-semibold">{enrollment.profiles.full_name}</h3>
+                            <h3 className="font-semibold">{(enrollment.profiles.first_name || enrollment.profiles.last_name) ? [enrollment.profiles.first_name, enrollment.profiles.last_name].filter(Boolean).join(' ') : enrollment.profiles.email}</h3>
                             <p className="text-sm text-muted-foreground">{enrollment.profiles.email}</p>
                           </div>
                         </div>

@@ -188,7 +188,8 @@ export const serverLessonService = {
         ),
         instructor:profiles!lessons_instructor_id_fkey(
           id,
-          full_name
+          first_name,
+          last_name
         )
       `)
       .single();

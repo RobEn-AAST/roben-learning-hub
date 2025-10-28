@@ -64,7 +64,10 @@ interface DashboardData {
   profile: {
     id: string;
     role: string;
-    full_name: string;
+    // Backend returns first_name/last_name (no full_name column in DB)
+    first_name?: string | null;
+    last_name?: string | null;
+    email?: string | null;
   };
   courses: Course[];
   modules: Module[];
@@ -165,13 +168,19 @@ export function InstructorDashboardNew() {
     }
   };
 
+  const profile = data.profile;
+  const displayName =
+    [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') ||
+    profile?.email ||
+    'Instructor';
+
   return (
     <div className="space-y-6 bg-gray-50 min-h-screen p-4">
       {/* Welcome Header */}
       <div className="bg-white border border-gray-200 p-6 rounded-lg shadow-sm">
         <div className="flex items-center space-x-3 mb-2">
           <Icons.User />
-          <h1 className="text-2xl font-bold text-gray-900">Welcome back, {data.profile.full_name}!</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Welcome back, {displayName}!</h1>
         </div>
         <p className="text-gray-600">Manage your assigned courses and track your teaching progress.</p>
       </div>

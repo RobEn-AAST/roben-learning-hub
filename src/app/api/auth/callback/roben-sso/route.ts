@@ -94,7 +94,6 @@ export async function GET(request: NextRequest) {
         email: userInfo.email,
         email_confirm: true, // Auto-confirm email from Roben.club
         user_metadata: {
-          full_name: userInfo.full_name,
           first_name: userInfo.first_name,
           last_name: userInfo.last_name,
         },
@@ -102,7 +101,7 @@ export async function GET(request: NextRequest) {
 
       if (authError || !authData.user) {
         console.error('Failed to create auth user:', authError);
-        console.error('User info that failed:', { email: userInfo.email, full_name: userInfo.full_name });
+        console.error('User info that failed:', { email: userInfo.email, first_name: userInfo.first_name, last_name: userInfo.last_name });
         throw new Error(`Failed to create user account: ${authError?.message || 'Unknown error'}`);
       }
 

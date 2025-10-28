@@ -27,12 +27,12 @@ export async function AuthButton() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, full_name')
+    .select('role, first_name, last_name')
     .eq('id', user.id)
     .single();
 
   const userRole = profile?.role;
-  const fullName = profile?.full_name || user.email;
+  const fullName = (profile && (profile.first_name || profile.last_name)) ? [profile.first_name, profile.last_name].filter(Boolean).join(' ') : user.email;
 
   return (
     <div className="flex items-center gap-4">

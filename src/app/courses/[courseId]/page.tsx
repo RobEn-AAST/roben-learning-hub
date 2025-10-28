@@ -42,7 +42,8 @@ interface Course {
 
 interface Instructor {
   id: string;
-  full_name: string;
+  first_name?: string | null;
+  last_name?: string | null;
   avatar_url: string | null;
   bio: string | null;
 }
@@ -238,7 +239,7 @@ export default function CourseDetailPage() {
                 <div className="flex items-center gap-3 mb-6">
                   <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center overflow-hidden">
                     {instructor.avatar_url && isDirectImageUrl(instructor.avatar_url) ? (
-                      <Image src={instructor.avatar_url} alt={instructor.full_name} width={48} height={48} className="object-cover" />
+                      <Image src={instructor.avatar_url} alt={(instructor.first_name || instructor.last_name) ? [instructor.first_name, instructor.last_name].filter(Boolean).join(' ') : ''} width={48} height={48} className="object-cover" />
                     ) : (
                       <svg className="w-8 h-8 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
@@ -247,7 +248,7 @@ export default function CourseDetailPage() {
                   </div>
                   <div>
                     <p className="text-sm text-blue-100">Instructor</p>
-                    <p className="font-semibold">{instructor.full_name}</p>
+                    <p className="font-semibold">{(instructor.first_name || instructor.last_name) ? [instructor.first_name, instructor.last_name].filter(Boolean).join(' ') : 'Instructor'}</p>
                   </div>
                 </div>
               )}

@@ -3,7 +3,8 @@ import { activityLogService } from './activityLogService';
 
 export interface UserProfile {
   id: string;
-  full_name: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
   email: string | null;
   avatar_url: string | null;
   bio: string | null;

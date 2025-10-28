@@ -174,13 +174,13 @@ function InstructorsList({ courseId, instructors, currentUserId, onUpdate }: Ins
                       <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                         <span className="text-sm font-medium text-blue-600">
                           {(
-                            (instructor.instructor?.first_name?.charAt(0) || instructor.instructor?.last_name?.charAt(0) || ((instructor.instructor as any)?.full_name?.charAt(0)) || '?')
+                            (instructor.instructor?.first_name?.charAt(0) || instructor.instructor?.last_name?.charAt(0) || '?')
                           ).toString().toUpperCase()}
                         </span>
                       </div>
                       <div className="flex-1">
                         <div className="text-sm font-medium text-gray-900">
-                          {`${instructor.instructor?.first_name || ''} ${instructor.instructor?.last_name || ''}`.trim() || (instructor.instructor as any)?.full_name || 'Unknown Instructor'}
+                          {`${instructor.instructor?.first_name || ''} ${instructor.instructor?.last_name || ''}`.trim() || 'Unknown Instructor'}
                         </div>
                         <div className="text-xs text-gray-500">
                           {instructor.instructor?.email}
@@ -472,7 +472,7 @@ function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
   const [stagedFileName, setStagedFileName] = useState<string | null>(null);
   const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB limit
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [availableInstructors, setAvailableInstructors] = useState<{ id: string; first_name?: string; last_name?: string; full_name?: string; email: string; avatar_url?: string }[]>([]);
+  const [availableInstructors, setAvailableInstructors] = useState<{ id: string; first_name?: string; last_name?: string; email: string; avatar_url?: string }[]>([]);
   const [selectedInstructorIds, setSelectedInstructorIds] = useState<string[]>([]);
   const supabase = createClient();
 
@@ -1039,7 +1039,7 @@ function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
                       key={instructor.id}
                       className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 border border-blue-200"
                     >
-                      <span className="font-medium">{`${instructor.first_name || ''} ${instructor.last_name || ''}`.trim() || instructor.full_name}</span>
+                      <span className="font-medium">{`${instructor.first_name || ''} ${instructor.last_name || ''}`.trim() || instructor.email}</span>
                       <button
                         type="button"
                         onClick={() => handleInstructorToggle(instructor.id)}
@@ -1075,11 +1075,11 @@ function CourseForm({ course, onSave, onCancel, loading }: CourseFormProps) {
                       <div className="flex items-center space-x-3">
                         <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                           <span className="text-sm font-medium text-blue-600">
-                            {( (instructor.first_name?.charAt(0) || instructor.last_name?.charAt(0) || instructor.full_name?.charAt(0) || '?') ).toString().toUpperCase()}
+                            {( (instructor.first_name?.charAt(0) || instructor.last_name?.charAt(0) || '?') ).toString().toUpperCase()}
                           </span>
                         </div>
                         <div>
-                          <div className="text-sm font-medium text-gray-900">{`${instructor.first_name || ''} ${instructor.last_name || ''}`.trim() || instructor.full_name}</div>
+                          <div className="text-sm font-medium text-gray-900">{`${instructor.first_name || ''} ${instructor.last_name || ''}`.trim() || instructor.email}</div>
                           <div className="text-xs text-gray-500">{instructor.email}</div>
                         </div>
                       </div>
@@ -1414,12 +1414,12 @@ export function CoursesAdminDashboard() {
                       <div key={instructor.id} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
                         <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
                           <span className="text-sm font-medium text-blue-600">
-                            {( (instructor.instructor?.first_name?.charAt(0) || instructor.instructor?.last_name?.charAt(0) || ((instructor.instructor as any)?.full_name?.charAt(0)) || '?') ).toString().toUpperCase()}
+                            {( (instructor.instructor?.first_name?.charAt(0) || instructor.instructor?.last_name?.charAt(0) || '?') ).toString().toUpperCase()}
                           </span>
                         </div>
                         <div className="flex-1">
                           <div className="font-medium text-gray-900">
-                            {`${instructor.instructor?.first_name || ''} ${instructor.instructor?.last_name || ''}`.trim() || (instructor.instructor as any)?.full_name || 'Unknown Instructor'}
+                            {`${instructor.instructor?.first_name || ''} ${instructor.instructor?.last_name || ''}`.trim() || 'Unknown Instructor'}
                           </div>
                           <div className="text-sm text-gray-500">
                             {instructor.instructor?.email}

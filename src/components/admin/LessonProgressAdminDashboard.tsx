@@ -494,7 +494,7 @@ export default function LessonProgressAdminDashboard() {
                           <div className="flex items-center gap-3">
                             <Icons.Book />
                             <div>
-                              <h3 className="font-semibold">{progress.profiles.full_name}</h3>
+                              <h3 className="font-semibold">{(progress.profiles.first_name || progress.profiles.last_name) ? [progress.profiles.first_name, progress.profiles.last_name].filter(Boolean).join(' ') : progress.profiles.email}</h3>
                               <p className="text-sm text-muted-foreground">{progress.profiles.email}</p>
                             </div>
                           </div>

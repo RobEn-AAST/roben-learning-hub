@@ -120,7 +120,6 @@ export async function GET(request: NextRequest) {
     // Merge auth users with profiles
     const users = authUsers.users.map(authUser => {
       const profile = profiles.find(p => p.id === authUser.id);
-      const computedFullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || null;
       const combinedUser = {
         id: authUser.id,
         email: authUser.email,
@@ -128,10 +127,11 @@ export async function GET(request: NextRequest) {
         created_at: authUser.created_at,
         updated_at: authUser.updated_at,
         last_sign_in_at: authUser.last_sign_in_at,
-  // Phone is stored on profiles.phone_number (use that)
-  phone: profile?.phone_number || profile?.phone || authUser.phone || null,
-        // Profile data
-        full_name: computedFullName,
+        // Phone is stored on profiles.phone_number (use that)
+        phone: profile?.phone_number || profile?.phone || authUser.phone || null,
+        // Profile data: surface first_name/last_name instead of a DB full_name column
+        first_name: profile?.first_name || null,
+        last_name: profile?.last_name || null,
         avatar_url: profile?.avatar_url || null,
         role: profile?.role || 'student',
         bio: profile?.bio || null
@@ -209,14 +209,15 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       user: {
-    id: authUser.user.id,
+        id: authUser.user.id,
         email: authUser.user.email,
         email_confirmed_at: authUser.user.email_confirmed_at,
         created_at: authUser.user.created_at,
         updated_at: authUser.user.updated_at,
         last_sign_in_at: authUser.user.last_sign_in_at,
-    phone: profile?.phone_number || null,
-  full_name: profile?.first_name || profile?.last_name ? [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') : (full_name || null),
+        phone: profile?.phone_number || null,
+        first_name: profile?.first_name || null,
+        last_name: profile?.last_name || null,
         avatar_url: profile?.avatar_url || avatar_url || null,
         role: profile?.role || role || 'student',
         bio: profile?.bio || bio || null

@@ -84,7 +84,7 @@ export function LessonsAdminDashboard() {
   const [filters, setFilters] = useState<Filters>({});
   const [showForm, setShowForm] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
-  const [currentUser, setCurrentUser] = useState<{ id: string; role: string; full_name?: string } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ id: string; role: string; first_name?: string | null; last_name?: string | null } | null>(null);
   const [formData, setFormData] = useState<LessonFormData>({
     module_id: '',
     title: '',
@@ -110,6 +110,27 @@ export function LessonsAdminDashboard() {
     // PERFORMANCE: loadInitialData removed - React Query handles data fetching
   }, []);
 
+  // If admin view and instructors load later, auto-select instructor when appropriate
+  useEffect(() => {
+    try {
+      if (!currentUser) return;
+
+      // If current user is an instructor (even if their role is 'admin' in some setups), and
+      // instructor_id is empty, prefer to auto-assign to them
+      const isListedInstructor = instructors.find((ins: any) => ins.id === currentUser.id);
+      if (!formData.instructor_id && isListedInstructor) {
+        setFormData(prev => ({ ...prev, instructor_id: currentUser.id }));
+      }
+
+      // If there is exactly one instructor available, auto-select them to simplify admin flow
+      if (!formData.instructor_id && instructors.length === 1) {
+        setFormData(prev => ({ ...prev, instructor_id: instructors[0].id }));
+      }
+    } catch (err) {
+      console.error('Error auto-selecting instructor:', err);
+    }
+  }, [instructors, currentUser]);
+
   // PERFORMANCE: loadLessons removed - React Query auto-fetches via useLessonsAdmin hook
 
   const loadCurrentUser = async () => {
@@ -121,12 +142,13 @@ export function LessonsAdminDashboard() {
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('id, role, full_name')
+        .select('id, role, first_name, last_name')
         .eq('id', user.id)
         .single();
 
       if (profile) {
-        setCurrentUser(profile);
+        // Store profile first/last names. Compose display name where needed in UI.
+        setCurrentUser({ id: profile.id, role: profile.role, first_name: profile.first_name, last_name: profile.last_name });
         
         // Auto-assign instructor if current user is instructor
         if (profile.role === 'instructor') {
@@ -146,7 +168,13 @@ export function LessonsAdminDashboard() {
     e.preventDefault();
     try {
       console.log('Submitting lesson form data:', formData);
-      
+      // If current user is an instructor and instructor_id is not set, auto-assign
+      if (currentUser?.role === 'instructor' && !formData.instructor_id) {
+        setFormData(prev => ({ ...prev, instructor_id: currentUser.id }));
+        // also update local variable for immediate validation below
+        formData.instructor_id = currentUser.id;
+      }
+
       // Validate required fields before sending
       if (!formData.module_id || !formData.title || !formData.lesson_type || !formData.instructor_id) {
         toast.error('Please fill in all required fields: Module, Title, Lesson Type, and Instructor');
@@ -336,7 +364,7 @@ export function LessonsAdminDashboard() {
                       </option>
                       {instructors.map((instructor: any) => (
                         <option key={instructor.id} value={instructor.id} style={{ backgroundColor: 'white', color: 'black' }}>
-                          {instructor.full_name || instructor.email}
+                          {(instructor.first_name || instructor.last_name) ? [instructor.first_name, instructor.last_name].filter(Boolean).join(' ') : instructor.email}
                         </option>
                       ))}
                     </select>
@@ -660,7 +688,7 @@ export function LessonsAdminDashboard() {
                         {currentUser?.role === 'admin' && (
                           <td className="p-4">
                             <div className="text-sm text-black">
-                              {lesson.instructor?.full_name || 'No instructor assigned'}
+                              {(lesson.instructor?.first_name || lesson.instructor?.last_name) ? [lesson.instructor?.first_name, lesson.instructor?.last_name].filter(Boolean).join(' ') : 'No instructor assigned'}
                             </div>
                           </td>
                         )}

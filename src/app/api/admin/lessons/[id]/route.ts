@@ -121,7 +121,8 @@ export async function PUT(
         ),
         profiles(
           id,
-          full_name
+          first_name,
+          last_name
         )
       `)
       .single();
@@ -131,12 +132,13 @@ export async function PUT(
       throw new Error(`Failed to update lesson: ${updateError.message}`);
     }
     
-    // Log the action
+    // Log the action (use CreateActivityLogData shape)
     await activityLogService.logActivity({
       action: 'UPDATE',
-      resource_type: 'lessons',
-      resource_id: id,
-      details: `Updated lesson: ${updatedLesson.title}`
+      table_name: 'lessons',
+      record_id: id,
+      record_name: updatedLesson.title,
+      description: `Updated lesson: ${updatedLesson.title}`
     });
 
     return NextResponse.json(updatedLesson);
@@ -223,12 +225,13 @@ export async function DELETE(
       console.log('[DELETE LESSON] VERIFIED: Lesson successfully removed from database');
     }
     
-    // Log the action
+    // Log the action (use CreateActivityLogData shape)
     await activityLogService.logActivity({
       action: 'DELETE',
-      resource_type: 'lessons',
-      resource_id: id,
-      details: `Deleted lesson: ${lesson.title}`
+      table_name: 'lessons',
+      record_id: id,
+      record_name: lesson.title,
+      description: `Deleted lesson: ${lesson.title}`
     });
 
     return NextResponse.json({ message: 'Lesson deleted successfully' });

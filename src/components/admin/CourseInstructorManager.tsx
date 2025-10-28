@@ -13,7 +13,7 @@ interface CourseInstructorManagerProps {
 
 export function CourseInstructorManager({ courseId, currentUserId }: CourseInstructorManagerProps) {
   const [instructors, setInstructors] = useState<CourseInstructor[]>([]);
-  const [availableInstructors, setAvailableInstructors] = useState<{ id: string; full_name: string; email: string }[]>([]);
+  const [availableInstructors, setAvailableInstructors] = useState<{ id: string; first_name?: string; last_name?: string; email: string }[]>([]);
   const [selectedInstructorId, setSelectedInstructorId] = useState('');
   const [selectedRole] = useState<'instructor'>('instructor'); // Only instructor role allowed
   const [loading, setLoading] = useState(false);
@@ -116,7 +116,7 @@ export function CourseInstructorManager({ courseId, currentUserId }: CourseInstr
               <div key={instructor.id} className="flex items-center justify-between p-3 border rounded">
                 <div className="flex items-center space-x-3">
                   <div>
-                    <p className="font-medium">{instructor.instructor?.full_name}</p>
+                    <p className="font-medium">{(instructor.instructor?.first_name || instructor.instructor?.last_name) ? [instructor.instructor?.first_name, instructor.instructor?.last_name].filter(Boolean).join(' ') : instructor.instructor?.email}</p>
                     <p className="text-sm text-gray-600">{instructor.instructor?.email}</p>
                   </div>
                   <span className={`px-2 py-1 rounded text-xs font-medium ${getRoleBadge()}`}>
@@ -126,7 +126,7 @@ export function CourseInstructorManager({ courseId, currentUserId }: CourseInstr
                 <div className="flex items-center space-x-2">
                   {/* Role selection removed - only instructor role exists */}
                   <button
-                    onClick={() => handleRemoveInstructor(instructor.instructor_id, instructor.instructor?.full_name || 'Unknown')}
+                    onClick={() => handleRemoveInstructor(instructor.instructor_id, (instructor.instructor?.first_name || instructor.instructor?.last_name) ? [instructor.instructor?.first_name, instructor.instructor?.last_name].filter(Boolean).join(' ') : (instructor.instructor?.email || 'Unknown'))}
                     disabled={loading}
                     className="text-red-600 hover:text-red-800 text-sm font-medium"
                   >
@@ -152,7 +152,7 @@ export function CourseInstructorManager({ courseId, currentUserId }: CourseInstr
             <option value="">Select an instructor...</option>
             {getAvailableInstructorsForSelection().map((instructor) => (
               <option key={instructor.id} value={instructor.id}>
-                {instructor.full_name} ({instructor.email})
+                {(instructor.first_name || instructor.last_name) ? [instructor.first_name, instructor.last_name].filter(Boolean).join(' ') : instructor.email} ({instructor.email})
               </option>
             ))}
           </select>

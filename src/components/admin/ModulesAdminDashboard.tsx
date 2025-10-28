@@ -764,7 +764,7 @@ export function ModulesAdminDashboard() {
                     <option value="">Select an instructor</option>
                     {instructors.map((instructor) => (
                       <option key={instructor.id} value={instructor.id}>
-                        {instructor.full_name}
+                        {(instructor.first_name || instructor.last_name) ? [instructor.first_name, instructor.last_name].filter(Boolean).join(' ') : instructor.email}
                       </option>
                     ))}
                   </select>

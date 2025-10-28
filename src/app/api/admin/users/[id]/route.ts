@@ -92,13 +92,13 @@ export async function PUT(
       );
     }
 
-    // Return the updated user data in the expected format
-    const computedFullName = [profile.first_name, profile.last_name].filter(Boolean).join(' ') || null;
+    // Return the updated user data (provide first_name/last_name instead of full_name)
     const updatedUser = {
       id: authUser.user.id,
       email: authUser.user.email || '',
       phone: profile.phone_number || null,
-      full_name: computedFullName,
+      first_name: profile.first_name || null,
+      last_name: profile.last_name || null,
       avatar_url: profile.avatar_url || null,
       bio: profile.bio || null,
       role: profile.role || 'student',

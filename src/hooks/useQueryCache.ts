@@ -1213,7 +1213,8 @@ export interface Enrollment {
   };
   profiles: {
     id: string;
-    full_name: string;
+    first_name?: string | null;
+    last_name?: string | null;
     email: string;
     avatar_url?: string;
     role: string;
@@ -1362,7 +1363,8 @@ export interface LessonProgress {
   };
   profiles: {
     id: string;
-    full_name: string;
+    first_name?: string | null;
+    last_name?: string | null;
     email: string;
     avatar_url?: string;
   };

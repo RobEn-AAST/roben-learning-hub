@@ -8,7 +8,8 @@ import { useEffect } from 'react';
 interface UserProfile {
   id: string;
   role: string;
-  full_name?: string;
+  first_name?: string | null;
+  last_name?: string | null;
   email?: string;
 }
 
