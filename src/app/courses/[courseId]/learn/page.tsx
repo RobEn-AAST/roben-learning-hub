@@ -1384,9 +1384,10 @@ export default function CourseLearnPage() {
       // Load completed lessons
       if (data.modules.length > 0) {
         const completedLessonsSet = await fetchCompletedLessons(data.modules);
-        
+        // Ensure correct type for Set<string>
+    const completedLessonsTyped: Set<string> = new Set<string>(Array.from(completedLessonsSet) as string[]);
         // Set first incomplete lesson or first lesson using the actual completed lessons
-        const firstIncompleteLesson = findFirstIncompleteLesson(data.modules, completedLessonsSet);
+        const firstIncompleteLesson = findFirstIncompleteLesson(data.modules, completedLessonsTyped);
         if (firstIncompleteLesson) {
           console.log('🎯 Starting at lesson:', firstIncompleteLesson.lesson.title, 'in module:', firstIncompleteLesson.module.title);
           setCurrentLesson(firstIncompleteLesson.lesson);
@@ -1400,44 +1401,25 @@ export default function CourseLearnPage() {
     }
   };
 
+  // Optimized: Fetch all completed lessons in one API call
   const fetchCompletedLessons = async (modules: Module[]) => {
-    const allLessons = modules.flatMap(m => m.lessons);
-    const completed = new Set<string>();
-    
-    console.log('📚 Loading progress for', allLessons.length, 'lessons...');
-    
-    // Fetch completion status for all lessons
-    for (const lesson of allLessons) {
-      try {
-        const response = await fetch(`/api/lessons/${lesson.id}/progress`, {
-          cache: 'no-store' // Ensure we get fresh data, not cached
-        });
-        
-        // Check if response is ok and is JSON before parsing
-        if (!response.ok) {
-          console.warn(`Failed to fetch progress for lesson ${lesson.title}: ${response.status}`);
-          continue;
-        }
-        
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          console.warn(`Invalid content type for lesson ${lesson.title}: ${contentType}`);
-          continue;
-        }
-        
-        const data = await response.json();
-        if (data.completed) {
-          completed.add(lesson.id);
-          console.log('✅ Lesson completed:', lesson.title);
-        }
-      } catch (error) {
-        console.error('Error fetching lesson progress:', error);
+    if (!courseId) return new Set<string>();
+    try {
+      const response = await fetch(`/api/courses/${courseId}/progress`, { cache: 'no-store' });
+      if (!response.ok) {
+        console.warn('Failed to fetch course progress:', response.status);
+        setCompletedLessons(new Set());
+        return new Set();
       }
+      const data = await response.json();
+      const completed = new Set<string>(data.completedLessons || []);
+      setCompletedLessons(completed);
+      return completed;
+    } catch (error) {
+      console.error('Error fetching course progress:', error);
+      setCompletedLessons(new Set());
+      return new Set();
     }
-    
-    console.log('✨ Total completed lessons:', completed.size);
-    setCompletedLessons(completed);
-    return completed;
   };
 
   const findFirstIncompleteLesson = (modules: Module[], completed: Set<string>) => {
