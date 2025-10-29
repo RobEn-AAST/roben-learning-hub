@@ -6,6 +6,7 @@ export interface RobenUserInfo {
   email: string;
   first_name: string;
   last_name: string;
+  full_name: string;
   member_id: string;
   major: string;
   team: string | null;
@@ -27,9 +28,9 @@ export class RobenSSO {
   private redirectUri: string;
 
   constructor() {
-    this.clientId = process.env.roben_sso_client_id || '';
-    this.clientSecret = process.env.roben_sso_client_secret || '';
-    this.redirectUri = process.env.roben_sso_redirect_uri || '';
+    this.clientId = process.env.NEXT_PUBLIC_ROBEN_SSO_CLIENT_ID || '';
+    this.clientSecret = process.env.NEXT_PUBLIC_ROBEN_SSO_CLIENT_SECRET || '';
+    this.redirectUri = process.env.NEXT_PUBLIC_ROBEN_SSO_REDIRECT_URI || '';
 
     if (!this.clientId || !this.clientSecret || !this.redirectUri) {
       throw new Error('Roben SSO credentials not configured in .env.local');

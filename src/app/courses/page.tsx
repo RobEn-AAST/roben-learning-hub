@@ -35,7 +35,7 @@ async function getCoursesData(): Promise<CoursesData> {
     const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
     
     // Fetch courses via API (bypasses RLS completely)
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+    const baseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'http://localhost:3000';
     const coursesResponse = await fetch(`${baseUrl}/api/courses/public`, {
       cache: 'no-store',
       headers: {
