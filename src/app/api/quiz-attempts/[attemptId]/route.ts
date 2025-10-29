@@ -41,15 +41,22 @@ export async function PUT(
       .eq('id', attemptId)
       .single();
 
-    if (attemptError || !attempt) {
-      console.error('🔴 Attempt not found:', attemptError);
+    // Distinguish DB/query errors from "not found" so callers get correct HTTP codes.
+    if (attemptError) {
+      console.error('🔴 Error querying attempt:', attemptError);
+      return NextResponse.json(
+        { error: 'Database error fetching attempt', details: attemptError?.message },
+        { status: 500 }
+      );
+    }
+
+    if (!attempt) {
+      console.error('� Attempt not found for id:', attemptId);
       return NextResponse.json(
         { error: 'Attempt not found' },
         { status: 404 }
       );
     }
-
-    console.log('🔵 Attempt found:', attempt);
 
     console.log('🔵 Attempt found:', attempt);
 
@@ -77,6 +84,12 @@ export async function PUT(
       .select('*')
       .eq('attempt_id', attemptId);
 
+    if (answersCheckError) {
+      console.error('🔴 Error fetching user answers:', answersCheckError);
+      // Not fatal: continue and let calculate_quiz_score handle the empty state,
+      // but log the error for diagnostics.
+    }
+
     console.log('🔵 User answers found:', userAnswers?.length || 0);
     if (userAnswers && userAnswers.length > 0) {
       console.log('🔵 Sample answer:', userAnswers[0]);
@@ -93,7 +106,7 @@ export async function PUT(
     if (scoreError) {
       console.error('🔴 Error calculating score:', scoreError);
       return NextResponse.json(
-        { error: 'Failed to calculate score', details: scoreError.message },
+        { error: 'Failed to calculate score', details: scoreError?.message },
         { status: 500 }
       );
     }
@@ -120,7 +133,7 @@ export async function PUT(
     if (updateError) {
       console.error('🔴 Error marking attempt as completed:', updateError);
       return NextResponse.json(
-        { error: 'Failed to complete attempt', details: updateError.message },
+        { error: 'Failed to complete attempt', details: updateError?.message },
         { status: 500 }
       );
     }
