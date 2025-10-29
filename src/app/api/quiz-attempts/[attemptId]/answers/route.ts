@@ -83,23 +83,18 @@ export async function POST(
 
     console.log('🔵 Fetching question details...');
 
-    // Get the question details to check correctness and points
+    // Fetch the question row and options in two simple queries to avoid
+    // heavy joins that can time out in busy/limited DB environments.
     const { data: question, error: questionError } = await supabase
       .from('questions')
-      .select('id, type, points, question_options(id, is_correct)')
+      .select('id, type, points')
       .eq('id', questionId)
       .single();
 
-    console.log('🔵 Question query result:', { question, questionError });
+    console.log('🔵 Question row result:', { question, questionError });
 
-    // Distinguish between DB errors and a true "not found" result so callers
-    // get a meaningful status code. Some DB errors (timeouts, connection
-    // problems) were being surfaced as "not found" which confused the client.
     if (questionError) {
-      console.error('🔴 Error querying question:', questionError);
-      // Return 500 for DB/query errors so the client can retry or surface
-      // an appropriate message. Include the DB error message for debugging
-      // (trimmed) but avoid returning sensitive internals in production.
+      console.error('🔴 Error querying question row:', questionError);
       return NextResponse.json(
         { error: 'Database error fetching question', details: questionError?.message },
         { status: 500 }
@@ -114,6 +109,26 @@ export async function POST(
       );
     }
 
+    // Fetch options separately - this should be a fast indexed lookup.
+    const { data: options, error: optionsError } = await supabase
+      .from('question_options')
+      .select('id, is_correct')
+      .eq('question_id', questionId);
+
+    if (optionsError) {
+      console.error('🔴 Error querying question options:', optionsError);
+      // Treat as a DB error (500) rather than returning 'not found'.
+      return NextResponse.json(
+        { error: 'Database error fetching question options', details: optionsError?.message },
+        { status: 500 }
+      );
+    }
+
+  // Keep options in a local variable to preserve strong typing and avoid
+  // mutating the question object. This mirrors the previous shape but
+  // keeps TypeScript happy.
+  const questionOptions = options || [];
+
     console.log('🔵 Question found, calculating correctness...');
 
     // Determine if answer is correct and calculate points
@@ -121,7 +136,7 @@ export async function POST(
     let pointsEarned = 0;
     
     if ((question.type === 'multiple_choice' || question.type === 'true_false') && selectedOptionId) {
-      const selectedOption = question.question_options.find(
+      const selectedOption = questionOptions.find(
         (opt: any) => opt.id === selectedOptionId
       );
       
@@ -130,7 +145,7 @@ export async function POST(
         questionId,
         selectedOptionId,
         selectedOption,
-        allOptions: question.question_options,
+        allOptions: questionOptions,
         isCorrect: selectedOption?.is_correct
       });
       
