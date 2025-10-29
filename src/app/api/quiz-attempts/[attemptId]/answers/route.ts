@@ -92,10 +92,24 @@ export async function POST(
 
     console.log('🔵 Question query result:', { question, questionError });
 
-    if (questionError || !question) {
-      console.error('🔴 Question not found:', questionError);
+    // Distinguish between DB errors and a true "not found" result so callers
+    // get a meaningful status code. Some DB errors (timeouts, connection
+    // problems) were being surfaced as "not found" which confused the client.
+    if (questionError) {
+      console.error('🔴 Error querying question:', questionError);
+      // Return 500 for DB/query errors so the client can retry or surface
+      // an appropriate message. Include the DB error message for debugging
+      // (trimmed) but avoid returning sensitive internals in production.
       return NextResponse.json(
-        { error: 'Question not found', details: questionError?.message },
+        { error: 'Database error fetching question', details: questionError?.message },
+        { status: 500 }
+      );
+    }
+
+    if (!question) {
+      console.error('🔴 Question not found for id:', questionId);
+      return NextResponse.json(
+        { error: 'Question not found' },
         { status: 404 }
       );
     }

@@ -2817,7 +2817,6 @@ CREATE POLICY "quiz_attempts_select_policy" ON "public"."quiz_attempts" FOR SELE
   WHERE (("profiles"."id" = ( SELECT "auth"."uid"() AS "uid")) AND ("profiles"."role" = 'admin'::"public"."user_role"))))));
 
 
-DROP POLICY IF EXISTS "quiz_attempts_select_policy" ON "public"."quiz_attempts";
 DROP POLICY IF EXISTS "quiz_attempts_update_policy" ON "public"."quiz_attempts";
 CREATE POLICY "quiz_attempts_update_policy" ON "public"."quiz_attempts" FOR UPDATE USING (((("user_id" = ( SELECT "auth"."uid"() AS "uid")) AND ("completed_at" IS NULL)) OR (EXISTS ( SELECT 1
   FROM "public"."profiles"
