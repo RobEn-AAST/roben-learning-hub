@@ -2528,9 +2528,9 @@ $$;
 
 DO $$
 BEGIN
-  IF to_regclass('public.video_questions') IS NOT NULL THEN
+  IF to_regclass('public.videos') IS NOT NULL THEN
     IF NOT EXISTS (
-      SELECT 1 FROM pg_constraint WHERE conname = 'video_questions_video_id_fkey' AND conrelid = 'public.video_questions'::regclass
+      SELECT 1 FROM pg_constraint WHERE conname = 'videos_lesson_id_fkey' AND conrelid = 'public.videos'::regclass
     ) THEN
       BEGIN
         ALTER TABLE ONLY "public"."videos"
