@@ -47,6 +47,9 @@ interface CourseData {
     title: string;
     description: string;
   };
+
+  // When a new attempt is created, assign any buffered answers that were
+  // collected before the attempt existed (attemptId === null) to the new attempt.
   modules: Module[];
   isEnrolled: boolean;
   progress: {
@@ -359,6 +362,83 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, 
   const [startTime, setStartTime] = useState<number | null>(null);
   const [earnedPoints, setEarnedPoints] = useState<number>(0);
   const [totalPoints, setTotalPoints] = useState<number>(0);
+  // Buffering refs to reduce server requests and avoid saving to completed attempts
+  const isStartingAttemptRef = useRef(false);
+  const answerBufferRef = useRef<Array<{ attemptId?: string | null; questionId: string; selectedOptionId?: string | null; textAnswer?: string | null; ts?: number }>>([]);
+  const flushTimeoutRef = useRef<number | null>(null);
+
+  // Flush buffered answers grouped by attemptId
+  const flushBufferedAnswers = useCallback(async () => {
+    // Drain buffer
+    const allBuffered = answerBufferRef.current.splice(0, answerBufferRef.current.length) || [];
+    if (!allBuffered.length) return;
+
+    // Group by attemptId (null items will be requeued)
+    const groups: Record<string, any[]> = {};
+    const nullGroup: any[] = [];
+    for (const item of allBuffered) {
+      if (!item.attemptId) {
+        nullGroup.push(item);
+        continue;
+      }
+      groups[item.attemptId] = groups[item.attemptId] || [];
+      groups[item.attemptId].push(item);
+    }
+
+    // Requeue null-group items for later assignment
+    if (nullGroup.length) answerBufferRef.current.push(...nullGroup);
+
+    for (const attemptIdKey of Object.keys(groups)) {
+      const group = groups[attemptIdKey];
+      try {
+        const response = await fetch(`/api/quiz-attempts/${attemptIdKey}/answers/batch`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ answers: group }),
+        });
+
+        if (!response.ok) {
+          // If attempt was completed on server, don't requeue those answers.
+          let body: any = null;
+          try { body = await response.json(); } catch (e) { /* ignore */ }
+          const msg = body && (body.error || body.message) ? String(body.error || body.message) : '';
+          if (response.status === 400 && /completed|already completed|Cannot modify/i.test(msg)) {
+            // attempt already completed — load final attempt if possible and show results
+            try {
+              if (quiz?.id) {
+                const ar = await fetch(`/api/quiz-attempts?quizId=${quiz.id}&latest=true`);
+                if (ar.ok) {
+                  const ad = await ar.json();
+                  const latest = ad.attempts;
+                  if (latest) {
+                    setLatestAttempt(latest);
+                    setScore(latest.score || 0);
+                    setEarnedPoints(latest.earned_points || 0);
+                    setTotalPoints(latest.total_points || 0);
+                    setShowResults(true);
+                  }
+                }
+              }
+            } catch (e) {
+              console.error('Error loading final attempt after completed flush:', e);
+            }
+            continue; // don't requeue
+          }
+
+          // Requeue group for retry later
+          answerBufferRef.current.push(...group);
+          continue;
+        }
+
+        // Success - nothing further needed
+        await response.json().catch(() => {});
+      } catch (e) {
+        console.error('Error flushing buffered answers for attempt', attemptIdKey, e);
+        // Requeue
+        answerBufferRef.current.push(...group);
+      }
+    }
+  }, [quiz?.id]);
 
   // Notify parent when quiz active state changes
   useEffect(() => {
@@ -538,6 +618,60 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, 
     loadQuizAndAttempts();
   }, [lesson.quizId]);
 
+  // When a new attemptId becomes available, assign any buffered answers that were
+  // collected before the attempt was created (attemptId === null) to the new attempt.
+  useEffect(() => {
+    if (!currentAttemptId) return;
+
+    try {
+      const buf = answerBufferRef.current || [];
+      let changed = false;
+      for (let i = 0; i < buf.length; i++) {
+        if (!buf[i].attemptId) {
+          buf[i].attemptId = currentAttemptId;
+          changed = true;
+        }
+      }
+      if (changed) {
+        answerBufferRef.current = buf;
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [currentAttemptId]);
+
+  // Ensure buffered answers are flushed on unmount or before unload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (flushTimeoutRef.current) {
+        window.clearTimeout(flushTimeoutRef.current);
+      }
+      const allBuffered = answerBufferRef.current.splice(0, answerBufferRef.current.length) || [];
+      const toSend = allBuffered.filter((a: any) => a.attemptId === currentAttemptId);
+      const leftovers = allBuffered.filter((a: any) => a.attemptId !== currentAttemptId);
+
+      // Restore leftovers to buffer
+      if (leftovers.length > 0) answerBufferRef.current.push(...leftovers);
+
+      if (toSend.length === 0 || !currentAttemptId) return;
+
+      try {
+        navigator.sendBeacon(`/api/quiz-attempts/${currentAttemptId}/answers/batch`, JSON.stringify({ answers: toSend }));
+      } catch (e) {
+        // ignore - best-effort
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      if (flushTimeoutRef.current) {
+        window.clearTimeout(flushTimeoutRef.current);
+      }
+      flushBufferedAnswers().catch(err => console.error('Error flushing on unmount:', err));
+    };
+  }, [currentAttemptId, flushBufferedAnswers]);
+
   // Submit quiz function (defined early for use in effects)
   const handleSubmitQuiz = useCallback(async () => {
     if (!currentAttemptId) return;
@@ -545,6 +679,12 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, 
     setSubmitting(true);
     
     try {
+      // Ensure buffered answers are flushed so score calculation includes them
+      try {
+        await flushBufferedAnswers();
+      } catch (e) {
+        console.warn('Failed to flush buffered answers before submit, continuing to submit:', e);
+      }
       // Calculate time taken
       const timeTakenSeconds = startTime ? Math.floor((Date.now() - startTime) / 1000) : null;
 
@@ -719,6 +859,12 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, 
         if (quiz?.timeLimitMinutes) {
           setTimeRemaining(quiz.timeLimitMinutes * 60);
         }
+        // Attempt created - try to flush any buffered answers that were waiting
+        try {
+          await flushBufferedAnswers();
+        } catch (e) {
+          console.warn('Failed to flush buffered answers after starting attempt:', e);
+        }
       } else {
         const errorData = await response.json();
         console.error('❌ Failed to create quiz attempt:', response.status, errorData);
@@ -737,39 +883,37 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, 
   };
 
   const handleAnswerChange = async (questionId: string, answer: string) => {
-    console.log('📝 Answer changed:', { questionId, answer, currentAttemptId });
-    
+    console.log('📝 Answer changed (buffered):', { questionId, answer, currentAttemptId });
+
     setUserAnswers(prev => ({
       ...prev,
       [questionId]: answer
     }));
 
-    // Save answer to database if we have an attempt
-    if (currentAttemptId) {
+    // If there's no attempt yet, try to start one before flushing so answers
+    // can be associated with the attempt. We still buffer immediately.
+    if (!currentAttemptId && !isStartingAttemptRef.current) {
       try {
-        console.log('📤 Saving answer to API...');
-        const response = await fetch(`/api/quiz-attempts/${currentAttemptId}/answers`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            questionId,
-            selectedOptionId: answer,
-          }),
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log('✅ Answer saved successfully:', data);
-        } else {
-          const errorData = await response.json();
-          console.error('❌ Failed to save answer:', response.status, errorData);
-        }
-      } catch (error) {
-        console.error('❌ Error saving answer:', error);
+        isStartingAttemptRef.current = true;
+        await handleStartQuiz();
+      } catch (e) {
+        console.error('Error auto-starting quiz attempt:', e);
+      } finally {
+        isStartingAttemptRef.current = false;
       }
-    } else {
-      console.warn('⚠️ No attempt ID - answer not saved to database');
     }
+
+    // Buffer the answer for batched save — tag with the attempt id so we never send
+    // answers to the wrong/old attempt (prevents 400 when an attempt completes)
+    answerBufferRef.current.push({ attemptId: currentAttemptId || null, questionId, selectedOptionId: answer, ts: Date.now() });
+
+    // Debounced flush (2s)
+    if (flushTimeoutRef.current) {
+      window.clearTimeout(flushTimeoutRef.current);
+    }
+    flushTimeoutRef.current = window.setTimeout(() => {
+      flushBufferedAnswers().catch(err => console.error('Error flushing answers:', err));
+    }, 2000) as unknown as number;
   };
 
   const resetQuiz = async () => {
