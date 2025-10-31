@@ -14,6 +14,78 @@ const supabaseAdmin = createServiceClient(
   }
 );
 
+// Cache configuration: prefer Redis when REDIS_URL is provided, otherwise
+// fall back to a process-local in-memory Map (best-effort).
+type CacheEntry = { ids: string[]; expiresAt: number };
+const CACHE_TTL_MS = 30 * 1000; // 30 seconds
+
+let redisClient: any = null;
+let redisInitAttempted = false;
+const completedLessonsCache = new Map<string, CacheEntry>();
+
+async function ensureRedis() {
+  if (redisInitAttempted) return redisClient;
+  redisInitAttempted = true;
+  const url = process.env.REDIS_URL || process.env.REDIS_TLS_URL || process.env.REDIS_URI;
+  if (!url) return null;
+
+  try {
+    // Use a runtime require to avoid static TypeScript dependency on ioredis
+    const req: any = (globalThis as any).require ?? eval('require');
+    const IORedis: any = req('ioredis');
+    redisClient = new IORedis(url);
+    // optional: handle simple connection errors
+    redisClient.on && redisClient.on('error', (err: any) => console.warn('redis client error:', err));
+    return redisClient;
+  } catch (rawErr) {
+    const errMsg = rawErr && (rawErr as any).message ? (rawErr as any).message : String(rawErr);
+    console.warn('Redis not available or failed to initialize, falling back to in-memory cache:', errMsg);
+    redisClient = null;
+    return null;
+  }
+}
+
+async function getCachedIds(key: string): Promise<string[] | null> {
+  const client = await ensureRedis();
+  if (client) {
+    try {
+      const raw = await client.get(key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+      return null;
+    } catch (rawErr) {
+      const errMsg = rawErr && (rawErr as any).message ? (rawErr as any).message : String(rawErr);
+      console.warn('Error reading from redis cache:', errMsg);
+    }
+  }
+
+  // In-memory fallback
+  const entry = completedLessonsCache.get(key);
+  if (entry && entry.expiresAt > Date.now()) return entry.ids;
+  return null;
+}
+
+async function setCachedIds(key: string, ids: string[]) {
+  const client = await ensureRedis();
+  if (client) {
+    try {
+      await client.set(key, JSON.stringify(ids), 'EX', Math.ceil(CACHE_TTL_MS / 1000));
+      return;
+    } catch (rawErr) {
+      const errMsg = rawErr && (rawErr as any).message ? (rawErr as any).message : String(rawErr);
+      console.warn('Error writing to redis cache:', errMsg);
+    }
+  }
+
+  // In-memory fallback
+  try {
+    completedLessonsCache.set(key, { ids, expiresAt: Date.now() + CACHE_TTL_MS });
+  } catch (e) {
+    // ignore
+  }
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ courseId: string }> }
@@ -272,15 +344,31 @@ export async function GET(
     let completedLessonIds: string[] | null = null;
     if (isAuthenticated && user) {
       try {
-        const { data: completedRows, error: completedError } = await supabase.rpc('get_completed_lessons_for_course', {
-          p_user_id: user.id,
-          p_course_id: courseId,
-        });
+        const cacheKey = `${user.id}:${courseId}`;
+        const cached = completedLessonsCache.get(cacheKey);
+        const now = Date.now();
 
-        if (!completedError && Array.isArray(completedRows)) {
-          completedLessonIds = completedRows.map((r: any) => r.lesson_id || r.id || Object.values(r)[0]).filter(Boolean);
-        } else if (completedError) {
-          console.warn('get_completed_lessons_for_course rpc error:', completedError);
+        if (cached && cached.expiresAt > now) {
+          // Use cached value
+          completedLessonIds = cached.ids;
+        } else {
+          const { data: completedRows, error: completedError } = await supabase.rpc('get_completed_lessons_for_course', {
+            p_user_id: user.id,
+            p_course_id: courseId,
+          });
+
+          if (!completedError && Array.isArray(completedRows)) {
+            completedLessonIds = completedRows.map((r: any) => r.lesson_id || r.id || Object.values(r)[0]).filter(Boolean);
+            // Cache the result for a short time
+            try {
+              completedLessonsCache.set(cacheKey, { ids: completedLessonIds, expiresAt: now + CACHE_TTL_MS });
+            } catch (e) {
+              // Ignore cache set errors - cache is best-effort
+              console.warn('Failed to set completedLessonsCache:', e);
+            }
+          } else if (completedError) {
+            console.warn('get_completed_lessons_for_course rpc error:', completedError);
+          }
         }
       } catch (e) {
         console.warn('get_completed_lessons_for_course rpc threw:', e);

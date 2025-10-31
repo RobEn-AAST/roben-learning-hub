@@ -1387,57 +1387,14 @@ export default function CourseLearnPage() {
   }, [currentLesson]);
 
   const fetchCompletedLessons = async (modules: Module[]) => {
-    const allLessons = modules.flatMap(m => m.lessons);
-    const completed = new Set<string>();
-    
-    console.log('📚 Loading progress for', allLessons.length, 'lessons...');
-    
-    // NOTE: The preferred fast path is for the server to include
-    // `completedLessonIds` in the `GET /api/courses/:id` response. This
-    // function remains as a fallback that will perform per-lesson checks.
-    // We intentionally no longer call `/api/courses/:id/completed-lessons`
-    // from the client because the main course endpoint already provides
-    // that data (see server route).
-
-    // Fallback: fetch per-lesson progress if batch endpoint is not available.
-    // Use bounded concurrency to speed up wall-clock time without flooding the server.
-    // Process lessons in chunks of `concurrency` and await each batch.
-    console.log('📡 Falling back to per-lesson progress fetch for', allLessons.length, 'lessons (bounded concurrency)');
-    const concurrency = 6; // safe parallelism value; adjust based on server capacity
-    for (let i = 0; i < allLessons.length; i += concurrency) {
-      const batch = allLessons.slice(i, i + concurrency);
-      await Promise.all(batch.map(async (lesson) => {
-        try {
-          const response = await fetch(`/api/lessons/${lesson.id}/progress`, {
-            cache: 'no-store' // Ensure we get fresh data, not cached
-          });
-
-          // Check if response is ok and is JSON before parsing
-          if (!response.ok) {
-            console.warn(`Failed to fetch progress for lesson ${lesson.title}: ${response.status}`);
-            return;
-          }
-
-          const contentType = response.headers.get('content-type');
-          if (!contentType || !contentType.includes('application/json')) {
-            console.warn(`Invalid content type for lesson ${lesson.title}: ${contentType}`);
-            return;
-          }
-
-          const data = await response.json();
-          if (data.completed) {
-            completed.add(lesson.id);
-            console.log('✅ Lesson completed:', lesson.title);
-          }
-        } catch (error) {
-          console.error('Error fetching lesson progress:', error);
-        }
-      }));
-    }
-
-    console.log('✨ Total completed lessons:', completed.size);
-    setCompletedLessons(completed);
-    return completed;
+    // We removed the client-side per-lesson progress fetch fallback.
+    // The server now provides `completedLessonIds` in the course payload
+    // (GET /api/courses/:id). This function remains for API compatibility
+    // but will not perform network requests.
+    console.warn('fetchCompletedLessons called — server should provide completedLessonIds via course payload. Returning empty set.');
+    const empty = new Set<string>();
+    setCompletedLessons(empty);
+    return empty;
   };
 
   const findFirstIncompleteLesson = (modules: Module[], completed: Set<string>) => {
