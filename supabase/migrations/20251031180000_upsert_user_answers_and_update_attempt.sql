@@ -16,10 +16,11 @@ BEGIN
   -- Insert or update answers from the JSON array
   WITH rows AS (
     SELECT
-      (r->>'questionId')::uuid AS question_id,
-      NULLIF(r->>'selectedOptionId','')::uuid AS selected_option_id,
-      NULLIF(r->>'textAnswer','') AS text_answer,
-      (r->>'answeredAt')::timestamptz AS answered_at
+      -- Accept either camelCase (from client) or snake_case (from server-side upsertRows)
+      COALESCE(NULLIF(r->>'questionId',''), r->>'question_id')::uuid AS question_id,
+      NULLIF(COALESCE(NULLIF(r->>'selectedOptionId',''), r->>'selected_option_id'), '')::uuid AS selected_option_id,
+      NULLIF(COALESCE(NULLIF(r->>'textAnswer',''), r->>'text_answer'), '') AS text_answer,
+      COALESCE(NULLIF(r->>'answeredAt',''), r->>'answered_at')::timestamptz AS answered_at
     FROM jsonb_array_elements(p_answers) r
   ),
   calc AS (

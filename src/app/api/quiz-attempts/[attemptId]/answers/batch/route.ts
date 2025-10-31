@@ -147,7 +147,7 @@ export async function POST(
           // Attempt to call the DB-side upsert function
           const { data: rpcRes, error: rpcErr } = await supabase.rpc('upsert_user_answers_and_update_attempt', {
             p_attempt_id: attemptId,
-            p_answers: JSON.stringify(chunk),
+            p_answers: chunk,
           });
 
           if (rpcErr) {
