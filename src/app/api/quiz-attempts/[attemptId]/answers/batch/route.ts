@@ -131,8 +131,28 @@ export async function POST(
     let totalSaved = 0;
     const failedRows: Array<{ row: any; error: any }> = [];
 
-    // Prefer using a DB-side upsert+aggregate function when available. This
-    // pushes the heavy work into Postgres and avoids multiple round-trips.
+    // Try a single DB RPC call for the whole batch first. This keeps the
+    // write and aggregation inside Postgres and avoids many RPC round-trips.
+    try {
+      console.log(`[BATCH-ANSWERS] Attempting single RPC upsert for ${upsertRows.length} rows`);
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('upsert_user_answers_and_update_attempt', {
+        p_attempt_id: attemptId,
+        p_answers: upsertRows,
+      });
+
+      if (rpcErr) {
+        console.warn('[BATCH-ANSWERS] Single RPC attempt failed, falling back to chunked RPCs:', rpcErr?.message || rpcErr);
+        // Fall through to chunked processing below
+      } else {
+        const processed = Array.isArray(rpcRes) ? Number(rpcRes[0]) : Number(rpcRes) || 0;
+        console.log(`[BATCH-ANSWERS] Single RPC processed ${processed} rows`);
+        return NextResponse.json({ success: true, saved: processed });
+      }
+    } catch (e) {
+      console.warn('[BATCH-ANSWERS] Exception during single RPC attempt, falling back to chunked RPCs:', e);
+    }
+
+    // Prefer using a DB-side upsert+aggregate function when available per-chunk.
     const chunks: any[] = [];
     for (let i = 0; i < upsertRows.length; i += CHUNK_SIZE) {
       chunks.push(upsertRows.slice(i, i + CHUNK_SIZE));
