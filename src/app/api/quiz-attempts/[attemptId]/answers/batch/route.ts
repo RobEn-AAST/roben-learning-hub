@@ -159,15 +159,28 @@ export async function POST(
       });
 
       if (rpcErr) {
-        console.warn('[BATCH-ANSWERS] Single RPC attempt failed, falling back to chunked RPCs:', rpcErr?.message || rpcErr);
-        // Fall through to chunked processing below
+        console.warn('[BATCH-ANSWERS] Single RPC attempt failed:', rpcErr?.message || rpcErr);
+        // If atomic batch mode is enabled, fail fast and do NOT fall back to partial per-row upserts.
+        // This ensures all-or-nothing semantics for the batch.
+        const atomic = process.env.ATOMIC_BATCH === 'true' || request.headers.get('x-atomic-batch') === '1';
+        if (atomic) {
+          console.error('[BATCH-ANSWERS] Atomic batch mode enabled - aborting and returning error to client');
+          return NextResponse.json({ error: 'Atomic batch upsert failed', details: rpcErr?.message || String(rpcErr) }, { status: 500 });
+        }
+        console.warn('[BATCH-ANSWERS] Falling back to chunked RPCs (non-atomic mode)');
+        // Fall through to chunked processing below for non-atomic behavior
       } else {
         const processed = Array.isArray(rpcRes) ? Number(rpcRes[0]) : Number(rpcRes) || 0;
         console.log(`[BATCH-ANSWERS] Single RPC processed ${processed} rows`);
         return NextResponse.json({ success: true, saved: processed });
       }
     } catch (e) {
-      console.warn('[BATCH-ANSWERS] Exception during single RPC attempt, falling back to chunked RPCs:', e);
+      console.warn('[BATCH-ANSWERS] Exception during single RPC attempt:', e instanceof Error ? e.stack : e);
+      const atomic = process.env.ATOMIC_BATCH === 'true' || request.headers.get('x-atomic-batch') === '1';
+      if (atomic) {
+        return NextResponse.json({ error: 'Atomic batch upsert exception', details: e instanceof Error ? e.message : String(e) }, { status: 500 });
+      }
+      console.warn('[BATCH-ANSWERS] Falling back to chunked RPCs (non-atomic mode)');
     }
 
     // Prefer using a DB-side upsert+aggregate function when available per-chunk.
