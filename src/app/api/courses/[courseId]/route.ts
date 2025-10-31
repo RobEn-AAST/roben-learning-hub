@@ -266,6 +266,27 @@ export async function GET(
       }
     }
 
+    // If enrolled/authenticated, try to fetch completed lesson IDs using
+    // the DB helper RPC `get_completed_lessons_for_course` (added via migrations).
+    // This collapses many per-lesson progress requests into a single call.
+    let completedLessonIds: string[] | null = null;
+    if (isAuthenticated && user) {
+      try {
+        const { data: completedRows, error: completedError } = await supabase.rpc('get_completed_lessons_for_course', {
+          p_user_id: user.id,
+          p_course_id: courseId,
+        });
+
+        if (!completedError && Array.isArray(completedRows)) {
+          completedLessonIds = completedRows.map((r: any) => r.lesson_id || r.id || Object.values(r)[0]).filter(Boolean);
+        } else if (completedError) {
+          console.warn('get_completed_lessons_for_course rpc error:', completedError);
+        }
+      } catch (e) {
+        console.warn('get_completed_lessons_for_course rpc threw:', e);
+      }
+    }
+
     return NextResponse.json({
       course,
       modules: sortedModules || [], // Ensure modules is always an array
@@ -278,7 +299,10 @@ export async function GET(
         moduleCount: (sortedModules || []).length,
         lessonCount: (sortedModules || []).reduce((acc, module) => acc + (module.lessons?.length || 0), 0)
       },
-      progress
+      progress,
+      // Provide completed lesson ids (if available). The client will use this
+      // to avoid issuing many per-lesson requests.
+      completedLessonIds: completedLessonIds || []
     });
 
   } catch (error) {

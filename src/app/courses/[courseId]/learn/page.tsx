@@ -1286,10 +1286,11 @@ export default function CourseLearnPage() {
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible' && courseData) {
-        console.log('👁️ Tab became visible - refreshing lesson progress...');
-        const completedLessonsSet = await fetchCompletedLessons(courseData.modules);
+        console.log('👁️ Tab became visible - refreshing course data (single request)...');
+        // Re-fetch the full course payload which now includes completedLessonIds
+        const latestCompletedSet = await fetchCourseData();
         // If current lesson is now complete, update the state
-        if (currentLesson && completedLessonsSet.has(currentLesson.id) && !completedLessons.has(currentLesson.id)) {
+        if (latestCompletedSet && currentLesson && latestCompletedSet.has(currentLesson.id) && !completedLessons.has(currentLesson.id)) {
           console.log('🎉 Current lesson is now complete!');
         }
       }
@@ -1329,11 +1330,25 @@ export default function CourseLearnPage() {
       });
 
       // The public course endpoint returns course + modules and enrollment info.
-      // We still need completed lesson ids for the UI; compute them client-side
-      // using the existing fetchCompletedLessons fallback (bounded concurrency).
+      // If the server provided completed lesson ids (fast path), use them to
+      // avoid per-lesson requests. Otherwise fall back to per-lesson fetch.
       const modules = data.modules || [];
-      const completedSet = await fetchCompletedLessons(modules);
-      setCompletedLessons(completedSet);
+      let completedSet: Set<string> = new Set();
+      if (Array.isArray((data as any).completedLessonIds)) {
+        try {
+          ((data as any).completedLessonIds || []).forEach((id: any) => {
+            if (id) completedSet.add(String(id));
+          });
+          setCompletedLessons(completedSet);
+        } catch (e) {
+          console.warn('Error normalizing completedLessonIds, falling back to per-lesson fetch:', e);
+          completedSet = await fetchCompletedLessons(modules);
+          setCompletedLessons(completedSet);
+        }
+      } else {
+        completedSet = await fetchCompletedLessons(modules);
+        setCompletedLessons(completedSet);
+      }
 
       if (modules && modules.length > 0) {
         const firstIncompleteLesson = findFirstIncompleteLesson(modules, completedSet);
@@ -1343,6 +1358,10 @@ export default function CourseLearnPage() {
           setCurrentModule(firstIncompleteLesson.module);
         }
       }
+
+      // Return the computed completed set so callers (like visibility refresh)
+      // can react to changes without performing additional per-lesson calls.
+      return completedSet;
     } catch (error) {
       console.error('Error fetching course learn-data:', error);
     } finally {
@@ -1373,38 +1392,12 @@ export default function CourseLearnPage() {
     
     console.log('📚 Loading progress for', allLessons.length, 'lessons...');
     
-    // First try a batch endpoint that returns completed lesson ids for the course.
-    // This collapses N per-lesson requests into a single request and greatly
-    // reduces server load for courses with many lessons.
-    try {
-      const batchResp = await fetch(`/api/courses/${courseId}/completed-lessons`, {
-        cache: 'no-store'
-      });
-
-      if (batchResp.ok) {
-        const contentType = batchResp.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-          const body = await batchResp.json();
-
-          // Support several possible shapes returned by different backends
-          const ids = body.completedLessonIds || body.completedLessons || body.completed || body.lessonIds || body.lesson_ids || body.ids;
-
-          if (Array.isArray(ids)) {
-            ids.forEach((id: any) => {
-              if (id) completed.add(String(id));
-            });
-            console.log('✅ Loaded completed lessons via batch endpoint:', completed.size);
-            setCompletedLessons(completed);
-            return completed;
-          }
-        }
-      } else if (batchResp.status !== 404) {
-        // non-404 errors are worth logging but we still fall back to per-lesson fetch
-        console.warn('Batch completed-lessons endpoint returned', batchResp.status);
-      }
-    } catch (err) {
-      console.warn('Batch completed-lessons request failed, falling back to per-lesson requests:', err);
-    }
+    // NOTE: The preferred fast path is for the server to include
+    // `completedLessonIds` in the `GET /api/courses/:id` response. This
+    // function remains as a fallback that will perform per-lesson checks.
+    // We intentionally no longer call `/api/courses/:id/completed-lessons`
+    // from the client because the main course endpoint already provides
+    // that data (see server route).
 
     // Fallback: fetch per-lesson progress if batch endpoint is not available.
     // Use bounded concurrency to speed up wall-clock time without flooding the server.
