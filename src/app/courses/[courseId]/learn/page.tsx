@@ -1,18 +1,28 @@
-'use client';
+"use client";
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
+import { toast } from 'sonner';
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useParams, useRouter } from "next/navigation";
 import { Tooltip } from "@/components/ui/tooltip";
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
-import rehypeRaw from 'rehype-raw';
-import rehypeSanitize from 'rehype-sanitize';
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogClose,
+} from '@/components/ui/dialog';
+import dynamic from 'next/dynamic';
+const ArticleRenderer = dynamic(() => import('@/components/ArticleRenderer'), {
+  ssr: false,
+  loading: () => <div className="py-8 text-center text-gray-500">Loading article...</div>
+});
+
 import ProjectSubmissionForm from '@/components/project/ProjectSubmissionForm';
-import '@/styles/highlight.css';
 
 interface Lesson {
   id: string;
@@ -82,261 +92,6 @@ interface Quiz {
   timeLimitMinutes?: number | null;
 }
 
-function ArticleRenderer({ content }: { content?: string | null }) {
-  const [showTOC, setShowTOC] = useState(false);
-  const [headings, setHeadings] = useState<{ id: string; text: string; level: number }[]>([]);
-
-  // Generate table of contents from headings
-  useEffect(() => {
-    if (content) {
-      const headingMatches = content.match(/^#{1,6}\s+(.+)$/gm);
-      if (headingMatches && headingMatches.length > 1) {
-        const parsedHeadings = headingMatches.map((heading, index) => {
-          const level = heading.match(/^#+/)?.[0].length || 1;
-          const text = heading.replace(/^#+\s+/, '');
-          return {
-            id: `heading-${index}`,
-            text: text,
-            level: level
-          };
-        });
-        setHeadings(parsedHeadings);
-      }
-    }
-  }, [content]);
-
-  if (!content) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No Article Content</h3>
-          <p className="text-gray-500">This lesson doesn't have any article content yet.</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      {/* Article Header with TOC toggle */}
-      {headings.length > 1 && (
-        <div className="bg-gray-50 px-8 py-4 border-b border-gray-200">
-          <button
-            onClick={() => setShowTOC(!showTOC)}
-            className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
-          >
-            <svg className={`w-4 h-4 transition-transform ${showTOC ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-            Table of Contents
-            <span className="text-gray-500">({headings.length} sections)</span>
-          </button>
-          
-          {/* Table of Contents */}
-          {showTOC && (
-            <div className="mt-4 p-4 bg-white rounded-lg border border-gray-200">
-              <nav className="space-y-1">
-                {headings.map((heading, index) => (
-                  <a
-                    key={heading.id}
-                    href={`#${heading.id}`}
-                    className={`block py-1 text-sm hover:text-blue-600 transition-colors ${
-                      heading.level === 1 
-                        ? 'font-semibold text-gray-900' 
-                        : heading.level === 2 
-                          ? 'font-medium text-gray-800 pl-3' 
-                          : 'text-gray-600 pl-6'
-                    }`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      const element = document.getElementById(heading.id);
-                      element?.scrollIntoView({ behavior: 'smooth' });
-                    }}
-                  >
-                    {heading.text}
-                  </a>
-                ))}
-              </nav>
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="p-8">
-        <article className="prose prose-lg max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-blue-600 prose-strong:text-gray-900 prose-code:text-pink-600 prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-gray-900 prose-pre:text-gray-100 prose-blockquote:border-blue-500 prose-blockquote:bg-blue-50 prose-blockquote:text-blue-900 prose-hr:border-gray-300">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeHighlight, rehypeRaw, rehypeSanitize]}
-            components={{
-              h1: ({ children, ...props }: any) => {
-                const headingIndex = headings.findIndex(h => h.text === children);
-                const id = headingIndex >= 0 ? headings[headingIndex].id : undefined;
-                return (
-                  <h1 id={id} className="text-3xl font-bold text-gray-900 mb-6 pb-2 border-b border-gray-200" {...props}>
-                    {children}
-                  </h1>
-                );
-              },
-              h2: ({ children, ...props }: any) => {
-                const headingIndex = headings.findIndex(h => h.text === children);
-                const id = headingIndex >= 0 ? headings[headingIndex].id : undefined;
-                return (
-                  <h2 id={id} className="text-2xl font-semibold text-gray-900 mb-4 mt-8" {...props}>
-                    {children}
-                  </h2>
-                );
-              },
-              h3: ({ children, ...props }: any) => {
-                const headingIndex = headings.findIndex(h => h.text === children);
-                const id = headingIndex >= 0 ? headings[headingIndex].id : undefined;
-                return (
-                  <h3 id={id} className="text-xl font-semibold text-gray-900 mb-3 mt-6" {...props}>
-                    {children}
-                  </h3>
-                );
-              },
-              p: ({ children }) => (
-                <p className="text-gray-700 mb-4 leading-relaxed">
-                  {children}
-                </p>
-              ),
-              a: ({ children, href }) => (
-                <a 
-                  href={href} 
-                  className="text-blue-600 hover:text-blue-800 underline transition-colors"
-                  target={href?.startsWith('http') ? '_blank' : undefined}
-                  rel={href?.startsWith('http') ? 'noopener noreferrer' : undefined}
-                >
-                  {children}
-                </a>
-              ),
-              code: ({ children, className, ...props }: any) => {
-                const isInline = !className?.includes('language-');
-                if (isInline) {
-                  return (
-                    <code className="bg-gray-100 text-pink-600 px-2 py-1 rounded text-sm font-mono" {...props}>
-                      {children}
-                    </code>
-                  );
-                }
-                const codeString = String(children).replace(/\n$/, '');
-                const language = className?.replace('language-', '') || 'text';
-                
-                return (
-                  <div className="relative group">
-                    <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto">
-                      <code className={className} {...props}>
-                        {children}
-                      </code>
-                    </pre>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(codeString);
-                      }}
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded text-xs"
-                      title="Copy code"
-                    >
-                      Copy
-                    </button>
-                    {language !== 'text' && (
-                      <div className="absolute top-2 left-2 text-xs text-gray-400 bg-gray-800 px-2 py-1 rounded">
-                        {language}
-                      </div>
-                    )}
-                  </div>
-                );
-              },
-              blockquote: ({ children }) => (
-                <blockquote className="border-l-4 border-blue-500 bg-blue-50 pl-4 py-2 my-6 italic text-blue-900">
-                  {children}
-                </blockquote>
-              ),
-              ul: ({ children }) => (
-                <ul className="list-disc list-inside mb-4 space-y-2 text-gray-700">
-                  {children}
-                </ul>
-              ),
-              ol: ({ children }) => (
-                <ol className="list-decimal list-inside mb-4 space-y-2 text-gray-700">
-                  {children}
-                </ol>
-              ),
-              li: ({ children }) => (
-                <li className="mb-1">
-                  {children}
-                </li>
-              ),
-              img: ({ src, alt }) => (
-                <div className="my-6">
-                  <img 
-                    src={src} 
-                    alt={alt || ''} 
-                    className="max-w-full h-auto rounded-lg shadow-sm border border-gray-200"
-                  />
-                  {alt && (
-                    <p className="text-sm text-gray-500 text-center mt-2 italic">
-                      {alt}
-                    </p>
-                  )}
-                </div>
-              ),
-              table: ({ children }) => (
-                <div className="overflow-x-auto my-6">
-                  <table className="min-w-full divide-y divide-gray-200 border border-gray-200 rounded-lg">
-                    {children}
-                  </table>
-                </div>
-              ),
-              thead: ({ children }) => (
-                <thead className="bg-gray-50">
-                  {children}
-                </thead>
-              ),
-              th: ({ children }) => (
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {children}
-                </th>
-              ),
-              td: ({ children }) => (
-                <td className="px-4 py-3 text-sm text-gray-900 border-t border-gray-200">
-                  {children}
-                </td>
-              ),
-              hr: () => (
-                <hr className="my-8 border-gray-300" />
-              )
-            }}
-          >
-            {content}
-          </ReactMarkdown>
-        </article>
-      </div>
-      
-      {/* Reading progress indicator */}
-      <div className="bg-gray-50 px-8 py-4 border-t border-gray-200">
-        <div className="flex items-center justify-between text-sm text-gray-600">
-          <div className="flex items-center gap-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>Reading time: ~{Math.ceil(content.split(' ').length / 200)} min</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <span>{content.split(' ').length} words</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, isLessonComplete }: { 
   lesson: Lesson;
@@ -362,6 +117,9 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, 
   const [startTime, setStartTime] = useState<number | null>(null);
   const [earnedPoints, setEarnedPoints] = useState<number>(0);
   const [totalPoints, setTotalPoints] = useState<number>(0);
+  // Leave-confirmation modal state (replaces window.confirm)
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const pendingNavRef = useRef<(() => void) | null>(null);
   // Buffering refs to reduce server requests and avoid saving to completed attempts
   const isStartingAttemptRef = useRef(false);
   const answerBufferRef = useRef<Array<{ attemptId?: string | null; questionId: string; selectedOptionId?: string | null; textAnswer?: string | null; ts?: number }>>([]);
@@ -456,14 +214,16 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, 
     // Prevent copy
     const handleCopy = (e: ClipboardEvent) => {
       e.preventDefault();
-      alert('⚠️ Copying is disabled during the quiz to maintain academic integrity.');
+      // Non-blocking toast instead of alert
+      try { toast.error('⚠️ Copying is disabled during the quiz.'); } catch (err) { /* ignore */ }
       return false;
     };
 
     // Prevent cut
     const handleCut = (e: ClipboardEvent) => {
       e.preventDefault();
-      alert('⚠️ Cutting text is disabled during the quiz to maintain academic integrity.');
+      // Non-blocking toast instead of alert
+      try { toast.error('⚠️ Cutting text is disabled during the quiz.'); } catch (err) { /* ignore */ }
       return false;
     };
 
@@ -490,7 +250,8 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, 
           e.key === 'S'
         ) {
           e.preventDefault();
-          alert('⚠️ This action is disabled during the quiz to maintain academic integrity.');
+          // Non-blocking toast instead of alert
+          try { toast.error('⚠️ This action is disabled during the quiz.'); } catch (err) { /* ignore */ }
           return false;
         }
       }
@@ -501,7 +262,8 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, 
         (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c'))
       ) {
         e.preventDefault();
-        alert('⚠️ Developer tools are disabled during the quiz.');
+        // Non-blocking toast instead of alert
+        try { toast.error('⚠️ Developer tools are disabled during the quiz.'); } catch (err) { /* ignore */ }
         return false;
       }
     };
@@ -778,18 +540,22 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, 
     // Prevent browser back button
     const handlePopState = (e: PopStateEvent) => {
       e.preventDefault();
+      // Push state back so user stays on the same page until they confirm
       window.history.pushState(null, '', window.location.href);
-      
-      const shouldLeave = window.confirm(
-        'Are you sure you want to leave? Your quiz will be automatically submitted and graded.'
-      );
-      
-      if (shouldLeave) {
-        // Auto-submit quiz before leaving
-        handleSubmitQuiz().then(() => {
-          window.history.back();
-        });
-      }
+
+      // Store the pending navigation action: auto-submit then go back
+      pendingNavRef.current = async () => {
+        try {
+          await handleSubmitQuiz();
+        } catch (err) {
+          console.error('Error submitting quiz during leave:', err);
+        }
+        // After submitting, navigate back
+        window.history.back();
+      };
+
+      // Show a non-blocking modal asking the user to confirm leaving
+      setShowLeaveModal(true);
     };
 
     // Add initial history state
@@ -1067,6 +833,36 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, 
 
         {/* Review section - only show correct/incorrect without revealing answers */}
         <div className="space-y-6">
+
+          {/* Leave-confirmation modal (shown when user attempts to navigate away during an active quiz) */}
+          <Dialog open={showLeaveModal} onOpenChange={(open) => setShowLeaveModal(open)}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Are you sure you want to leave?</DialogTitle>
+                <DialogDescription>
+                  Your quiz will be automatically submitted and graded if you leave. Do you want to continue and leave the page?
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => { setShowLeaveModal(false); pendingNavRef.current = null; }}>
+                  Cancel
+                </Button>
+                <Button onClick={async () => {
+                  setShowLeaveModal(false);
+                  const action = pendingNavRef.current;
+                  pendingNavRef.current = null;
+                  if (action) {
+                    try { await action(); } catch (e) { console.error('Error during leave action:', e); }
+                  } else {
+                    try { await handleSubmitQuiz(); } catch (e) { console.error('Error submitting quiz on leave:', e); }
+                    window.history.back();
+                  }
+                }}>
+                  Leave and Submit
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           <h4 className="text-xl font-bold text-gray-800 mb-4">Question Review:</h4>
           {questions.map((question, index) => {
             const userAnswer = userAnswers[question.id];
@@ -1505,32 +1301,42 @@ export default function CourseLearnPage() {
 
   const fetchCourseData = async () => {
     try {
-      const response = await fetch(`/api/courses/${courseId}`);
+  // Fetch course and modules from the public course endpoint (client-side)
+  const response = await fetch(`/api/courses/${courseId}`, { cache: 'no-store' });
       if (response.status === 401) {
         router.push('/auth/login?redirect=/courses/' + courseId + '/learn');
         return;
       }
-      
+
       if (!response.ok) {
-        console.error('Failed to fetch course data:', response.status);
+        console.error('Failed to fetch course learn-data:', response.status);
         return;
       }
-      
+
       const data = await response.json();
-      
+
       if (!data.isEnrolled) {
         router.push(`/courses/${courseId}`);
         return;
       }
 
-      setCourseData(data);
-      
-      // Load completed lessons
-      if (data.modules.length > 0) {
-        const completedLessonsSet = await fetchCompletedLessons(data.modules);
-        
-        // Set first incomplete lesson or first lesson using the actual completed lessons
-        const firstIncompleteLesson = findFirstIncompleteLesson(data.modules, completedLessonsSet);
+      // Set course + modules + progress from server payload
+      setCourseData({
+        course: data.course,
+        modules: data.modules || [],
+        isEnrolled: !!data.isEnrolled,
+        progress: data.progress || null,
+      });
+
+      // The public course endpoint returns course + modules and enrollment info.
+      // We still need completed lesson ids for the UI; compute them client-side
+      // using the existing fetchCompletedLessons fallback (bounded concurrency).
+      const modules = data.modules || [];
+      const completedSet = await fetchCompletedLessons(modules);
+      setCompletedLessons(completedSet);
+
+      if (modules && modules.length > 0) {
+        const firstIncompleteLesson = findFirstIncompleteLesson(modules, completedSet);
         if (firstIncompleteLesson) {
           console.log('🎯 Starting at lesson:', firstIncompleteLesson.lesson.title, 'in module:', firstIncompleteLesson.module.title);
           setCurrentLesson(firstIncompleteLesson.lesson);
@@ -1538,11 +1344,28 @@ export default function CourseLearnPage() {
         }
       }
     } catch (error) {
-      console.error('Error fetching course:', error);
+      console.error('Error fetching course learn-data:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  // Log current lesson once when it changes (avoid per-render logging which can spam console)
+  useEffect(() => {
+    if (!currentLesson) return;
+    try {
+      // Use debug-level logging so it's easier to filter and less intrusive
+      console.debug('🔍 Current lesson:', {
+        id: currentLesson.id,
+        title: currentLesson.title,
+        content_type: currentLesson.content_type,
+        quizId: currentLesson.quizId,
+        hasQuizId: !!currentLesson.quizId
+      });
+    } catch (e) {
+      // ignore
+    }
+  }, [currentLesson]);
 
   const fetchCompletedLessons = async (modules: Module[]) => {
     const allLessons = modules.flatMap(m => m.lessons);
@@ -1550,35 +1373,75 @@ export default function CourseLearnPage() {
     
     console.log('📚 Loading progress for', allLessons.length, 'lessons...');
     
-    // Fetch completion status for all lessons
-    for (const lesson of allLessons) {
-      try {
-        const response = await fetch(`/api/lessons/${lesson.id}/progress`, {
-          cache: 'no-store' // Ensure we get fresh data, not cached
-        });
-        
-        // Check if response is ok and is JSON before parsing
-        if (!response.ok) {
-          console.warn(`Failed to fetch progress for lesson ${lesson.title}: ${response.status}`);
-          continue;
+    // First try a batch endpoint that returns completed lesson ids for the course.
+    // This collapses N per-lesson requests into a single request and greatly
+    // reduces server load for courses with many lessons.
+    try {
+      const batchResp = await fetch(`/api/courses/${courseId}/completed-lessons`, {
+        cache: 'no-store'
+      });
+
+      if (batchResp.ok) {
+        const contentType = batchResp.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const body = await batchResp.json();
+
+          // Support several possible shapes returned by different backends
+          const ids = body.completedLessonIds || body.completedLessons || body.completed || body.lessonIds || body.lesson_ids || body.ids;
+
+          if (Array.isArray(ids)) {
+            ids.forEach((id: any) => {
+              if (id) completed.add(String(id));
+            });
+            console.log('✅ Loaded completed lessons via batch endpoint:', completed.size);
+            setCompletedLessons(completed);
+            return completed;
+          }
         }
-        
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-          console.warn(`Invalid content type for lesson ${lesson.title}: ${contentType}`);
-          continue;
-        }
-        
-        const data = await response.json();
-        if (data.completed) {
-          completed.add(lesson.id);
-          console.log('✅ Lesson completed:', lesson.title);
-        }
-      } catch (error) {
-        console.error('Error fetching lesson progress:', error);
+      } else if (batchResp.status !== 404) {
+        // non-404 errors are worth logging but we still fall back to per-lesson fetch
+        console.warn('Batch completed-lessons endpoint returned', batchResp.status);
       }
+    } catch (err) {
+      console.warn('Batch completed-lessons request failed, falling back to per-lesson requests:', err);
     }
-    
+
+    // Fallback: fetch per-lesson progress if batch endpoint is not available.
+    // Use bounded concurrency to speed up wall-clock time without flooding the server.
+    // Process lessons in chunks of `concurrency` and await each batch.
+    console.log('📡 Falling back to per-lesson progress fetch for', allLessons.length, 'lessons (bounded concurrency)');
+    const concurrency = 6; // safe parallelism value; adjust based on server capacity
+    for (let i = 0; i < allLessons.length; i += concurrency) {
+      const batch = allLessons.slice(i, i + concurrency);
+      await Promise.all(batch.map(async (lesson) => {
+        try {
+          const response = await fetch(`/api/lessons/${lesson.id}/progress`, {
+            cache: 'no-store' // Ensure we get fresh data, not cached
+          });
+
+          // Check if response is ok and is JSON before parsing
+          if (!response.ok) {
+            console.warn(`Failed to fetch progress for lesson ${lesson.title}: ${response.status}`);
+            return;
+          }
+
+          const contentType = response.headers.get('content-type');
+          if (!contentType || !contentType.includes('application/json')) {
+            console.warn(`Invalid content type for lesson ${lesson.title}: ${contentType}`);
+            return;
+          }
+
+          const data = await response.json();
+          if (data.completed) {
+            completed.add(lesson.id);
+            console.log('✅ Lesson completed:', lesson.title);
+          }
+        } catch (error) {
+          console.error('Error fetching lesson progress:', error);
+        }
+      }));
+    }
+
     console.log('✨ Total completed lessons:', completed.size);
     setCompletedLessons(completed);
     return completed;
@@ -1848,14 +1711,7 @@ export default function CourseLearnPage() {
       );
     };
 
-    // Debug logging
-    console.log('🔍 Current lesson debug:', {
-      id: currentLesson.id,
-      title: currentLesson.title,
-      content_type: currentLesson.content_type,
-      quizId: currentLesson.quizId,
-      hasQuizId: !!currentLesson.quizId
-    });
+    // Debug logging moved to a useEffect that runs only when currentLesson changes
 
     return (
       <div className="p-6">
