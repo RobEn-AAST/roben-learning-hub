@@ -257,7 +257,11 @@ export async function POST(
     console.log(`[BATCH-ANSWERS] ${new Date().toISOString()} - Saved ${totalSaved} answers for attempt=${attemptId} user=${user.id}`);
     return NextResponse.json({ success: true, saved: totalSaved });
   } catch (error) {
-    console.error('Unexpected error in batch answers:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    // Log full error for debugging (stack may contain sensitive info - remove after debugging)
+    console.error('[BATCH-ANSWERS] Unexpected error in batch answers:', error instanceof Error ? error.stack : error);
+
+    // Return error message to client to aid debugging (temporary)
+    const errMsg = error instanceof Error ? error.message : String(error);
+    return NextResponse.json({ error: 'Internal server error', details: errMsg }, { status: 500 });
   }
 }
