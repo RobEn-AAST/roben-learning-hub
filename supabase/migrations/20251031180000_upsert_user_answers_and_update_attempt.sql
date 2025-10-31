@@ -13,6 +13,12 @@ DECLARE
   v_earned integer := 0;
   v_total integer := 0;
 BEGIN
+  -- Ensure the attempt exists before inserting answers. This prevents
+  -- foreign key violations when the client read was served from a stale
+  -- replica while the primary hasn't committed the attempt yet.
+  IF NOT EXISTS (SELECT 1 FROM public.quiz_attempts WHERE id = p_attempt_id) THEN
+    RAISE EXCEPTION 'Attempt % not found', p_attempt_id;
+  END IF;
   -- Insert or update answers from the JSON array
   WITH rows AS (
     SELECT

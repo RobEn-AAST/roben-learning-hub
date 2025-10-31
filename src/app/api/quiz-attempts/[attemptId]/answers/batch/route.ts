@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient } from '@/lib/supabase/server';
 
 /**
  * POST /api/quiz-attempts/[attemptId]/answers/batch
@@ -14,7 +14,8 @@ export async function POST(
     const startedAt = new Date().toISOString();
     console.log(`[BATCH-ANSWERS] ${startedAt} - POST /api/quiz-attempts/[attemptId]/answers/batch - Starting`);
 
-    const supabase = await createClient();
+  const supabase = await createClient();
+  const supabaseAdmin = createAdminClient();
     const { attemptId } = await params;
 
     const {
@@ -40,8 +41,9 @@ export async function POST(
       return NextResponse.json({ success: true, saved: 0 });
     }
 
-    // Verify ownership and that attempt is not completed
-    const { data: attempt, error: attemptError } = await supabase
+    // Verify ownership and that attempt is not completed. Use the admin
+    // client to read the attempt from the primary (avoids replica lag).
+    const { data: attempt, error: attemptError } = await supabaseAdmin
       .from('quiz_attempts')
       .select('id, user_id, completed_at')
       .eq('id', attemptId)
