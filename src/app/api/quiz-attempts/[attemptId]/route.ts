@@ -76,74 +76,45 @@ export async function PUT(
       );
     }
 
-    console.log('🔵 Calling calculate_quiz_score...');
+    console.log('🔵 Calling calculate_quiz_score_and_complete (single RPC)...');
 
-    // First, check if there are any user_answers for this attempt
-    const { data: userAnswers, error: answersCheckError } = await supabase
-      .from('user_answers')
-      .select('*')
-      .eq('attempt_id', attemptId);
-
-    if (answersCheckError) {
-      console.error('🔴 Error fetching user answers:', answersCheckError);
-      // Not fatal: continue and let calculate_quiz_score handle the empty state,
-      // but log the error for diagnostics.
-    }
-
-    console.log('🔵 User answers found:', userAnswers?.length || 0);
-    if (userAnswers && userAnswers.length > 0) {
-      console.log('🔵 Sample answer:', userAnswers[0]);
-    } else {
-      console.log('⚠️ WARNING: No user answers found for this attempt!');
-    }
-
-    // Call the database function to calculate score
-    const { data: scoreData, error: scoreError } = await supabase.rpc(
-      'calculate_quiz_score',
-      { p_attempt_id: attemptId }
+    // Call the new wrapper RPC which calculates score AND marks the attempt completed
+    // in a single, atomic DB call. This reduces round-trips and potential row locking.
+    const { data: rpcData, error: rpcError } = await supabase.rpc(
+      'calculate_quiz_score_and_complete',
+      { p_attempt_id: attemptId, p_time_taken_seconds: timeTakenSeconds || null }
     );
 
-    if (scoreError) {
-      console.error('🔴 Error calculating score:', scoreError);
+    if (rpcError) {
+      console.error('🔴 Error calculating/completing score:', rpcError);
       return NextResponse.json(
-        { error: 'Failed to calculate score', details: scoreError?.message },
+        { error: 'Failed to calculate/complete score', details: rpcError?.message },
         { status: 500 }
       );
     }
 
-    console.log('🔵 Score calculated:', scoreData);
+    // rpcData should be an array with one row containing the returned values
+    const result = Array.isArray(rpcData) && rpcData.length > 0 ? rpcData[0] : null;
 
-    console.log('🔵 Score calculated:', scoreData);
-
-    // The calculate_quiz_score function already updated score fields (via SECURITY DEFINER)
-    // Now mark the attempt as completed and set the time taken
-    console.log('🔵 Marking attempt as completed...');
-    
-    const { data: updatedAttempt, error: updateError } = await supabase
-      .from('quiz_attempts')
-      .update({
-        completed_at: new Date().toISOString(),
-        time_taken_seconds: timeTakenSeconds || null,
-      })
-      .eq('id', attemptId)
-      .eq('user_id', user.id)
-      .select()
-      .single();
-
-    if (updateError) {
-      console.error('🔴 Error marking attempt as completed:', updateError);
-      return NextResponse.json(
-        { error: 'Failed to complete attempt', details: updateError?.message },
-        { status: 500 }
-      );
+    if (!result) {
+      console.error('🔴 RPC returned no data for attempt:', attemptId);
+      return NextResponse.json({ error: 'Failed to complete attempt' }, { status: 500 });
     }
 
-    console.log('✅ Quiz attempt completed successfully!');
+    // The wrapper returns: earned_points, total_points, score, passed, attempt (jsonb)
+    const returnedAttempt = result.attempt || null;
+
+    console.log('✅ Quiz attempt calculated & completed (RPC).');
 
     return NextResponse.json({
       success: true,
-      attempt: updatedAttempt,
-      score: scoreData?.[0] || updatedAttempt,
+      attempt: returnedAttempt,
+      score: {
+        earned_points: result.earned_points,
+        total_points: result.total_points,
+        score: result.score,
+        passed: result.passed,
+      },
     });
   } catch (error) {
     console.error('🔴 CATCH BLOCK - Error completing quiz attempt:', error);
