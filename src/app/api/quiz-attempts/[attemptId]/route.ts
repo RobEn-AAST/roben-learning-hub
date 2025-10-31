@@ -80,15 +80,28 @@ export async function PUT(
 
     // Call the new wrapper RPC which calculates score AND marks the attempt completed
     // in a single, atomic DB call. This reduces round-trips and potential row locking.
-    const { data: rpcData, error: rpcError } = await supabase.rpc(
-      'calculate_quiz_score_and_complete',
-      { p_attempt_id: attemptId, p_time_taken_seconds: timeTakenSeconds || null }
-    );
+    // Add a small retry for transient/connection errors since we sometimes see
+    // 'Database connection error. Retrying the connection.' from the client.
+    const MAX_RPC_RETRIES = 2;
+    let rpcData: any = null;
+    let rpcError: any = null;
+    for (let attemptNum = 0; attemptNum <= MAX_RPC_RETRIES; attemptNum++) {
+      const res = await supabase.rpc('calculate_quiz_score_and_complete', {
+        p_attempt_id: attemptId,
+        p_time_taken_seconds: timeTakenSeconds || null,
+      });
+      rpcData = res.data;
+      rpcError = res.error;
+      if (!rpcError) break;
+      console.warn(`RPC attempt ${attemptNum + 1} failed:`, rpcError?.message || rpcError);
+      // small backoff
+      await new Promise(r => setTimeout(r, Math.pow(2, attemptNum) * 250));
+    }
 
     if (rpcError) {
-      console.error('🔴 Error calculating/completing score:', rpcError);
+      console.error('🔴 Error calculating/completing score after retries:', rpcError);
       return NextResponse.json(
-        { error: 'Failed to calculate/complete score', details: rpcError?.message },
+        { error: 'Failed to calculate/complete score', details: rpcError?.message || String(rpcError) },
         { status: 500 }
       );
     }

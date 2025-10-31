@@ -124,52 +124,100 @@ export async function POST(
       };
     });
 
-    // Use upsert with onConflict to update existing answers
-    const { data: upserted, error: upsertError } = await supabase
-      .from('user_answers')
-      .upsert(upsertRows, { onConflict: 'attempt_id,question_id' })
-      .select();
+    // Use chunked upserts to avoid extremely large single operations which can
+    // time out or overload the DB. Also add a small retry for transient errors.
+    const CHUNK_SIZE = 50;
+    const MAX_RETRIES = 2;
+    let totalSaved = 0;
+    const failedRows: Array<{ row: any; error: any }> = [];
 
-    if (upsertError) {
-      // Log full error for debugging
-      console.error(`[BATCH-ANSWERS] ${new Date().toISOString()} - Error upserting batch answers:`, upsertError);
-
-      // Try per-row upsert to identify problematic rows (helps surface DB constraint/fk issues)
-      const failedRows: Array<{ row: any; error: any }> = [];
-      let perRowSaved = 0;
-
-      for (const row of upsertRows) {
-        try {
-          const { data: singleData, error: singleErr } = await supabase
-            .from('user_answers')
-            .upsert(row, { onConflict: 'attempt_id,question_id' })
-            .select();
-
-          if (singleErr) {
-            console.error(`[BATCH-ANSWERS] ${new Date().toISOString()} - Per-row upsert failed:`, singleErr, 'row:', row);
-            failedRows.push({ row, error: singleErr });
-          } else {
-            perRowSaved += (singleData?.length || 0);
-          }
-        } catch (e) {
-          console.error(`[BATCH-ANSWERS] ${new Date().toISOString()} - Exception during per-row upsert:`, e, 'row:', row);
-          failedRows.push({ row, error: e });
-        }
-      }
-
-      // If nothing could be saved, return the original error with more context
-      if (perRowSaved === 0) {
-        // Return some details to help debugging (non-sensitive). The full DB error is logged server-side.
-        return NextResponse.json({ error: 'Failed to save answers', details: upsertError?.message || String(upsertError) }, { status: 500 });
-      }
-
-      // Some rows saved, but some failed - return partial success with counts
-      console.warn(`[BATCH-ANSWERS] ${new Date().toISOString()} - Partial upsert: saved=${perRowSaved}, failed=${failedRows.length}`);
-      return NextResponse.json({ success: true, saved: perRowSaved, failed: failedRows.length, note: 'Partial save - see server logs for details' }, { status: 207 });
+    // Prefer using a DB-side upsert+aggregate function when available. This
+    // pushes the heavy work into Postgres and avoids multiple round-trips.
+    const chunks: any[] = [];
+    for (let i = 0; i < upsertRows.length; i += CHUNK_SIZE) {
+      chunks.push(upsertRows.slice(i, i + CHUNK_SIZE));
     }
 
-    console.log(`[BATCH-ANSWERS] ${new Date().toISOString()} - Saved ${upserted?.length || 0} answers for attempt=${attemptId} user=${user.id}`);
-    return NextResponse.json({ success: true, saved: upserted?.length || 0 });
+    for (const chunk of chunks) {
+      let attemptNum = 0;
+      let success = false;
+
+      while (attemptNum <= MAX_RETRIES && !success) {
+        try {
+          // Attempt to call the DB-side upsert function
+          const { data: rpcRes, error: rpcErr } = await supabase.rpc('upsert_user_answers_and_update_attempt', {
+            p_attempt_id: attemptId,
+            p_answers: JSON.stringify(chunk),
+          });
+
+          if (rpcErr) {
+            console.warn(`[BATCH-ANSWERS] RPC chunk error (attempt ${attemptNum + 1}):`, rpcErr?.message || rpcErr);
+            attemptNum += 1;
+            if (attemptNum > MAX_RETRIES) {
+              // Fall back to client-side per-row upserts for this chunk
+              for (const row of chunk) {
+                try {
+                  const { data: singleData, error: singleErr } = await supabase
+                    .from('user_answers')
+                    .upsert(row, { onConflict: 'attempt_id,question_id' })
+                    .select();
+                  if (singleErr) {
+                    failedRows.push({ row, error: singleErr });
+                  } else {
+                    totalSaved += (singleData?.length || 0);
+                  }
+                } catch (e) {
+                  failedRows.push({ row, error: e });
+                }
+              }
+              break;
+            }
+            await new Promise(r => setTimeout(r, Math.pow(2, attemptNum) * 250));
+            continue;
+          }
+
+          // rpcRes is expected to be the number of processed rows
+          totalSaved += (rpcRes || 0);
+          success = true;
+        } catch (e) {
+          console.error('[BATCH-ANSWERS] Exception calling RPC for chunk:', e);
+          attemptNum += 1;
+          if (attemptNum > MAX_RETRIES) {
+            // last-resort per-row fallback
+            for (const row of chunk) {
+              try {
+                const { data: singleData, error: singleErr } = await supabase
+                  .from('user_answers')
+                  .upsert(row, { onConflict: 'attempt_id,question_id' })
+                  .select();
+                if (singleErr) {
+                  failedRows.push({ row, error: singleErr });
+                } else {
+                  totalSaved += (singleData?.length || 0);
+                }
+              } catch (err) {
+                failedRows.push({ row, error: err });
+              }
+            }
+            break;
+          }
+          await new Promise(r => setTimeout(r, Math.pow(2, attemptNum) * 250));
+        }
+      }
+    }
+
+    if (failedRows.length > 0 && totalSaved === 0) {
+      console.error(`[BATCH-ANSWERS] Failed to save any rows for attempt=${attemptId}. Failed rows:`, failedRows.length);
+      return NextResponse.json({ error: 'Failed to save answers', details: 'Database error while saving answers' }, { status: 500 });
+    }
+
+    if (failedRows.length > 0) {
+      console.warn(`[BATCH-ANSWERS] Partial save: saved=${totalSaved}, failed=${failedRows.length}`);
+      return NextResponse.json({ success: true, saved: totalSaved, failed: failedRows.length, note: 'Partial save - see server logs for details' }, { status: 207 });
+    }
+
+    console.log(`[BATCH-ANSWERS] ${new Date().toISOString()} - Saved ${totalSaved} answers for attempt=${attemptId} user=${user.id}`);
+    return NextResponse.json({ success: true, saved: totalSaved });
   } catch (error) {
     console.error('Unexpected error in batch answers:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
