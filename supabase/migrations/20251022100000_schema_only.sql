@@ -215,13 +215,20 @@ BEGIN
     v_score := 0;
   END IF;
   
-  -- Check if passed
+  -- Determine pass only when the user earned all available points for the attempt.
+  -- This enforces "all answers correct" as the passing rule.
+  -- Fetch passing_score for historical reference but we will use strict full-score rule.
   SELECT qz.passing_score INTO v_passing_score
   FROM public.quiz_attempts qa
   JOIN public.quizzes qz ON qz.id = qa.quiz_id
   WHERE qa.id = p_attempt_id;
-  
-  v_passed := v_score >= COALESCE(v_passing_score, 0);
+
+  -- Passed only when total points > 0 and earned points equals total points.
+  IF v_total > 0 THEN
+    v_passed := (v_earned = v_total);
+  ELSE
+    v_passed := false;
+  END IF;
   
   -- Update the attempt record
   UPDATE public.quiz_attempts

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -129,6 +129,8 @@ export default function ProjectSubmissionForm({
   const [validationError, setValidationError] = useState('');
   const [existingSubmission, setExistingSubmission] = useState<ExistingSubmission | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // Guard to prevent double-fetch in React Strict Mode/dev
+  const checkExistingRanRef = useRef(false);
 
   // Get platform configuration
   const platformKey = (projectPlatform?.toLowerCase() || 'custom') as keyof typeof PLATFORMS;
@@ -136,6 +138,10 @@ export default function ProjectSubmissionForm({
 
   // Check for existing submission on mount
   useEffect(() => {
+    // Prevent double-fetch in React Strict Mode/dev by using a stable ref
+    if (checkExistingRanRef.current) return;
+    checkExistingRanRef.current = true;
+
     const checkExistingSubmission = async () => {
       try {
         const response = await fetch(`/api/project-submissions?lessonId=${lessonId}`);

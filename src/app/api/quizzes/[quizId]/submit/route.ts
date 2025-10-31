@@ -90,8 +90,11 @@ export async function POST(
       }
     }
 
-    const percentage = (correctAnswers / totalQuestions) * 100;
-    const passed = percentage >= (quiz.passing_score || 70);
+  const percentage = (correctAnswers / totalQuestions) * 100;
+
+  // Passing rule: only pass when every question is answered correctly.
+  // This enforces "all correct" passing criteria regardless of quiz.passing_score.
+  const passed = correctAnswers === totalQuestions;
 
     console.log('🔵 Step 10: Score calculated:', {
       correctAnswers,

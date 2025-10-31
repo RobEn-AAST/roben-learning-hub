@@ -1,18 +1,28 @@
-'use client';
+"use client";
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
+import { toast } from 'sonner';
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useParams, useRouter } from "next/navigation";
 import { Tooltip } from "@/components/ui/tooltip";
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import rehypeHighlight from 'rehype-highlight';
-import rehypeRaw from 'rehype-raw';
-import rehypeSanitize from 'rehype-sanitize';
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogClose,
+} from '@/components/ui/dialog';
+import dynamic from 'next/dynamic';
+const ArticleRenderer = dynamic(() => import('@/components/ArticleRenderer'), {
+  ssr: false,
+  loading: () => <div className="py-8 text-center text-gray-500">Loading article...</div>
+});
+
 import ProjectSubmissionForm from '@/components/project/ProjectSubmissionForm';
-import '@/styles/highlight.css';
 
 interface Lesson {
   id: string;
@@ -47,6 +57,9 @@ interface CourseData {
     title: string;
     description: string;
   };
+
+  // When a new attempt is created, assign any buffered answers that were
+  // collected before the attempt existed (attemptId === null) to the new attempt.
   modules: Module[];
   isEnrolled: boolean;
   progress: {
@@ -79,261 +92,6 @@ interface Quiz {
   timeLimitMinutes?: number | null;
 }
 
-function ArticleRenderer({ content }: { content?: string | null }) {
-  const [showTOC, setShowTOC] = useState(false);
-  const [headings, setHeadings] = useState<{ id: string; text: string; level: number }[]>([]);
-
-  // Generate table of contents from headings
-  useEffect(() => {
-    if (content) {
-      const headingMatches = content.match(/^#{1,6}\s+(.+)$/gm);
-      if (headingMatches && headingMatches.length > 1) {
-        const parsedHeadings = headingMatches.map((heading, index) => {
-          const level = heading.match(/^#+/)?.[0].length || 1;
-          const text = heading.replace(/^#+\s+/, '');
-          return {
-            id: `heading-${index}`,
-            text: text,
-            level: level
-          };
-        });
-        setHeadings(parsedHeadings);
-      }
-    }
-  }, [content]);
-
-  if (!content) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-center">
-          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
-            <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No Article Content</h3>
-          <p className="text-gray-500">This lesson doesn't have any article content yet.</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      {/* Article Header with TOC toggle */}
-      {headings.length > 1 && (
-        <div className="bg-gray-50 px-8 py-4 border-b border-gray-200">
-          <button
-            onClick={() => setShowTOC(!showTOC)}
-            className="flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
-          >
-            <svg className={`w-4 h-4 transition-transform ${showTOC ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
-            Table of Contents
-            <span className="text-gray-500">({headings.length} sections)</span>
-          </button>
-          
-          {/* Table of Contents */}
-          {showTOC && (
-            <div className="mt-4 p-4 bg-white rounded-lg border border-gray-200">
-              <nav className="space-y-1">
-                {headings.map((heading, index) => (
-                  <a
-                    key={heading.id}
-                    href={`#${heading.id}`}
-                    className={`block py-1 text-sm hover:text-blue-600 transition-colors ${
-                      heading.level === 1 
-                        ? 'font-semibold text-gray-900' 
-                        : heading.level === 2 
-                          ? 'font-medium text-gray-800 pl-3' 
-                          : 'text-gray-600 pl-6'
-                    }`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      const element = document.getElementById(heading.id);
-                      element?.scrollIntoView({ behavior: 'smooth' });
-                    }}
-                  >
-                    {heading.text}
-                  </a>
-                ))}
-              </nav>
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="p-8">
-        <article className="prose prose-lg max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-blue-600 prose-strong:text-gray-900 prose-code:text-pink-600 prose-code:bg-gray-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-pre:bg-gray-900 prose-pre:text-gray-100 prose-blockquote:border-blue-500 prose-blockquote:bg-blue-50 prose-blockquote:text-blue-900 prose-hr:border-gray-300">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeHighlight, rehypeRaw, rehypeSanitize]}
-            components={{
-              h1: ({ children, ...props }: any) => {
-                const headingIndex = headings.findIndex(h => h.text === children);
-                const id = headingIndex >= 0 ? headings[headingIndex].id : undefined;
-                return (
-                  <h1 id={id} className="text-3xl font-bold text-gray-900 mb-6 pb-2 border-b border-gray-200" {...props}>
-                    {children}
-                  </h1>
-                );
-              },
-              h2: ({ children, ...props }: any) => {
-                const headingIndex = headings.findIndex(h => h.text === children);
-                const id = headingIndex >= 0 ? headings[headingIndex].id : undefined;
-                return (
-                  <h2 id={id} className="text-2xl font-semibold text-gray-900 mb-4 mt-8" {...props}>
-                    {children}
-                  </h2>
-                );
-              },
-              h3: ({ children, ...props }: any) => {
-                const headingIndex = headings.findIndex(h => h.text === children);
-                const id = headingIndex >= 0 ? headings[headingIndex].id : undefined;
-                return (
-                  <h3 id={id} className="text-xl font-semibold text-gray-900 mb-3 mt-6" {...props}>
-                    {children}
-                  </h3>
-                );
-              },
-              p: ({ children }) => (
-                <p className="text-gray-700 mb-4 leading-relaxed">
-                  {children}
-                </p>
-              ),
-              a: ({ children, href }) => (
-                <a 
-                  href={href} 
-                  className="text-blue-600 hover:text-blue-800 underline transition-colors"
-                  target={href?.startsWith('http') ? '_blank' : undefined}
-                  rel={href?.startsWith('http') ? 'noopener noreferrer' : undefined}
-                >
-                  {children}
-                </a>
-              ),
-              code: ({ children, className, ...props }: any) => {
-                const isInline = !className?.includes('language-');
-                if (isInline) {
-                  return (
-                    <code className="bg-gray-100 text-pink-600 px-2 py-1 rounded text-sm font-mono" {...props}>
-                      {children}
-                    </code>
-                  );
-                }
-                const codeString = String(children).replace(/\n$/, '');
-                const language = className?.replace('language-', '') || 'text';
-                
-                return (
-                  <div className="relative group">
-                    <pre className="bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto">
-                      <code className={className} {...props}>
-                        {children}
-                      </code>
-                    </pre>
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(codeString);
-                      }}
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-700 hover:bg-gray-600 text-gray-300 px-2 py-1 rounded text-xs"
-                      title="Copy code"
-                    >
-                      Copy
-                    </button>
-                    {language !== 'text' && (
-                      <div className="absolute top-2 left-2 text-xs text-gray-400 bg-gray-800 px-2 py-1 rounded">
-                        {language}
-                      </div>
-                    )}
-                  </div>
-                );
-              },
-              blockquote: ({ children }) => (
-                <blockquote className="border-l-4 border-blue-500 bg-blue-50 pl-4 py-2 my-6 italic text-blue-900">
-                  {children}
-                </blockquote>
-              ),
-              ul: ({ children }) => (
-                <ul className="list-disc list-inside mb-4 space-y-2 text-gray-700">
-                  {children}
-                </ul>
-              ),
-              ol: ({ children }) => (
-                <ol className="list-decimal list-inside mb-4 space-y-2 text-gray-700">
-                  {children}
-                </ol>
-              ),
-              li: ({ children }) => (
-                <li className="mb-1">
-                  {children}
-                </li>
-              ),
-              img: ({ src, alt }) => (
-                <div className="my-6">
-                  <img 
-                    src={src} 
-                    alt={alt || ''} 
-                    className="max-w-full h-auto rounded-lg shadow-sm border border-gray-200"
-                  />
-                  {alt && (
-                    <p className="text-sm text-gray-500 text-center mt-2 italic">
-                      {alt}
-                    </p>
-                  )}
-                </div>
-              ),
-              table: ({ children }) => (
-                <div className="overflow-x-auto my-6">
-                  <table className="min-w-full divide-y divide-gray-200 border border-gray-200 rounded-lg">
-                    {children}
-                  </table>
-                </div>
-              ),
-              thead: ({ children }) => (
-                <thead className="bg-gray-50">
-                  {children}
-                </thead>
-              ),
-              th: ({ children }) => (
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  {children}
-                </th>
-              ),
-              td: ({ children }) => (
-                <td className="px-4 py-3 text-sm text-gray-900 border-t border-gray-200">
-                  {children}
-                </td>
-              ),
-              hr: () => (
-                <hr className="my-8 border-gray-300" />
-              )
-            }}
-          >
-            {content}
-          </ReactMarkdown>
-        </article>
-      </div>
-      
-      {/* Reading progress indicator */}
-      <div className="bg-gray-50 px-8 py-4 border-t border-gray-200">
-        <div className="flex items-center justify-between text-sm text-gray-600">
-          <div className="flex items-center gap-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span>Reading time: ~{Math.ceil(content.split(' ').length / 200)} min</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <span>{content.split(' ').length} words</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, isLessonComplete }: { 
   lesson: Lesson;
@@ -359,6 +117,86 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, 
   const [startTime, setStartTime] = useState<number | null>(null);
   const [earnedPoints, setEarnedPoints] = useState<number>(0);
   const [totalPoints, setTotalPoints] = useState<number>(0);
+  // Leave-confirmation modal state (replaces window.confirm)
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const pendingNavRef = useRef<(() => void) | null>(null);
+  // Buffering refs to reduce server requests and avoid saving to completed attempts
+  const isStartingAttemptRef = useRef(false);
+  const answerBufferRef = useRef<Array<{ attemptId?: string | null; questionId: string; selectedOptionId?: string | null; textAnswer?: string | null; ts?: number }>>([]);
+  const flushTimeoutRef = useRef<number | null>(null);
+
+  // Flush buffered answers grouped by attemptId
+  const flushBufferedAnswers = useCallback(async () => {
+    // Drain buffer
+    const allBuffered = answerBufferRef.current.splice(0, answerBufferRef.current.length) || [];
+    if (!allBuffered.length) return;
+
+    // Group by attemptId (null items will be requeued)
+    const groups: Record<string, any[]> = {};
+    const nullGroup: any[] = [];
+    for (const item of allBuffered) {
+      if (!item.attemptId) {
+        nullGroup.push(item);
+        continue;
+      }
+      groups[item.attemptId] = groups[item.attemptId] || [];
+      groups[item.attemptId].push(item);
+    }
+
+    // Requeue null-group items for later assignment
+    if (nullGroup.length) answerBufferRef.current.push(...nullGroup);
+
+    for (const attemptIdKey of Object.keys(groups)) {
+      const group = groups[attemptIdKey];
+      try {
+        const response = await fetch(`/api/quiz-attempts/${attemptIdKey}/answers/batch`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ answers: group }),
+        });
+
+        if (!response.ok) {
+          // If attempt was completed on server, don't requeue those answers.
+          let body: any = null;
+          try { body = await response.json(); } catch (e) { /* ignore */ }
+          const msg = body && (body.error || body.message) ? String(body.error || body.message) : '';
+          if (response.status === 400 && /completed|already completed|Cannot modify/i.test(msg)) {
+            // attempt already completed — load final attempt if possible and show results
+            try {
+              if (quiz?.id) {
+                const ar = await fetch(`/api/quiz-attempts?quizId=${quiz.id}&latest=true`);
+                if (ar.ok) {
+                  const ad = await ar.json();
+                  const latest = ad.attempts;
+                  if (latest) {
+                    setLatestAttempt(latest);
+                    setScore(latest.score || 0);
+                    setEarnedPoints(latest.earned_points || 0);
+                    setTotalPoints(latest.total_points || 0);
+                    setShowResults(true);
+                  }
+                }
+              }
+            } catch (e) {
+              console.error('Error loading final attempt after completed flush:', e);
+            }
+            continue; // don't requeue
+          }
+
+          // Requeue group for retry later
+          answerBufferRef.current.push(...group);
+          continue;
+        }
+
+        // Success - nothing further needed
+        await response.json().catch(() => {});
+      } catch (e) {
+        console.error('Error flushing buffered answers for attempt', attemptIdKey, e);
+        // Requeue
+        answerBufferRef.current.push(...group);
+      }
+    }
+  }, [quiz?.id]);
 
   // Notify parent when quiz active state changes
   useEffect(() => {
@@ -376,14 +214,16 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, 
     // Prevent copy
     const handleCopy = (e: ClipboardEvent) => {
       e.preventDefault();
-      alert('⚠️ Copying is disabled during the quiz to maintain academic integrity.');
+      // Non-blocking toast instead of alert
+      try { toast.error('⚠️ Copying is disabled during the quiz.'); } catch (err) { /* ignore */ }
       return false;
     };
 
     // Prevent cut
     const handleCut = (e: ClipboardEvent) => {
       e.preventDefault();
-      alert('⚠️ Cutting text is disabled during the quiz to maintain academic integrity.');
+      // Non-blocking toast instead of alert
+      try { toast.error('⚠️ Cutting text is disabled during the quiz.'); } catch (err) { /* ignore */ }
       return false;
     };
 
@@ -410,7 +250,8 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, 
           e.key === 'S'
         ) {
           e.preventDefault();
-          alert('⚠️ This action is disabled during the quiz to maintain academic integrity.');
+          // Non-blocking toast instead of alert
+          try { toast.error('⚠️ This action is disabled during the quiz.'); } catch (err) { /* ignore */ }
           return false;
         }
       }
@@ -421,7 +262,8 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, 
         (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c'))
       ) {
         e.preventDefault();
-        alert('⚠️ Developer tools are disabled during the quiz.');
+        // Non-blocking toast instead of alert
+        try { toast.error('⚠️ Developer tools are disabled during the quiz.'); } catch (err) { /* ignore */ }
         return false;
       }
     };
@@ -538,6 +380,60 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, 
     loadQuizAndAttempts();
   }, [lesson.quizId]);
 
+  // When a new attemptId becomes available, assign any buffered answers that were
+  // collected before the attempt was created (attemptId === null) to the new attempt.
+  useEffect(() => {
+    if (!currentAttemptId) return;
+
+    try {
+      const buf = answerBufferRef.current || [];
+      let changed = false;
+      for (let i = 0; i < buf.length; i++) {
+        if (!buf[i].attemptId) {
+          buf[i].attemptId = currentAttemptId;
+          changed = true;
+        }
+      }
+      if (changed) {
+        answerBufferRef.current = buf;
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, [currentAttemptId]);
+
+  // Ensure buffered answers are flushed on unmount or before unload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (flushTimeoutRef.current) {
+        window.clearTimeout(flushTimeoutRef.current);
+      }
+      const allBuffered = answerBufferRef.current.splice(0, answerBufferRef.current.length) || [];
+      const toSend = allBuffered.filter((a: any) => a.attemptId === currentAttemptId);
+      const leftovers = allBuffered.filter((a: any) => a.attemptId !== currentAttemptId);
+
+      // Restore leftovers to buffer
+      if (leftovers.length > 0) answerBufferRef.current.push(...leftovers);
+
+      if (toSend.length === 0 || !currentAttemptId) return;
+
+      try {
+        navigator.sendBeacon(`/api/quiz-attempts/${currentAttemptId}/answers/batch`, JSON.stringify({ answers: toSend }));
+      } catch (e) {
+        // ignore - best-effort
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      if (flushTimeoutRef.current) {
+        window.clearTimeout(flushTimeoutRef.current);
+      }
+      flushBufferedAnswers().catch(err => console.error('Error flushing on unmount:', err));
+    };
+  }, [currentAttemptId, flushBufferedAnswers]);
+
   // Submit quiz function (defined early for use in effects)
   const handleSubmitQuiz = useCallback(async () => {
     if (!currentAttemptId) return;
@@ -545,6 +441,12 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, 
     setSubmitting(true);
     
     try {
+      // Ensure buffered answers are flushed so score calculation includes them
+      try {
+        await flushBufferedAnswers();
+      } catch (e) {
+        console.warn('Failed to flush buffered answers before submit, continuing to submit:', e);
+      }
       // Calculate time taken
       const timeTakenSeconds = startTime ? Math.floor((Date.now() - startTime) / 1000) : null;
 
@@ -638,18 +540,22 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, 
     // Prevent browser back button
     const handlePopState = (e: PopStateEvent) => {
       e.preventDefault();
+      // Push state back so user stays on the same page until they confirm
       window.history.pushState(null, '', window.location.href);
-      
-      const shouldLeave = window.confirm(
-        'Are you sure you want to leave? Your quiz will be automatically submitted and graded.'
-      );
-      
-      if (shouldLeave) {
-        // Auto-submit quiz before leaving
-        handleSubmitQuiz().then(() => {
-          window.history.back();
-        });
-      }
+
+      // Store the pending navigation action: auto-submit then go back
+      pendingNavRef.current = async () => {
+        try {
+          await handleSubmitQuiz();
+        } catch (err) {
+          console.error('Error submitting quiz during leave:', err);
+        }
+        // After submitting, navigate back
+        window.history.back();
+      };
+
+      // Show a non-blocking modal asking the user to confirm leaving
+      setShowLeaveModal(true);
     };
 
     // Add initial history state
@@ -719,6 +625,12 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, 
         if (quiz?.timeLimitMinutes) {
           setTimeRemaining(quiz.timeLimitMinutes * 60);
         }
+        // Attempt created - try to flush any buffered answers that were waiting
+        try {
+          await flushBufferedAnswers();
+        } catch (e) {
+          console.warn('Failed to flush buffered answers after starting attempt:', e);
+        }
       } else {
         const errorData = await response.json();
         console.error('❌ Failed to create quiz attempt:', response.status, errorData);
@@ -737,39 +649,37 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, 
   };
 
   const handleAnswerChange = async (questionId: string, answer: string) => {
-    console.log('📝 Answer changed:', { questionId, answer, currentAttemptId });
-    
+    console.log('📝 Answer changed (buffered):', { questionId, answer, currentAttemptId });
+
     setUserAnswers(prev => ({
       ...prev,
       [questionId]: answer
     }));
 
-    // Save answer to database if we have an attempt
-    if (currentAttemptId) {
+    // If there's no attempt yet, try to start one before flushing so answers
+    // can be associated with the attempt. We still buffer immediately.
+    if (!currentAttemptId && !isStartingAttemptRef.current) {
       try {
-        console.log('📤 Saving answer to API...');
-        const response = await fetch(`/api/quiz-attempts/${currentAttemptId}/answers`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            questionId,
-            selectedOptionId: answer,
-          }),
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log('✅ Answer saved successfully:', data);
-        } else {
-          const errorData = await response.json();
-          console.error('❌ Failed to save answer:', response.status, errorData);
-        }
-      } catch (error) {
-        console.error('❌ Error saving answer:', error);
+        isStartingAttemptRef.current = true;
+        await handleStartQuiz();
+      } catch (e) {
+        console.error('Error auto-starting quiz attempt:', e);
+      } finally {
+        isStartingAttemptRef.current = false;
       }
-    } else {
-      console.warn('⚠️ No attempt ID - answer not saved to database');
     }
+
+    // Buffer the answer for batched save — tag with the attempt id so we never send
+    // answers to the wrong/old attempt (prevents 400 when an attempt completes)
+    answerBufferRef.current.push({ attemptId: currentAttemptId || null, questionId, selectedOptionId: answer, ts: Date.now() });
+
+    // Debounced flush (2s)
+    if (flushTimeoutRef.current) {
+      window.clearTimeout(flushTimeoutRef.current);
+    }
+    flushTimeoutRef.current = window.setTimeout(() => {
+      flushBufferedAnswers().catch(err => console.error('Error flushing answers:', err));
+    }, 2000) as unknown as number;
   };
 
   const resetQuiz = async () => {
@@ -923,6 +833,36 @@ function QuizRenderer({ lesson, onComplete, onNavigateNext, onQuizActiveChange, 
 
         {/* Review section - only show correct/incorrect without revealing answers */}
         <div className="space-y-6">
+
+          {/* Leave-confirmation modal (shown when user attempts to navigate away during an active quiz) */}
+          <Dialog open={showLeaveModal} onOpenChange={(open) => setShowLeaveModal(open)}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Are you sure you want to leave?</DialogTitle>
+                <DialogDescription>
+                  Your quiz will be automatically submitted and graded if you leave. Do you want to continue and leave the page?
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => { setShowLeaveModal(false); pendingNavRef.current = null; }}>
+                  Cancel
+                </Button>
+                <Button onClick={async () => {
+                  setShowLeaveModal(false);
+                  const action = pendingNavRef.current;
+                  pendingNavRef.current = null;
+                  if (action) {
+                    try { await action(); } catch (e) { console.error('Error during leave action:', e); }
+                  } else {
+                    try { await handleSubmitQuiz(); } catch (e) { console.error('Error submitting quiz on leave:', e); }
+                    window.history.back();
+                  }
+                }}>
+                  Leave and Submit
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           <h4 className="text-xl font-bold text-gray-800 mb-4">Question Review:</h4>
           {questions.map((question, index) => {
             const userAnswer = userAnswers[question.id];
@@ -1346,10 +1286,11 @@ export default function CourseLearnPage() {
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible' && courseData) {
-        console.log('👁️ Tab became visible - refreshing lesson progress...');
-        const completedLessonsSet = await fetchCompletedLessons(courseData.modules);
+        console.log('👁️ Tab became visible - refreshing course data (single request)...');
+        // Re-fetch the full course payload which now includes completedLessonIds
+        const latestCompletedSet = await fetchCourseData();
         // If current lesson is now complete, update the state
-        if (currentLesson && completedLessonsSet.has(currentLesson.id) && !completedLessons.has(currentLesson.id)) {
+        if (latestCompletedSet && currentLesson && latestCompletedSet.has(currentLesson.id) && !completedLessons.has(currentLesson.id)) {
           console.log('🎉 Current lesson is now complete!');
         }
       }
@@ -1361,65 +1302,99 @@ export default function CourseLearnPage() {
 
   const fetchCourseData = async () => {
     try {
-      const response = await fetch(`/api/courses/${courseId}`);
+  // Fetch course and modules from the public course endpoint (client-side)
+  const response = await fetch(`/api/courses/${courseId}`, { cache: 'no-store' });
       if (response.status === 401) {
         router.push('/auth/login?redirect=/courses/' + courseId + '/learn');
         return;
       }
-      
+
       if (!response.ok) {
-        console.error('Failed to fetch course data:', response.status);
+        console.error('Failed to fetch course learn-data:', response.status);
         return;
       }
-      
+
       const data = await response.json();
-      
+
       if (!data.isEnrolled) {
         router.push(`/courses/${courseId}`);
         return;
       }
 
-      setCourseData(data);
-      
-      // Load completed lessons
-      if (data.modules.length > 0) {
-        const completedLessonsSet = await fetchCompletedLessons(data.modules);
-        // Ensure correct type for Set<string>
-    const completedLessonsTyped: Set<string> = new Set<string>(Array.from(completedLessonsSet) as string[]);
-        // Set first incomplete lesson or first lesson using the actual completed lessons
-        const firstIncompleteLesson = findFirstIncompleteLesson(data.modules, completedLessonsTyped);
+      // Set course + modules + progress from server payload
+      setCourseData({
+        course: data.course,
+        modules: data.modules || [],
+        isEnrolled: !!data.isEnrolled,
+        progress: data.progress || null,
+      });
+
+      // The public course endpoint returns course + modules and enrollment info.
+      // If the server provided completed lesson ids (fast path), use them to
+      // avoid per-lesson requests. Otherwise fall back to per-lesson fetch.
+      const modules = data.modules || [];
+      let completedSet: Set<string> = new Set();
+      if (Array.isArray((data as any).completedLessonIds)) {
+        try {
+          ((data as any).completedLessonIds || []).forEach((id: any) => {
+            if (id) completedSet.add(String(id));
+          });
+          setCompletedLessons(completedSet);
+        } catch (e) {
+          console.warn('Error normalizing completedLessonIds, falling back to per-lesson fetch:', e);
+          completedSet = await fetchCompletedLessons(modules);
+          setCompletedLessons(completedSet);
+        }
+      } else {
+        completedSet = await fetchCompletedLessons(modules);
+        setCompletedLessons(completedSet);
+      }
+
+      if (modules && modules.length > 0) {
+        const firstIncompleteLesson = findFirstIncompleteLesson(modules, completedSet);
         if (firstIncompleteLesson) {
           console.log('🎯 Starting at lesson:', firstIncompleteLesson.lesson.title, 'in module:', firstIncompleteLesson.module.title);
           setCurrentLesson(firstIncompleteLesson.lesson);
           setCurrentModule(firstIncompleteLesson.module);
         }
       }
+
+      // Return the computed completed set so callers (like visibility refresh)
+      // can react to changes without performing additional per-lesson calls.
+      return completedSet;
     } catch (error) {
-      console.error('Error fetching course:', error);
+      console.error('Error fetching course learn-data:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  // Optimized: Fetch all completed lessons in one API call
-  const fetchCompletedLessons = async (modules: Module[]) => {
-    if (!courseId) return new Set<string>();
+  // Log current lesson once when it changes (avoid per-render logging which can spam console)
+  useEffect(() => {
+    if (!currentLesson) return;
     try {
-      const response = await fetch(`/api/courses/${courseId}/progress`, { cache: 'no-store' });
-      if (!response.ok) {
-        console.warn('Failed to fetch course progress:', response.status);
-        setCompletedLessons(new Set());
-        return new Set();
-      }
-      const data = await response.json();
-      const completed = new Set<string>(data.completedLessons || []);
-      setCompletedLessons(completed);
-      return completed;
-    } catch (error) {
-      console.error('Error fetching course progress:', error);
-      setCompletedLessons(new Set());
-      return new Set();
+      // Use debug-level logging so it's easier to filter and less intrusive
+      console.debug('🔍 Current lesson:', {
+        id: currentLesson.id,
+        title: currentLesson.title,
+        content_type: currentLesson.content_type,
+        quizId: currentLesson.quizId,
+        hasQuizId: !!currentLesson.quizId
+      });
+    } catch (e) {
+      // ignore
     }
+  }, [currentLesson]);
+
+  const fetchCompletedLessons = async (modules: Module[]) => {
+    // We removed the client-side per-lesson progress fetch fallback.
+    // The server now provides `completedLessonIds` in the course payload
+    // (GET /api/courses/:id). This function remains for API compatibility
+    // but will not perform network requests.
+    console.warn('fetchCompletedLessons called — server should provide completedLessonIds via course payload. Returning empty set.');
+    const empty = new Set<string>();
+    setCompletedLessons(empty);
+    return empty;
   };
 
   const findFirstIncompleteLesson = (modules: Module[], completed: Set<string>) => {
@@ -1686,14 +1661,7 @@ export default function CourseLearnPage() {
       );
     };
 
-    // Debug logging
-    console.log('🔍 Current lesson debug:', {
-      id: currentLesson.id,
-      title: currentLesson.title,
-      content_type: currentLesson.content_type,
-      quizId: currentLesson.quizId,
-      hasQuizId: !!currentLesson.quizId
-    });
+    // Debug logging moved to a useEffect that runs only when currentLesson changes
 
     return (
       <div className="p-6">

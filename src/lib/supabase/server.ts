@@ -3,8 +3,10 @@ import { cookies } from "next/headers";
 
 // Custom fetch with timeout and retry logic for server-side
 const fetchWithTimeout = async (url: string | URL | Request, options: RequestInit = {}) => {
-  const timeoutMs = 10000; // 10 second timeout for server
-  const maxRetries = 2;
+  // Increase server-side timeout to tolerate longer DB/RPC operations in deployed env.
+  // Local dev may be faster; production Supabase calls can occasionally take longer.
+  const timeoutMs = 30000; // 30 second timeout for server
+  const maxRetries = 3;
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
