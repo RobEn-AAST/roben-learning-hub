@@ -28,7 +28,22 @@ export async function POST(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const body = await request.json();
+    let body: any;
+    try {
+      body = await request.json();
+    } catch (err) {
+      console.error(`[BATCH-ANSWERS] ${new Date().toISOString()} - Failed to parse JSON body:`, err);
+      return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+
+    // Log body size/type for debugging sendBeacon / fetch differences
+    try {
+      const rawText = await request.text();
+      console.log(`[BATCH-ANSWERS] Request body length (chars):`, rawText.length);
+    } catch (e) {
+      // ignore - some environments may have already consumed the body
+    }
+
     const answers = Array.isArray(body?.answers) ? body.answers : [];
 
     if (!attemptId) {
@@ -60,8 +75,9 @@ export async function POST(
     }
 
     if (attempt.completed_at) {
-      console.log(`[BATCH-ANSWERS] ${new Date().toISOString()} - Attempt is already completed, rejecting updates`);
-      return NextResponse.json({ error: 'Cannot modify completed attempt' }, { status: 400 });
+      console.log(`[BATCH-ANSWERS] ${new Date().toISOString()} - Attempt is already completed (completed_at=${attempt.completed_at}), rejecting updates`);
+      // Return more descriptive debug-friendly response (remove after debugging)
+      return NextResponse.json({ error: 'Cannot modify completed attempt', attempt_completed_at: attempt.completed_at }, { status: 400 });
     }
 
     // Prepare upsert rows
