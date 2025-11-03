@@ -39,6 +39,7 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
   const [remainingSeconds, setRemainingSeconds] = React.useState<number | null>(null);
   const timerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const startingRef = React.useRef<boolean>(false); // prevent double-attempt creation
+  const forceRestartRef = React.useRef<boolean>(false); // retake should reuse/reset prior attempt
 
   // Debounce upsert of answers to reduce writes
   const upsertTimeout = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -114,29 +115,57 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
         return;
       }
 
-      // Reuse latest in-progress attempt, else create one
-      const { data: existing, error: e1 } = await supabase
-        .from('quiz_attempts')
-        .select('id')
-        .eq('quiz_id', quizId)
-        .eq('user_id', user.id)
-        .is('completed_at', null)
-        .order('started_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (e1 && e1.code !== 'PGRST116') console.warn('Fetch attempt error:', e1);
+      // Attempt reuse via localStorage key to reduce multi-tab races
+      const storageKey = `quiz_attempt:${user.id}:${quizId}`;
+      let id: string | undefined = undefined;
+      try {
+        const stored = (typeof window !== 'undefined') ? window.localStorage.getItem(storageKey) : null;
+        if (stored) {
+          const { data: open } = await supabase
+            .from('quiz_attempts')
+            .select('id')
+            .eq('id', stored)
+            .is('completed_at', null)
+            .maybeSingle();
+          if (open?.id) {
+            id = open.id;
+          } else {
+            // stale id; clear it
+            if (typeof window !== 'undefined') window.localStorage.removeItem(storageKey);
+          }
+        }
+      } catch {}
 
-      let id = existing?.id as string | undefined;
+      // Ensure there's exactly one open attempt for this (user, quiz); optionally force a restart to reuse/reset prior attempt
       if (!id) {
-        const { data: inserted, error: e2 } = await supabase
-          .from('quiz_attempts')
-          .insert({ quiz_id: quizId, user_id: user.id })
-          .select('id')
-          .single();
-        if (e2) throw e2;
-        id = inserted!.id;
+        try {
+          let ensured: any = null;
+          if (forceRestartRef.current) {
+            const { data, error } = await supabase.rpc('restart_quiz_attempt', { p_quiz_id: quizId });
+            if (error) throw error;
+            ensured = data;
+          } else {
+            const { data, error } = await supabase.rpc('ensure_quiz_attempt', { p_quiz_id: quizId });
+            if (error) throw error;
+            ensured = data;
+          }
+          const row: any = Array.isArray(ensured) ? ensured[0] : ensured;
+          id = row?.id as string | undefined;
+          forceRestartRef.current = false;
+        } catch (eEnsure) {
+          console.error('Failed to ensure/open quiz attempt:', eEnsure);
+          setStartError('Could not start quiz. Please refresh the page and try again.');
+          return;
+        }
       }
-      setAttemptId(id!);
+
+      if (!id) {
+        setStartError('Could not get an attempt. Please try again.');
+        return;
+      }
+
+      setAttemptId(id);
+      try { if (typeof window !== 'undefined') window.localStorage.setItem(storageKey, id); } catch {}
 
       // Fetch questions via RPC that bundles payload and checks attempt authorization server-side
       const { data: payload, error: qErr } = await supabase.rpc('get_quiz_payload', { p_quiz_id: quizId });
@@ -250,6 +279,15 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
       if (passed && onCompleted) {
         onCompleted();
       }
+
+      // Clear attempt cache so a retake can open a new attempt
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const storageKey = `quiz_attempt:${user.id}:${quizId}`;
+          if (typeof window !== 'undefined') window.localStorage.removeItem(storageKey);
+        }
+      } catch {}
     } catch (e) {
       console.error('Submit quiz failed:', e);
     } finally {
@@ -438,7 +476,7 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
             );
           })}
           <div className="flex justify-end">
-            <Button onClick={() => { setPhase('idle'); setAttemptId(null); setQuestions([]); setAnswers({}); setResult(null); }} variant="outline">Retake Quiz</Button>
+            <Button onClick={() => { forceRestartRef.current = true; setPhase('idle'); setQuestions([]); setAnswers({}); setResult(null); }} variant="outline">Retake Quiz</Button>
           </div>
         </div>
       )}

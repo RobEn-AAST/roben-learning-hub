@@ -172,17 +172,35 @@ export default function CourseLearnPage() {
         setCompletedLessons(completedSet);
       }
 
-      if (modules && modules.length > 0) {
-        const firstIncompleteLesson = findFirstIncompleteLesson(modules, completedSet);
-        if (firstIncompleteLesson) {
-          console.log('🎯 Starting at lesson:', firstIncompleteLesson.lesson.title, 'in module:', firstIncompleteLesson.module.title);
-          setCurrentLesson(firstIncompleteLesson.lesson);
-          setCurrentModule(firstIncompleteLesson.module);
+      // Only set the initial lesson if we don't already have one selected
+      if (!currentLesson) {
+        if (modules && modules.length > 0) {
+          const firstIncompleteLesson = findFirstIncompleteLesson(modules, completedSet);
+          if (firstIncompleteLesson) {
+            console.log('🎯 Starting at lesson:', firstIncompleteLesson.lesson.title, 'in module:', firstIncompleteLesson.module.title);
+            setCurrentLesson(firstIncompleteLesson.lesson);
+            setCurrentModule(firstIncompleteLesson.module);
+          } else {
+            console.warn('⚠️ No lessons found in course modules');
+            toast.error('This course has no lessons yet');
+          }
         } else {
-          console.warn('⚠️ No lessons found in course modules');
-          toast.error('This course has no lessons yet');
+          console.warn('⚠️ Course has no modules');
+          toast.error('This course has no content yet');
         }
-      } else {
+      }
+      else if (modules && modules.length > 0) {
+        // Keep the current lesson if it still exists in the new payload; otherwise, pick a sensible fallback
+        const stillExists = modules.some((m: Module) => (m.lessons || []).some((l: Lesson) => l.id === currentLesson.id));
+        if (!stillExists) {
+          const firstIncompleteLesson = findFirstIncompleteLesson(modules, completedSet) || (modules[0]?.lessons?.[0] ? { lesson: modules[0].lessons[0], module: modules[0] } : null);
+          if (firstIncompleteLesson) {
+            setCurrentLesson(firstIncompleteLesson.lesson);
+            setCurrentModule(firstIncompleteLesson.module);
+          }
+        }
+      }
+      else {
         console.warn('⚠️ Course has no modules');
         toast.error('This course has no content yet');
       }
@@ -203,10 +221,8 @@ export default function CourseLearnPage() {
     // The server now provides `completedLessonIds` in the course payload
     // (GET /api/courses/:id). This function remains for API compatibility
     // but will not perform network requests.
-    console.warn('fetchCompletedLessons called — server should provide completedLessonIds via course payload. Returning empty set.');
-    const empty = new Set<string>();
-    setCompletedLessons(empty);
-    return empty;
+    console.warn('fetchCompletedLessons called — server should provide completedLessonIds via course payload. Keeping current set.');
+    return completedLessons;
   };
 
   const findFirstIncompleteLesson = (modules: Module[], completed: Set<string>) => {
@@ -282,14 +298,7 @@ export default function CourseLearnPage() {
           });
         }
         
-        // Auto-advance to next lesson
-        const nextLesson = getNextLesson();
-        if (nextLesson) {
-          setTimeout(() => {
-            setCurrentLesson(nextLesson.lesson);
-            setCurrentModule(nextLesson.module);
-          }, 500);
-        }
+        // Note: Auto-advance removed by request. User can navigate manually to the next lesson.
       } else {
         console.error('Failed to mark lesson complete:', data.error, data.details);
       }
