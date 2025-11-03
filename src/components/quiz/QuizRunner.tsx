@@ -34,6 +34,7 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
   const [answers, setAnswers] = React.useState<Record<string, { selected_option_id?: string | null; text_answer?: string | null; is_correct?: boolean | null }>>({});
   const [submitting, setSubmitting] = React.useState(false);
   const [result, setResult] = React.useState<null | { score: number; passed: boolean }>(null);
+  const [startError, setStartError] = React.useState<string | null>(null);
   const startTimeRef = React.useRef<number>(Date.now());
   const [remainingSeconds, setRemainingSeconds] = React.useState<number | null>(null);
   const timerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
@@ -108,7 +109,10 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
     startingRef.current = true;
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setStartError('Please sign in to start the quiz.');
+        return;
+      }
 
       // Reuse latest in-progress attempt, else create one
       const { data: existing, error: e1 } = await supabase
@@ -136,18 +140,33 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
 
       // Fetch questions via RPC that bundles payload and checks attempt authorization server-side
       const { data: payload, error: qErr } = await supabase.rpc('get_quiz_payload', { p_quiz_id: quizId });
-      if (qErr) throw qErr;
-      const qs = (payload ?? []) as any[];
-      setQuestions(qs as any);
+      if (qErr) {
+        console.warn('get_quiz_payload RPC failed, falling back to direct select:', qErr);
+        // Fallback: direct PostgREST select (minimal fields, no is_correct)
+        const { data: qs2, error: qErr2 } = await supabase
+          .from('questions')
+          .select('id, content, type, points, position, question_options(id, content, position)')
+          .eq('quiz_id', quizId)
+          .order('position', { ascending: true });
+        if (qErr2) throw qErr2;
+        setQuestions((qs2 || []) as any);
+      } else {
+        const qs = (payload ?? []) as any[];
+        setQuestions(qs as any);
+      }
 
       // Reset answers and result state
       setAnswers({});
       setResult(null);
+      setStartError(null);
       startTimeRef.current = Date.now();
       setPhase('active');
       startTimer(quizMeta?.time_limit_minutes ?? null);
     } catch (e) {
-      console.error('Failed to start quiz:', e);
+      const anyErr: any = e;
+      const msg = anyErr?.message || anyErr?.hint || anyErr?.details || (typeof anyErr === 'string' ? anyErr : 'Unknown error');
+      console.error('Failed to start quiz:', anyErr);
+      setStartError(`Could not start quiz: ${msg}`);
     } finally {
       startingRef.current = false;
     }
@@ -275,6 +294,9 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
               <li>Time limit: {quizMeta.time_limit_minutes} min</li>
             )}
           </ul>
+          {startError && (
+            <div className="mt-4 text-sm text-red-600">{startError}</div>
+          )}
           <div className="mt-6 flex justify-end">
             <Button onClick={startQuiz} className="bg-blue-600 hover:bg-blue-700 text-white">Start Quiz</Button>
           </div>
