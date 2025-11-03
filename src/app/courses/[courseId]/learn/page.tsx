@@ -23,6 +23,10 @@ const ArticleRenderer = dynamic(() => import('@/components/ArticleRenderer'), {
 });
 
 import ProjectSubmissionForm from '@/components/project/ProjectSubmissionForm';
+const QuizRunner = dynamic(() => import('@/components/quiz/QuizRunner'), {
+  ssr: false,
+  loading: () => <div className="py-6 text-center text-gray-500">Loading quiz…</div>,
+});
 
 
 interface Lesson {
@@ -495,6 +499,20 @@ export default function CourseLearnPage() {
           </div>
         )}
         
+        {currentLesson.lesson_type === 'quiz' && (
+          <div className="max-w-4xl mx-auto">
+            {currentLesson.quizId ? (
+              <QuizRunner
+                quizId={currentLesson.quizId}
+                lessonId={currentLesson.id}
+                onCompleted={handleMarkComplete}
+              />
+            ) : (
+              <div className="p-6 text-center text-gray-500">Quiz isn’t configured for this lesson.</div>
+            )}
+          </div>
+        )}
+        
     
       </div>
     );
@@ -640,7 +658,7 @@ export default function CourseLearnPage() {
 
                 <div className="flex gap-2">
                   {/* Only show Mark as Complete for video and article lessons */}
-                  {!isLessonComplete && currentLesson.lesson_type !== 'project' && (
+                  {!isLessonComplete && (currentLesson.lesson_type === 'video' || currentLesson.lesson_type === 'article') && (
                     <Button
                       onClick={handleMarkComplete}
                       disabled={markingComplete}

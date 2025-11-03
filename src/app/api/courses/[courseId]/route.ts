@@ -174,7 +174,9 @@ export async function GET(
           id: lesson.id,
           title: lesson.title,
           description: '', // Not in schema
+          // Keep both for backward compatibility during the rename
           content_type: lesson.lesson_type,
+          lesson_type: lesson.lesson_type,
           content_url: '',
           duration: 0,
           order_index: lesson.position,
