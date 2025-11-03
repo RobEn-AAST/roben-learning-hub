@@ -3,8 +3,13 @@ import { createBrowserClient } from "@supabase/ssr";
 // Custom fetch with timeout and retry logic
 // Important: Always create a fresh Request to avoid reusing an aborted signal/body
 const fetchWithTimeout = async (url: string | URL | Request, options: RequestInit = {}) => {
-  const timeoutMs = 15000; // 15 second timeout to tolerate slower networks
-  const maxRetries = 1; // keep retries minimal to avoid long stalls
+  const urlStr = typeof url === 'string' ? url : (url instanceof Request ? url.url : (url as URL).toString());
+  const isQuizRPC = urlStr.includes('/rest/v1/rpc/get_quiz_payload');
+  const isQuestions = urlStr.includes('/rest/v1/questions');
+
+  // Tune per-endpoint to avoid duplicate load on low-spec servers
+  const timeoutMs = isQuizRPC ? 20000 : 15000; // give RPC more time once; avoid retries
+  const maxRetries = (isQuizRPC || isQuestions) ? 0 : 1; // no retries for heavy endpoints
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     let timeoutId: any;

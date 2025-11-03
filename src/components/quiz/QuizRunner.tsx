@@ -134,15 +134,11 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
       }
       setAttemptId(id!);
 
-      // Fetch questions now that attempt exists (RLS-friendly)
-      const { data: qs, error: qErr } = await supabase
-        .from('questions')
-        // Do NOT fetch is_correct during the active attempt to avoid leaking answers
-        .select('id, content, type, points, position, question_options(id, content, position)')
-        .eq('quiz_id', quizId)
-        .order('position', { ascending: true });
+      // Fetch questions via RPC that bundles payload and checks attempt authorization server-side
+      const { data: payload, error: qErr } = await supabase.rpc('get_quiz_payload', { p_quiz_id: quizId });
       if (qErr) throw qErr;
-      setQuestions((qs || []) as any);
+      const qs = (payload ?? []) as any[];
+      setQuestions(qs as any);
 
       // Reset answers and result state
       setAnswers({});
