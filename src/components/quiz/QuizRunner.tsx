@@ -137,7 +137,8 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
       // Fetch questions now that attempt exists (RLS-friendly)
       const { data: qs, error: qErr } = await supabase
         .from('questions')
-        .select('id, content, type, points, position, question_options(id, content, is_correct, position)')
+        // Do NOT fetch is_correct during the active attempt to avoid leaking answers
+        .select('id, content, type, points, position, question_options(id, content, position)')
         .eq('quiz_id', quizId)
         .order('position', { ascending: true });
       if (qErr) throw qErr;
@@ -227,6 +228,27 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
           merged[a.question_id] = { selected_option_id: a.selected_option_id || null, text_answer: a.text_answer || null, is_correct: a.is_correct ?? null };
         });
         setAnswers(prev => ({ ...prev, ...merged }));
+
+        // Fetch correct options now (post-completion) to enable correct/wrong highlighting
+        try {
+          const { data: qWithCorrect } = await supabase
+            .from('questions')
+            .select('id, question_options(id, content, is_correct, position)')
+            .eq('quiz_id', quizId);
+          if (qWithCorrect && Array.isArray(qWithCorrect)) {
+            const map = new Map<string, any>();
+            qWithCorrect.forEach((q: any) => map.set(q.id, q));
+            setQuestions(prev => prev.map(q => {
+              const updated = map.get(q.id);
+              if (updated?.question_options) {
+                return { ...q, question_options: updated.question_options } as any;
+              }
+              return q;
+            }));
+          }
+        } catch (e) {
+          console.warn('Could not load correct options for review:', e);
+        }
       } catch (e) {
         console.warn('Could not load review answers:', e);
       }
