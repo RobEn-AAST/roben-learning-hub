@@ -216,11 +216,11 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
       setResult({ passed, score });
       setPhase('completed');
 
-      // Build review data: mark answers correctness using user_answers and question options
+      // Build review data: mark answers correctness using user_answers
       try {
         const { data: ua } = await supabase
           .from('user_answers')
-          .select('question_id, selected_option_id, text_answer, is_correct, points_earned')
+          .select('question_id, selected_option_id, text_answer, is_correct')
           .eq('attempt_id', attemptId);
         // Merge into answers state for highlighting after completion
         const merged: Record<string, { selected_option_id?: string | null; text_answer?: string | null; is_correct?: boolean | null }> = {};
@@ -228,27 +228,6 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
           merged[a.question_id] = { selected_option_id: a.selected_option_id || null, text_answer: a.text_answer || null, is_correct: a.is_correct ?? null };
         });
         setAnswers(prev => ({ ...prev, ...merged }));
-
-        // Fetch correct options now (post-completion) to enable correct/wrong highlighting
-        try {
-          const { data: qWithCorrect } = await supabase
-            .from('questions')
-            .select('id, question_options(id, content, is_correct, position)')
-            .eq('quiz_id', quizId);
-          if (qWithCorrect && Array.isArray(qWithCorrect)) {
-            const map = new Map<string, any>();
-            qWithCorrect.forEach((q: any) => map.set(q.id, q));
-            setQuestions(prev => prev.map(q => {
-              const updated = map.get(q.id);
-              if (updated?.question_options) {
-                return { ...q, question_options: updated.question_options } as any;
-              }
-              return q;
-            }));
-          }
-        } catch (e) {
-          console.warn('Could not load correct options for review:', e);
-        }
       } catch (e) {
         console.warn('Could not load review answers:', e);
       }
@@ -406,7 +385,6 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
           {questions.map((q, idx) => {
             const ans = answers[q.id];
             const isCorrect = ans?.is_correct ?? null;
-            const correctOption = (q.question_options || []).find(o => o.is_correct);
             return (
               <div key={q.id} className={`border rounded-md p-4 ${isCorrect === true ? 'border-green-200 bg-green-50' : isCorrect === false ? 'border-red-200 bg-red-50' : 'border-gray-200'}`}>
                 <div className="flex items-start justify-between">
@@ -417,13 +395,16 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
                   <div className="mt-3 space-y-2">
                     {(q.question_options || []).sort((a,b) => (a.position ?? 0) - (b.position ?? 0)).map(opt => {
                       const selected = ans?.selected_option_id === opt.id;
-                      const correct = !!opt.is_correct;
+                      const showGreen = selected && isCorrect === true;
+                      const showRed = selected && isCorrect === false;
                       return (
                         <div key={opt.id} className={`flex items-center gap-2 px-2 py-1 rounded ${selected ? 'ring-1 ring-blue-300' : ''}`}>
-                          <div className={`w-2 h-2 rounded-full ${correct ? 'bg-green-500' : selected ? 'bg-red-500' : 'bg-gray-300'}`} />
-                          <span className={correct ? 'font-medium' : ''}>{opt.content}</span>
-                          {selected && !correct && correctOption && (
-                            <span className="ml-auto text-xs text-gray-600">Correct: {correctOption.content}</span>
+                          <div className={`w-2 h-2 rounded-full ${showGreen ? 'bg-green-500' : showRed ? 'bg-red-500' : 'bg-gray-300'}`} />
+                          <span className={showGreen ? 'font-medium' : ''}>{opt.content}</span>
+                          {selected && (
+                            <span className={`ml-auto text-xs ${showGreen ? 'text-green-700' : showRed ? 'text-red-700' : 'text-gray-500'}`}>
+                              Your choice
+                            </span>
                           )}
                         </div>
                       );
