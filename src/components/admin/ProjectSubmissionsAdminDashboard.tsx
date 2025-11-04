@@ -98,7 +98,8 @@ export default function ProjectSubmissionsAdminDashboard() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/submissions');
+      const qs = statusFilter !== 'all' ? `?status=${encodeURIComponent(statusFilter)}` : '';
+      const response = await fetch(`/api/submissions${qs}`);
       if (!response.ok) throw new Error('Failed to fetch submissions');
       
       const data = await response.json();
@@ -246,7 +247,6 @@ export default function ProjectSubmissionsAdminDashboard() {
     const statusConfig: Record<string, { color: string; label: string }> = {
       submitted: { color: 'bg-blue-100 text-blue-800', label: 'Submitted' },
       pending_review: { color: 'bg-yellow-100 text-yellow-800', label: 'Pending Review' },
-      reviewed: { color: 'bg-purple-100 text-purple-800', label: 'Reviewed' },
       approved: { color: 'bg-green-100 text-green-800', label: '✓ Approved' },
       rejected: { color: 'bg-red-100 text-red-800', label: '✗ Rejected' },
       resubmission_required: { color: 'bg-orange-100 text-orange-800', label: 'Resubmission Required' },
@@ -318,7 +318,7 @@ export default function ProjectSubmissionsAdminDashboard() {
               <div>
                 <Label className="text-gray-600">Grade</Label>
                 <div className="mt-1 text-lg font-semibold">
-                  {selectedSubmission.grade !== null ? `${selectedSubmission.grade}/100` : 'Not graded'}
+                  {selectedSubmission.grade !== null ? `${selectedSubmission.grade}/100` : 'No grade for this project'}
                 </div>
               </div>
               <div>
@@ -409,7 +409,6 @@ export default function ProjectSubmissionsAdminDashboard() {
                 >
                   <option value="submitted">Submitted</option>
                   <option value="pending_review">Pending Review</option>
-                  <option value="reviewed">Reviewed</option>
                   <option value="approved">Approved</option>
                   <option value="rejected">Rejected</option>
                   <option value="resubmission_required">Resubmission Required</option>
@@ -573,7 +572,6 @@ export default function ProjectSubmissionsAdminDashboard() {
                 <option value="all">All Statuses</option>
                 <option value="submitted">Submitted</option>
                 <option value="pending_review">Pending Review</option>
-                <option value="reviewed">Reviewed</option>
                 <option value="approved">Approved</option>
                 <option value="rejected">Rejected</option>
                 <option value="resubmission_required">Resubmission Required</option>
@@ -630,7 +628,7 @@ export default function ProjectSubmissionsAdminDashboard() {
                         {submission.grade !== null ? (
                           <span className="font-semibold">{submission.grade}/100</span>
                         ) : (
-                          <span className="text-gray-400">-</span>
+                          <span className="text-gray-400">No grade</span>
                         )}
                       </td>
                       <td className="p-3 text-sm text-gray-600">

@@ -23,6 +23,7 @@ interface ExistingSubmission {
   submitted_at: string;
   reviewed_at?: string;
   feedback?: string;
+  grade?: number | null;
   metadata?: {
     notes?: string;
   };
@@ -305,6 +306,16 @@ export default function ProjectSubmissionForm({
                 <p className="mt-3 text-sm text-green-700">
                   🎉 Great work! Your project has been approved. This lesson is now complete.
                 </p>
+              )}
+              {existingSubmission.status === 'approved' && (
+                <div className="mt-3 text-sm">
+                  <p className="font-semibold">Grade:</p>
+                  {existingSubmission.grade !== null && existingSubmission.grade !== undefined ? (
+                    <p className="text-gray-800">{existingSubmission.grade}/100</p>
+                  ) : (
+                    <p className="text-gray-500">No grade for this project</p>
+                  )}
+                </div>
               )}
               {(existingSubmission.status === 'rejected' || existingSubmission.status === 'resubmission_required') && (
                 <p className="mt-3 text-sm text-red-700">

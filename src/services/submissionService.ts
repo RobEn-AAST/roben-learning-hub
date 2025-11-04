@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/client';
 import { createClient as createServerClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/adminHelpers';
 import type { SubmissionPlatform } from '@/types/project';
 import type {
   SubmissionStatus,
@@ -26,15 +27,13 @@ class SubmissionService {
 
   // Helper method to get appropriate client based on user role
   private async getClientForRole(clientType?: 'admin' | 'regular'): Promise<any> {
-    const serverClient = await createServerClient();
-    
     if (clientType === 'admin') {
-      console.log('🔧 SubmissionService - Using admin client type');
-      return serverClient;
-    } else {
-      console.log('🔧 SubmissionService - Using regular client type (will respect RLS)');
-      return serverClient;
+      console.log('🔧 SubmissionService - Using admin client (service role)');
+      // Use service-role client to bypass RLS for admin/instructor operations
+      return createAdminClient();
     }
+    console.log('🔧 SubmissionService - Using regular server client (RLS enforced)');
+    return createServerClient();
   }
 
   /**
@@ -59,12 +58,13 @@ class SubmissionService {
       const supabaseClient = await this.getClientForRole(clientType);
       console.log('📚 SubmissionService.getAllSubmissions - Filters:', filters);
 
+      // Minimal projection for list view to reduce payload; details are fetched per-item when needed
       let query = supabaseClient
         .from('project_submissions')
         .select(`
-          *,
+          id, project_id, user_id, submission_link, submission_platform, status, grade, submitted_at,
           projects!inner(title),
-          profiles!project_submissions_user_id_fkey(first_name, last_name),
+          profiles!project_submissions_user_id_fkey(first_name, last_name, email),
           reviewer:profiles!project_submissions_reviewed_by_fkey(first_name, last_name)
         `)
         .order('submitted_at', { ascending: false });
@@ -91,8 +91,11 @@ class SubmissionService {
       const submissions = data.map((submission: any) => ({
         ...submission,
         project_title: submission.projects?.title,
-  user_name: `${submission.profiles?.first_name || ''} ${submission.profiles?.last_name || ''}`.trim(),
-  reviewer_name: `${submission.reviewer?.first_name || ''} ${submission.reviewer?.last_name || ''}`.trim(),
+        user_name: `${submission.profiles?.first_name || ''} ${submission.profiles?.last_name || ''}`.trim(),
+        reviewer_name: `${submission.reviewer?.first_name || ''} ${submission.reviewer?.last_name || ''}`.trim(),
+        // Admin dashboard expects these:
+        student_name: `${submission.profiles?.first_name || ''} ${submission.profiles?.last_name || ''}`.trim(),
+        student_email: submission.profiles?.email || ''
       }));
 
       console.log('✅ SubmissionService.getAllSubmissions - Found', submissions.length, 'submissions');
@@ -116,7 +119,7 @@ class SubmissionService {
         .select(`
           *,
           projects!inner(title),
-          profiles!project_submissions_user_id_fkey(first_name, last_name),
+          profiles!project_submissions_user_id_fkey(first_name, last_name, email),
           reviewer:profiles!project_submissions_reviewed_by_fkey(first_name, last_name)
         `)
         .eq('id', id)
@@ -131,8 +134,10 @@ class SubmissionService {
       return {
         ...data,
         project_title: data.projects?.title,
-  user_name: `${data.profiles?.first_name || ''} ${data.profiles?.last_name || ''}`.trim(),
-  reviewer_name: `${data.reviewer?.first_name || ''} ${data.reviewer?.last_name || ''}`.trim(),
+        user_name: `${data.profiles?.first_name || ''} ${data.profiles?.last_name || ''}`.trim(),
+        reviewer_name: `${data.reviewer?.first_name || ''} ${data.reviewer?.last_name || ''}`.trim(),
+        student_name: `${data.profiles?.first_name || ''} ${data.profiles?.last_name || ''}`.trim(),
+        student_email: data.profiles?.email || ''
       };
     } catch (error) {
       console.error('❌ SubmissionService.getSubmissionById - Error:', error);
@@ -157,7 +162,7 @@ class SubmissionService {
         .select(`
           *,
           projects!inner(title),
-          profiles!project_submissions_user_id_fkey(first_name, last_name),
+          profiles!project_submissions_user_id_fkey(first_name, last_name, email),
           reviewer:profiles!project_submissions_reviewed_by_fkey(first_name, last_name)
         `)
         .eq('project_id', projectId)
@@ -178,8 +183,10 @@ class SubmissionService {
       return {
         ...data,
         project_title: data.projects?.title,
-  user_name: `${data.profiles?.first_name || ''} ${data.profiles?.last_name || ''}`.trim(),
-  reviewer_name: `${data.reviewer?.first_name || ''} ${data.reviewer?.last_name || ''}`.trim(),
+        user_name: `${data.profiles?.first_name || ''} ${data.profiles?.last_name || ''}`.trim(),
+        reviewer_name: `${data.reviewer?.first_name || ''} ${data.reviewer?.last_name || ''}`.trim(),
+        student_name: `${data.profiles?.first_name || ''} ${data.profiles?.last_name || ''}`.trim(),
+        student_email: data.profiles?.email || ''
       };
     } catch (error) {
       console.error('❌ SubmissionService.getUserProjectSubmission - Error:', error);
@@ -259,9 +266,9 @@ class SubmissionService {
       const supabaseClient = await this.getClientForRole(clientType);
       console.log('✏️ SubmissionService.updateSubmission - Updating submission:', id);
 
-      // If status is being updated to reviewed/approved/rejected, set reviewed_at
+      // If status is being updated to approved/rejected, set reviewed_at
       const updateData = { ...submissionData };
-      if (updateData.status && ['reviewed', 'approved', 'rejected'].includes(updateData.status)) {
+      if (updateData.status && ['approved', 'rejected'].includes(updateData.status)) {
         updateData.reviewed_at = new Date().toISOString();
       }
 
@@ -332,7 +339,6 @@ class SubmissionService {
         total_submissions: 0,
         submitted_count: 0,
         pending_review_count: 0,
-        reviewed_count: 0,
         approved_count: 0,
         rejected_count: 0,
         average_grade: 0,

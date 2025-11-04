@@ -74,7 +74,7 @@ export async function PUT(
       updateData.status = status;
       
       // If instructor/admin is reviewing, set reviewed_by
-      if (['reviewed', 'approved', 'rejected', 'resubmission_required'].includes(status)) {
+      if (['approved', 'rejected', 'resubmission_required'].includes(status)) {
         if (profile?.role === 'admin' || profile?.role === 'instructor') {
           updateData.reviewed_by = user.id;
         }

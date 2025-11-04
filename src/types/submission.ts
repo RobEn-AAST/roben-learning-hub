@@ -1,7 +1,7 @@
 import type { SubmissionPlatform } from './project';
 
 // Shared types for project submissions
-export type SubmissionStatus = 'submitted' | 'pending_review' | 'reviewed' | 'approved' | 'rejected' | 'resubmission_required';
+export type SubmissionStatus = 'submitted' | 'pending_review' | 'approved' | 'rejected' | 'resubmission_required';
 
 export interface ProjectSubmission {
   id: string;
