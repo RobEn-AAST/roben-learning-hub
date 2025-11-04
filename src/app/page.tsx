@@ -9,7 +9,7 @@ import { Navigation } from "@/components/navigation";
 
 export default function Home() {
   return (
-    <main className="min-h-screen flex flex-col items-center relative overflow-hidden bg-white">
+    <main className="min-h-screen flex flex-col items-center relative overflow-x-hidden bg-white">
       {/* 3D Background */}
       <ThreeDBackground />
       

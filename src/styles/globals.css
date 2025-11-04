@@ -2,6 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
+/* (reverted) Removed external player CSS imports */
+
 @layer base {
   :root {
     --background: 0 0% 100%;

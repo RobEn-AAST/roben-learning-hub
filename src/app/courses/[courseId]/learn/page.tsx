@@ -1,21 +1,12 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { toast } from 'sonner';
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useParams, useRouter } from "next/navigation";
 import { Tooltip } from "@/components/ui/tooltip";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogClose,
-} from '@/components/ui/dialog';
 import dynamic from 'next/dynamic';
 const ArticleRenderer = dynamic(() => import('@/components/ArticleRenderer'), {
   ssr: false,
@@ -27,6 +18,8 @@ const QuizRunner = dynamic(() => import('@/components/quiz/QuizRunner'), {
   ssr: false,
   loading: () => <div className="py-6 text-center text-gray-500">Loading quiz…</div>,
 });
+
+// (reverted) Use standard iframe embed only for video lessons
 
 
 interface Lesson {
@@ -72,6 +65,15 @@ interface CourseData {
   } | null;
 }
 
+// Narrowed response type from API to avoid any
+interface CourseApiResponse {
+  course: CourseData["course"];
+  modules: Module[];
+  isEnrolled: boolean;
+  progress: CourseData["progress"];
+  completedLessonIds?: Array<string | number> | null;
+}
+
 
 export default function CourseLearnPage() {
   const params = useParams();
@@ -83,8 +85,26 @@ export default function CourseLearnPage() {
   const [currentModule, setCurrentModule] = useState<Module | null>(null);
   const [completedLessons, setCompletedLessons] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [quizActive, setQuizActive] = useState(false);
+  // Open sidebar by default on md+ screens
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const init = () => setSidebarOpen(window.innerWidth >= 768);
+      init();
+      const onResize = () => {
+        if (window.innerWidth >= 768) setSidebarOpen(true);
+        else setSidebarOpen(false);
+      };
+      window.addEventListener('resize', onResize);
+      return () => window.removeEventListener('resize', onResize);
+    }
+  }, []);
   const [markingComplete, setMarkingComplete] = useState(false);
+  // Close sidebar when quiz starts to prevent navigation
+  useEffect(() => {
+    if (quizActive) setSidebarOpen(false);
+  }, [quizActive]);
 
   useEffect(() => {
     if (courseId) {
@@ -135,7 +155,7 @@ export default function CourseLearnPage() {
         return;
       }
 
-      const data = await response.json();
+  const data: CourseApiResponse = await response.json();
 
       if (!data.isEnrolled) {
         router.push(`/courses/${courseId}`);
@@ -155,10 +175,10 @@ export default function CourseLearnPage() {
       // avoid per-lesson requests. Otherwise fall back to per-lesson fetch.
       const modules = data.modules || [];
       let completedSet: Set<string> = new Set();
-      if (Array.isArray((data as any).completedLessonIds)) {
+      if (Array.isArray(data.completedLessonIds)) {
         try {
-          ((data as any).completedLessonIds || []).forEach((id: any) => {
-            if (id) completedSet.add(String(id));
+          (data.completedLessonIds || []).forEach((id) => {
+            if (id != null) completedSet.add(String(id));
           });
           setCompletedLessons(completedSet);
         } catch (e) {
@@ -369,7 +389,7 @@ export default function CourseLearnPage() {
   const renderLessonContent = () => {
     if (!currentLesson) return null;
 
-    // Convert YouTube URLs to privacy-enhanced embed format
+    // Convert YouTube URLs to embed format (configurable domain)
     const convertToEmbedUrl = (url: string): string => {
       if (!url) return url;
       
@@ -379,28 +399,29 @@ export default function CourseLearnPage() {
       
       if (match && match[1]) {
         const videoId = match[1];
-        // Use youtube-nocookie (privacy enhanced mode) and modern, lightweight params
-        const params = new URLSearchParams({
-          rel: '0',
-          modestbranding: '1',
-          playsinline: '1',
-          // Hide annotations/overlays that can make the player look like the old UI
-          iv_load_policy: '3',
-          // Keep JS API disabled unless needed to reduce surface for extensions
-          enablejsapi: '0'
-        });
-        // Provide origin for YouTube’s embed best practices when available (client-side only)
-        if (typeof window !== 'undefined' && window.location?.origin) {
-          params.set('origin', window.location.origin);
+        // Choose host: by default, prefer standard domain to ensure latest UI; allow override via env
+        const embedHost = process.env.NEXT_PUBLIC_YT_EMBED_DOMAIN || 'www.youtube.com';
+        // Supported, modern params only
+        const params = new URLSearchParams();
+        params.set('rel', '0');
+        params.set('controls', '1');
+        params.set('modestbranding', '1');
+        params.set('playsinline', '1');
+        // Use JS API + origin to ensure latest player behaviors and avoid legacy fallbacks
+        params.set('enablejsapi', '1');
+        if (typeof window !== 'undefined') {
+          if (window.location?.origin) params.set('origin', window.location.origin);
+          const lang = (navigator?.language || 'en').split('-')[0];
+          if (lang) params.set('hl', lang);
         }
-        return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`;
+        return `https://${embedHost}/embed/${videoId}?${params.toString()}`;
       }
       
       // If it's not a YouTube URL or already an embed URL, return as is
       return url;
     };
 
-    const renderVideoContent = () => {
+  const renderVideoContent = () => {
       console.log('🎥 Rendering video content:', {
         lesson_type: currentLesson.lesson_type,
         content_url: currentLesson.content_url,
@@ -409,13 +430,8 @@ export default function CourseLearnPage() {
       });
 
       if (currentLesson.lesson_type === 'video' && currentLesson.content_url) {
+        // Use modern YouTube embed (or passthrough) with native controls
         const embedUrl = convertToEmbedUrl(currentLesson.content_url);
-        
-        console.log('🔄 Converting video URL:', {
-          originalUrl: currentLesson.content_url,
-          embedUrl: embedUrl
-        });
-        
         return (
           <div className="w-full aspect-video bg-black rounded-lg overflow-hidden shadow-lg relative">
             <iframe
@@ -426,8 +442,6 @@ export default function CourseLearnPage() {
               referrerPolicy="strict-origin-when-cross-origin"
               loading="lazy"
               allowFullScreen
-              onLoad={() => console.log('✅ Iframe loaded successfully')}
-              onError={(e) => console.error('❌ Iframe error:', e)}
             />
           </div>
         );
@@ -479,6 +493,12 @@ export default function CourseLearnPage() {
                 quizId={currentLesson.quizId}
                 lessonId={currentLesson.id}
                 onCompleted={handleMarkComplete}
+                onPhaseChange={(p) => {
+                  setQuizActive(p === 'active');
+                  if (p === 'completed') {
+                    setSidebarOpen(true);
+                  }
+                }}
               />
             ) : (
               <div className="p-6 text-center text-gray-500">Quiz isn’t configured for this lesson.</div>
@@ -517,9 +537,8 @@ export default function CourseLearnPage() {
       </div>
     );
   }
-
-  const isLessonComplete = completedLessons.has(currentLesson.id);
   const progress = courseData.progress;
+  const isLessonComplete = completedLessons.has(currentLesson.id);
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
@@ -534,7 +553,7 @@ export default function CourseLearnPage() {
       )}
       
       {/* Top Navigation */}
-      <div className="bg-blue-600 shadow-md px-6 py-3 flex items-center justify-between">
+      <div className="bg-blue-600 shadow-md px-4 md:px-6 py-2 md:py-3 flex items-center justify-between sticky top-0 z-40">
         <div className="flex items-center gap-4">
           <Link href={`/courses/${courseId}`} className="text-white hover:text-blue-100 transition-colors bg-blue-700 rounded-full p-1">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -542,33 +561,25 @@ export default function CourseLearnPage() {
             </svg>
           </Link>
           <div>
-            <h1 className="text-white font-bold">{courseData.course.title}</h1>
-            <div className="flex items-center gap-2 text-sm text-blue-100">
+            <h1 className="text-white font-bold text-sm md:text-base line-clamp-1">{courseData.course.title}</h1>
+            <div className="flex items-center gap-2 text-xs md:text-sm text-blue-100">
               {progress && (
                 <span className="bg-blue-700 px-2 py-0.5 rounded-full flex items-center">
                   <div className="w-16 h-2 bg-blue-300/30 rounded-full mr-2">
-                    <div 
-                      className="h-2 bg-white rounded-full" 
-                      style={{width: `${progress.percentage}%`}}
-                    ></div>
+                    <div className="h-2 bg-white rounded-full" style={{ width: `${progress.percentage}%` }}></div>
                   </div>
                   <span>{progress.percentage}%</span>
                 </span>
               )}
               <span>
-                {courseData.modules.length} {courseData.modules.length === 1 ? 'module' : 'modules'} • 
+                {courseData.modules.length} {courseData.modules.length === 1 ? 'module' : 'modules'} •
                 {courseData.modules.reduce((acc, m) => acc + m.lessons.length, 0)} {courseData.modules.reduce((acc, m) => acc + m.lessons.length, 0) === 1 ? 'lesson' : 'lessons'}
               </span>
             </div>
           </div>
         </div>
-        
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="text-white bg-blue-700 hover:bg-blue-800"
-        >
+
+        <Button size="sm" variant="ghost" onClick={() => setSidebarOpen(!sidebarOpen)} disabled={quizActive} aria-disabled={quizActive} className={`text-white ${quizActive ? 'bg-blue-600/60 cursor-not-allowed' : 'bg-blue-700 hover:bg-blue-800'}`}>
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
           </svg>
@@ -576,22 +587,12 @@ export default function CourseLearnPage() {
       </div>
 
       <div className="flex flex-1">
-        {/* Main Content - Scrolls entire page */}
         <div className="flex-1 bg-gray-50">
-          <div className="max-w-5xl mx-auto p-6">
-            <motion.div
-              key={currentLesson.id}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.3 }}
-              className="bg-white p-6 rounded-lg shadow-sm"
-            >
+          <div className="max-w-5xl mx-auto p-4 md:p-6">
+            <motion.div key={currentLesson.id} initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.3 }} className="bg-white p-4 md:p-6 rounded-lg shadow-sm">
               <div className="mb-6">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
-                    {currentModule?.title}
-                  </span>
+                  <span className="text-sm font-medium text-blue-600 bg-blue-50 px-3 py-1 rounded-full">{currentModule?.title}</span>
                   {isLessonComplete && (
                     <span className="flex items-center text-green-600 text-sm bg-green-50 px-3 py-1 rounded-full">
                       <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
@@ -601,42 +602,24 @@ export default function CourseLearnPage() {
                     </span>
                   )}
                 </div>
-                <h2 className="text-2xl font-bold text-gray-800 mb-2">{currentLesson.title}</h2>
-                {currentLesson.description && (
-                  <p className="text-gray-600">{currentLesson.description}</p>
-                )}
+                <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-2">{currentLesson.title}</h2>
+                {currentLesson.description && <p className="text-gray-600 text-sm md:text-base">{currentLesson.description}</p>}
               </div>
 
-              <div className="bg-white rounded-lg overflow-hidden shadow-sm border border-gray-100">
-                {renderLessonContent()}
-              </div>
+              <div className="bg-white rounded-lg overflow-hidden shadow-sm border border-gray-100">{renderLessonContent()}</div>
 
-              <div className="flex items-center justify-between mt-8">
-                <Button
-                  onClick={() => {
-                    if (prevLesson) {
-                      setCurrentLesson(prevLesson.lesson);
-                      setCurrentModule(prevLesson.module);
-                    }
-                  }}
-                  disabled={!prevLesson}
-                  variant="outline"
-                  className="text-blue-600 border-blue-200 hover:bg-blue-50 disabled:text-gray-400 disabled:border-gray-200 rounded-md"
-                >
+              {!quizActive && (
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 mt-6 md:mt-8">
+                <Button onClick={() => { if (prevLesson) { setCurrentLesson(prevLesson.lesson); setCurrentModule(prevLesson.module); } }} disabled={!prevLesson} variant="outline" className="w-full sm:w-auto text-blue-600 border-blue-200 hover:bg-blue-50 disabled:text-gray-400 disabled:border-gray-200 rounded-md">
                   <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                   </svg>
                   Previous
                 </Button>
 
-                <div className="flex gap-2">
-                  {/* Only show Mark as Complete for video and article lessons */}
+                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                   {!isLessonComplete && (currentLesson.lesson_type === 'video' || currentLesson.lesson_type === 'article') && (
-                    <Button
-                      onClick={handleMarkComplete}
-                      disabled={markingComplete}
-                      className="bg-blue-600 hover:bg-blue-700 text-white rounded-md"
-                    >
+                    <Button onClick={handleMarkComplete} disabled={markingComplete} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white rounded-md">
                       {markingComplete ? (
                         <span className="flex items-center">
                           <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-white mr-2"></div>
@@ -652,24 +635,10 @@ export default function CourseLearnPage() {
                       )}
                     </Button>
                   )}
-                  
-                  {/* Project lessons: no manual approval check UI; approval now auto-updates progress */}
-                  
+
                   {nextLesson && (
-                    <Tooltip 
-                      content={!isLessonComplete ? "Complete this lesson first" : ""}
-                      side="top"
-                    >
-                      <Button
-                        onClick={() => {
-                          if (isLessonComplete) {
-                            setCurrentLesson(nextLesson.lesson);
-                            setCurrentModule(nextLesson.module);
-                          }
-                        }}
-                        disabled={!isLessonComplete}
-                        className={`${isLessonComplete ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 cursor-not-allowed'} text-white rounded-md`}
-                      >
+                    <Tooltip content={!isLessonComplete ? "Complete this lesson first" : ""} side="top">
+                      <Button onClick={() => { if (isLessonComplete) { setCurrentLesson(nextLesson.lesson); setCurrentModule(nextLesson.module); } }} disabled={!isLessonComplete} className={`w-full sm:w-auto ${isLessonComplete ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-300 cursor-not-allowed'} text-white rounded-md`}>
                         {!isLessonComplete && (
                           <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -684,144 +653,117 @@ export default function CourseLearnPage() {
                   )}
                 </div>
               </div>
+              )}
             </motion.div>
           </div>
         </div>
 
-        {/* Sidebar - Sticky with Internal Scroll */}
         <AnimatePresence>
           {sidebarOpen && (
-            <motion.div
-              initial={{ x: 300 }}
-              animate={{ x: 0 }}
-              exit={{ x: 300 }}
-              transition={{ duration: 0.3 }}
-              className="w-80 bg-white border-l border-gray-200 shadow-inner"
-            >
-              <div className="sticky top-0 h-screen overflow-y-auto scrollbar-hide">
-                <div className="p-4">
-                  <div className="border-b border-gray-200 pb-3 mb-4">
-                    <h3 className="text-gray-800 font-bold">Course Content</h3>
-                  <div className="flex items-center justify-between text-sm text-gray-500 mt-1">
-                    <div>
-                      {courseData.modules.length} {courseData.modules.length === 1 ? 'module' : 'modules'} • 
-                      {' '}{courseData.modules.reduce((acc, m) => acc + m.lessons.length, 0)} {courseData.modules.reduce((acc, m) => acc + m.lessons.length, 0) === 1 ? 'lesson' : 'lessons'}
-                    </div>
-                    {progress && <div>{progress.percentage}% complete</div>}
-                  </div>
-                </div>
-                
-                {courseData.modules.map((module, moduleIndex) => (
-                  <div key={module.id} className="mb-6">
-                    <div className="bg-blue-50 px-3 py-2 rounded-md text-sm font-semibold text-blue-800 mb-2 flex items-center justify-between">
-                      <span>Module {moduleIndex + 1}: {module.title}</span>
-                      <div className="text-xs text-blue-600">
-                        {module.lessons.filter(l => completedLessons.has(l.id)).length}/{module.lessons.length}
+            <>
+              <div className="md:hidden fixed inset-0 bg-black/40 z-40" onClick={() => setSidebarOpen(false)}></div>
+              <motion.div initial={{ x: 300 }} animate={{ x: 0 }} exit={{ x: 300 }} transition={{ duration: 0.3 }} className="fixed md:static inset-y-0 right-0 z-50 md:z-auto w-72 md:w-80 bg-white border-l border-gray-200 shadow-xl md:shadow-inner">
+                <div className="sticky md:top-0 h-full md:h-screen overflow-y-auto scrollbar-hide">
+                  <div className="p-4">
+                    <div className="border-b border-gray-200 pb-3 mb-4">
+                      <h3 className="text-gray-800 font-bold">Course Content</h3>
+                      <div className="flex items-center justify-between text-sm text-gray-500 mt-1">
+                        <div>
+                          {courseData.modules.length} {courseData.modules.length === 1 ? 'module' : 'modules'} • {courseData.modules.reduce((acc, m) => acc + m.lessons.length, 0)} {courseData.modules.reduce((acc, m) => acc + m.lessons.length, 0) === 1 ? 'lesson' : 'lessons'}
+                        </div>
+                        {progress && <div>{progress.percentage}% complete</div>}
                       </div>
                     </div>
-                    <div className="space-y-1">
-                      {module.lessons.map((lesson, lessonIndex) => {
-                        const isComplete = completedLessons.has(lesson.id);
-                        const isCurrent = currentLesson.id === lesson.id;
-                        
-                        // Calculate if this lesson is accessible
-                        // First lesson is always accessible
-                        let isAccessible = lessonIndex === 0;
-                        
-                        // Check if any previous lessons in this module are incomplete
-                        if (lessonIndex > 0) {
-                          const prevLesson = module.lessons[lessonIndex - 1];
-                          isAccessible = completedLessons.has(prevLesson.id) || isComplete;
-                        }
-                        
-                        // If it's in a later module, check if the last lesson of the previous module is complete
-                        const moduleIndex = courseData.modules.findIndex(m => m.id === module.id);
-                        if (moduleIndex > 0 && lessonIndex === 0) {
-                          const prevModule = courseData.modules[moduleIndex - 1];
-                          if (prevModule?.lessons && prevModule.lessons.length > 0) {
-                            const lastLessonInPrevModule = prevModule.lessons[prevModule.lessons.length - 1];
-                            if (lastLessonInPrevModule?.id) {
-                              isAccessible = completedLessons.has(lastLessonInPrevModule.id) || isComplete;
+
+                    {courseData.modules.map((module, moduleIndex) => (
+                      <div key={module.id} className="mb-6">
+                        <div className="bg-blue-50 px-3 py-2 rounded-md text-sm font-semibold text-blue-800 mb-2 flex items-center justify-between">
+                          <span>Module {moduleIndex + 1}: {module.title}</span>
+                          <div className="text-xs text-blue-600">{module.lessons.filter(l => completedLessons.has(l.id)).length}/{module.lessons.length}</div>
+                        </div>
+                        <div className="space-y-1">
+                          {module.lessons.map((lesson, lessonIndex) => {
+                            const isComplete = completedLessons.has(lesson.id);
+                            const isCurrent = currentLesson.id === lesson.id;
+                            let isAccessible = lessonIndex === 0;
+                            if (lessonIndex > 0) {
+                              const prev = module.lessons[lessonIndex - 1];
+                              isAccessible = completedLessons.has(prev.id) || isComplete;
                             }
-                          }
-                        }
-                        
-                        return (
-                          <button
-                            key={lesson.id}
-                            onClick={() => {
-                              if (isAccessible) {
-                                handleLessonSelect(lesson, module);
+                            const modIdx = courseData.modules.findIndex(m => m.id === module.id);
+                            if (modIdx > 0 && lessonIndex === 0) {
+                              const prevModule = courseData.modules[modIdx - 1];
+                              if (prevModule?.lessons?.length) {
+                                const lastPrev = prevModule.lessons[prevModule.lessons.length - 1];
+                                if (lastPrev?.id) isAccessible = completedLessons.has(lastPrev.id) || isComplete;
                               }
-                            }}
-                            disabled={!isAccessible}
-                            className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                              isCurrent
-                                ? 'bg-blue-100 text-blue-800 border-l-4 border-blue-600'
-                                : isAccessible
-                                  ? 'text-gray-700 hover:bg-gray-100'
-                                  : 'text-gray-400 cursor-not-allowed'
-                            }`}
-                          >
-                            <div className="flex flex-col w-full">
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  {isComplete ? (
-                                    <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                    </svg>
-                                  ) : !isAccessible ? (
-                                    <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                    </svg>
-                                  ) : (
-                                    <div className="w-4 h-4 border-2 border-gray-300 rounded-full"></div>
-                                  )}
-                                  <span className="flex-1">{lesson.title}</span>
+                            }
+
+                            // Lock navigation during active quiz: only current lesson is clickable
+                            const canClick = quizActive ? (lesson.id === currentLesson.id) : isAccessible;
+
+                            return (
+                              <button key={lesson.id} onClick={() => { if (canClick) { handleLessonSelect(lesson, module); } }} disabled={!canClick} className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${isCurrent ? 'bg-blue-100 text-blue-800 border-l-4 border-blue-600' : canClick ? 'text-gray-700 hover:bg-gray-100' : 'text-gray-400 cursor-not-allowed'}`}>
+                                <div className="flex flex-col w-full">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      {isComplete ? (
+                                        <svg className="w-4 h-4 text-green-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                        </svg>
+                                      ) : !isAccessible ? (
+                                        <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                        </svg>
+                                      ) : (
+                                        <div className="w-4 h-4 border-2 border-gray-300 rounded-full"></div>
+                                      )}
+                                      <span className="flex-1">{lesson.title}</span>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center text-xs text-gray-500 mt-1 ml-6">
+                                    <span className="capitalize flex items-center">
+                                      {lesson.lesson_type === 'video' && (
+                                        <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                      )}
+                                      {lesson.lesson_type === 'article' && (
+                                        <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                                        </svg>
+                                      )}
+                                      {lesson.lesson_type === 'project' && (
+                                        <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                        </svg>
+                                      )}
+                                      {lesson.lesson_type === 'quiz' && (
+                                        <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                                        </svg>
+                                      )}
+                                      {lesson.lesson_type}
+                                    </span>
+                                    {lesson.duration > 0 && (
+                                      <>
+                                        <span className="mx-1">•</span>
+                                        <span>{lesson.duration} min</span>
+                                      </>
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
-                              <div className="flex items-center text-xs text-gray-500 mt-1 ml-6">
-                                <span className="capitalize flex items-center">
-                                  {lesson.lesson_type === 'video' && (
-                                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                  )}
-                                  {lesson.lesson_type === 'article' && (
-                                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-                                    </svg>
-                                  )}
-                                  {lesson.lesson_type === 'project' && (
-                                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                                    </svg>
-                                  )}
-                                  {lesson.lesson_type === 'quiz' && (
-                                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-                                    </svg>
-                                  )}
-                                  {lesson.lesson_type}
-                                </span>
-                                {lesson.duration > 0 && (
-                                  <>
-                                    <span className="mx-1">•</span>
-                                    <span>{lesson.duration} min</span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </div>
-            </motion.div>
+                </div>
+              </motion.div>
+            </>
           )}
         </AnimatePresence>
       </div>
