@@ -241,6 +241,21 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
 
   const onSubmit = async () => {
     if (!attemptId) return;
+    // Guard: require all questions answered before manual submit
+    const total = questions.length;
+    const answered = Object.values(answers).filter(a => (a.selected_option_id || (a.text_answer && a.text_answer.trim().length > 0))).length;
+    if (phase === 'active' && total > 0 && answered < total) {
+      // Scroll to first unanswered for convenience
+      const unansweredId = questions.find(q => !answers[q.id] || (!answers[q.id]?.selected_option_id && !(answers[q.id]?.text_answer && answers[q.id]!.text_answer!.trim().length > 0)))?.id;
+      if (unansweredId) {
+        try {
+          const el = document.getElementById(`quiz-q-${unansweredId}`);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } catch {}
+      }
+      alert('Please answer all questions before submitting the quiz.');
+      return;
+    }
     setSubmitting(true);
     try {
       // Stop timer if running
@@ -467,7 +482,7 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
             <div className="p-6 text-center text-gray-500">No questions available for this quiz.</div>
           )}
           {questions.map((q, idx) => (
-            <div key={q.id} className="border border-gray-200 rounded-lg p-4 bg-white shadow-sm">
+            <div key={q.id} id={`quiz-q-${q.id}`} className="border border-gray-200 rounded-lg p-4 bg-white shadow-sm">
               <div className="flex items-start justify-between">
                 <div className="font-medium text-gray-800">Q{idx + 1}. {q.content}</div>
                 {typeof q.points === 'number' && <div className="text-sm text-gray-500">{q.points} pts</div>}
@@ -525,8 +540,13 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
             </div>
           ))}
 
-          <div className="flex justify-end pt-2">
-            <Button onClick={onSubmit} disabled={submitting} className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
+          <div className="flex items-center justify-end gap-3 pt-2">
+            {questions.length > 0 && answeredCount < questions.length && (
+              <div className="text-sm text-orange-700 bg-orange-50 border border-orange-200 rounded px-2 py-1">
+                {questions.length - answeredCount} question{questions.length - answeredCount === 1 ? '' : 's'} remaining
+              </div>
+            )}
+            <Button onClick={onSubmit} disabled={submitting || answeredCount < questions.length} className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm disabled:opacity-60">
               {submitting ? 'Submitting…' : 'Submit Quiz'}
             </Button>
           </div>
