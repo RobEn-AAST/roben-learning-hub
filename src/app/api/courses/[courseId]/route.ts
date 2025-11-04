@@ -229,7 +229,14 @@ export async function GET(
             if (video?.url) {
               videoUrl = video.url;
             } else if (video?.provider === 'youtube' && video?.provider_video_id) {
-              videoUrl = `https://www.youtube.com/embed/${video.provider_video_id}`;
+              const params = new URLSearchParams({
+                rel: '0',
+                modestbranding: '1',
+                playsinline: '1',
+                iv_load_policy: '3',
+                enablejsapi: '0'
+              });
+              videoUrl = `https://www.youtube-nocookie.com/embed/${video.provider_video_id}?${params.toString()}`;
             }
             base.content_url = videoUrl;
             base.duration = video?.duration_seconds ? Math.ceil(video.duration_seconds / 60) : 0;

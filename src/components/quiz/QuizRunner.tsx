@@ -34,6 +34,7 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
   const [answers, setAnswers] = React.useState<Record<string, { selected_option_id?: string | null; text_answer?: string | null; is_correct?: boolean | null }>>({});
   const [submitting, setSubmitting] = React.useState(false);
   const [result, setResult] = React.useState<null | { score: number; passed: boolean }>(null);
+  const [lastAttempt, setLastAttempt] = React.useState<null | { id: string; score: number; passed: boolean; completed_at: string | null }>(null);
   const [startError, setStartError] = React.useState<string | null>(null);
   const startTimeRef = React.useRef<number>(Date.now());
   const [remainingSeconds, setRemainingSeconds] = React.useState<number | null>(null);
@@ -77,6 +78,23 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
           passing_score: meta?.passing_score ?? null,
           time_limit_minutes: meta?.time_limit_minutes ?? null,
         });
+
+        // Also fetch the latest completed attempt (lightweight, 1 row)
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: la } = await supabase
+            .from('quiz_attempts')
+            .select('id, score, passed, completed_at')
+            .eq('quiz_id', quizId)
+            .eq('user_id', user.id)
+            .not('completed_at','is', null)
+            .order('completed_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (la && mounted) {
+            setLastAttempt({ id: la.id, score: Number(la.score ?? 0), passed: !!la.passed, completed_at: la.completed_at });
+          }
+        }
       } catch (e) {
         console.error('Failed to load quiz meta:', e);
       } finally {
@@ -152,6 +170,8 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
           const row: any = Array.isArray(ensured) ? ensured[0] : ensured;
           id = row?.id as string | undefined;
           forceRestartRef.current = false;
+          // On start, clear lastAttempt for fresh run (user can still review after submit)
+          setLastAttempt(null);
         } catch (eEnsure) {
           console.error('Failed to ensure/open quiz attempt:', eEnsure);
           setStartError('Could not start quiz. Please refresh the page and try again.');
@@ -258,6 +278,8 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
       const passed = !!row?.passed;
       const score = Number(row?.score ?? 0);
       setResult({ passed, score });
+  // Save as lastAttempt to show in idle upon revisit
+  setLastAttempt({ id: attemptId, score, passed, completed_at: new Date().toISOString() });
       setPhase('completed');
 
       // Build review data: mark answers correctness using user_answers
@@ -295,6 +317,37 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
     }
   };
 
+  const reviewLastAttempt = React.useCallback(async () => {
+    try {
+      if (!lastAttempt) return;
+      setLoading(true);
+      const id = lastAttempt.id;
+      setAttemptId(id);
+      // Load questions (no is_correct in options)
+      const { data: payload, error: qErr } = await supabase.rpc('get_quiz_payload', { p_quiz_id: quizId });
+      if (qErr) throw qErr;
+      setQuestions((payload ?? []) as any);
+      // Load answers for that attempt
+      const { data: ua, error: uaErr } = await supabase
+        .from('user_answers')
+        .select('question_id, selected_option_id, text_answer, is_correct')
+        .eq('attempt_id', id);
+      if (uaErr) throw uaErr;
+      const merged: Record<string, { selected_option_id?: string | null; text_answer?: string | null; is_correct?: boolean | null }> = {};
+      (ua || []).forEach(a => {
+        merged[a.question_id] = { selected_option_id: a.selected_option_id || null, text_answer: a.text_answer || null, is_correct: a.is_correct ?? null };
+      });
+      setAnswers(merged);
+      setResult({ score: lastAttempt.score, passed: lastAttempt.passed });
+      setPhase('completed');
+    } catch (e) {
+      console.error('Failed to review last attempt:', e);
+      setStartError('Could not load last attempt for review.');
+    } finally {
+      setLoading(false);
+    }
+  }, [lastAttempt, quizId, supabase]);
+
   React.useEffect(() => {
     return () => {
       // cleanup timer on unmount
@@ -302,6 +355,15 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
       if (upsertTimeout.current) clearTimeout(upsertTimeout.current);
     };
   }, []);
+
+  // Derived counts must be declared before any early return to preserve hook order
+  const answeredCount = React.useMemo(() => {
+    return Object.values(answers).filter(a => (a.selected_option_id || (a.text_answer && a.text_answer.trim().length > 0))).length;
+  }, [answers]);
+
+  const correctCount = React.useMemo(() => {
+    return Object.values(answers).filter(a => a.is_correct === true).length;
+  }, [answers]);
 
   if (loading) {
     return (
@@ -315,50 +377,86 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
     return `${mm}:${ss}`;
   };
 
+
   return (
     <div className="space-y-6">
       {/* Idle: Start screen with metadata */}
       {phase === 'idle' && (
-        <div className="max-w-3xl mx-auto border rounded-md p-6">
+        <div className="max-w-3xl mx-auto border rounded-lg p-6 bg-white shadow-sm">
           <div className="mb-4">
-            <h3 className="text-xl font-semibold text-gray-800">{quizMeta?.title || 'Quiz'}</h3>
+            <h3 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+              {quizMeta?.title || 'Quiz'}
+              {typeof quizMeta?.passing_score === 'number' && (
+                <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">Pass {quizMeta.passing_score}%</span>
+              )}
+              {typeof quizMeta?.time_limit_minutes === 'number' && quizMeta.time_limit_minutes! > 0 && (
+                <span className="text-xs px-2 py-0.5 rounded-full bg-gray-50 text-gray-700 border border-gray-200">{quizMeta.time_limit_minutes} min</span>
+              )}
+            </h3>
             {quizMeta?.description && (
               <p className="text-gray-600 mt-1 whitespace-pre-line">{quizMeta.description}</p>
             )}
           </div>
-          <ul className="text-sm text-gray-600 space-y-1">
-            {typeof quizMeta?.passing_score === 'number' && <li>Passing score: {quizMeta.passing_score}%</li>}
-            {typeof quizMeta?.time_limit_minutes === 'number' && quizMeta.time_limit_minutes! > 0 && (
-              <li>Time limit: {quizMeta.time_limit_minutes} min</li>
-            )}
-          </ul>
+          {!lastAttempt && (
+            <p className="text-sm text-gray-500">Start the quiz when you’re ready. You can retake it later.</p>
+          )}
+          {lastAttempt && (
+            <div className="mt-4 p-3 rounded-md border flex items-center justify-between bg-gray-50">
+              <div className="text-sm">
+                <div className="font-semibold text-gray-900">Last result: {lastAttempt.score}%</div>
+                <div className={`text-sm ${lastAttempt.passed ? 'text-green-700' : 'text-red-700'}`}>
+                  {lastAttempt.passed ? 'Passed' : 'Completed'} {lastAttempt.completed_at ? `• ${new Date(lastAttempt.completed_at).toLocaleString()}` : ''}
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={reviewLastAttempt}>Review</Button>
+                <Button onClick={() => { forceRestartRef.current = true; startQuiz(); }} className="bg-blue-600 hover:bg-blue-700 text-white">Start New Attempt</Button>
+              </div>
+            </div>
+          )}
           {startError && (
             <div className="mt-4 text-sm text-red-600">{startError}</div>
           )}
-          <div className="mt-6 flex justify-end">
-            <Button onClick={startQuiz} className="bg-blue-600 hover:bg-blue-700 text-white">Start Quiz</Button>
-          </div>
+          {!lastAttempt && (
+            <div className="mt-6 flex justify-end">
+              <Button onClick={startQuiz} className="bg-blue-600 hover:bg-blue-700 text-white">Start Quiz</Button>
+            </div>
+          )}
         </div>
       )}
 
       {/* Header with timer during active phase */}
       {phase === 'active' && (
-        <div className="flex items-center justify-between p-3 rounded-md bg-blue-50 text-blue-800">
-          <div className="font-medium flex items-center gap-3">
-            <span>Quiz in progress</span>
-            {!!questions.length && <span className="text-blue-700/80 text-sm">Questions: {questions.length}</span>}
+        <div className="p-3 rounded-lg bg-blue-50 text-blue-800 border border-blue-100">
+          <div className="flex items-center justify-between">
+            <div className="font-medium flex items-center gap-3">
+              <span>Quiz in progress</span>
+              {!!questions.length && <span className="text-blue-700/80 text-sm">{answeredCount}/{questions.length} answered</span>}
+            </div>
+            {typeof remainingSeconds === 'number' && remainingSeconds >= 0 && (
+              <div className="font-mono text-lg">{formatTime(remainingSeconds)}</div>
+            )}
           </div>
-          {typeof remainingSeconds === 'number' && remainingSeconds >= 0 && (
-            <div className="font-mono text-lg">{formatTime(remainingSeconds)}</div>
+          {!!questions.length && (
+            <div className="mt-2 w-full h-1.5 bg-white/70 rounded-full overflow-hidden">
+              <div className="h-full bg-blue-600" style={{ width: `${Math.min(100, Math.round((answeredCount / questions.length) * 100))}%` }} />
+            </div>
           )}
         </div>
       )}
 
       {/* Completed banner */}
       {phase === 'completed' && result && (
-        <div className={`p-4 rounded-md ${result.passed ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
-          <div className="font-semibold">Quiz {result.passed ? 'Passed' : 'Completed'}</div>
-          <div>Score: {result.score}%</div>
+        <div className={`p-4 rounded-lg border ${result.passed ? 'bg-green-50 text-green-800 border-green-200' : 'bg-red-50 text-red-800 border-red-200'}`}>
+          <div className="flex items-center gap-4">
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold ${result.passed ? 'bg-white text-green-700 border border-green-200' : 'bg-white text-red-700 border border-red-200'}`}>{Math.round(result.score)}%</div>
+            <div>
+              <div className="font-semibold text-lg">{result.passed ? 'Passed' : 'Completed'}</div>
+              {!!questions.length && (
+                <div className="text-sm opacity-90">{correctCount}/{questions.length} correct</div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -369,7 +467,7 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
             <div className="p-6 text-center text-gray-500">No questions available for this quiz.</div>
           )}
           {questions.map((q, idx) => (
-            <div key={q.id} className="border border-gray-200 rounded-md p-4">
+            <div key={q.id} className="border border-gray-200 rounded-lg p-4 bg-white shadow-sm">
               <div className="flex items-start justify-between">
                 <div className="font-medium text-gray-800">Q{idx + 1}. {q.content}</div>
                 {typeof q.points === 'number' && <div className="text-sm text-gray-500">{q.points} pts</div>}
@@ -379,7 +477,7 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
               {q.type === 'multiple_choice' && (
                 <div className="mt-3 space-y-2">
                   {(q.question_options || []).sort((a,b) => (a.position ?? 0) - (b.position ?? 0)).map(opt => (
-                    <label key={opt.id} className="flex items-center gap-2 cursor-pointer">
+                    <label key={opt.id} className="flex items-center gap-3 cursor-pointer rounded-md px-3 py-2 border border-gray-200 hover:bg-gray-50">
                       <input
                         type="radio"
                         name={`q-${q.id}`}
@@ -387,7 +485,7 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
                         checked={answers[q.id]?.selected_option_id === opt.id}
                         onChange={() => onSelectOption(q.id, opt.id)}
                       />
-                      <span>{opt.content}</span>
+                      <span className="text-gray-800">{opt.content}</span>
                     </label>
                   ))}
                 </div>
@@ -416,7 +514,7 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
               {q.type === 'short_answer' && (
                 <div className="mt-3">
                   <textarea
-                    className="w-full border border-gray-300 rounded-md p-2 text-sm"
+                    className="w-full border border-gray-300 rounded-md p-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
                     rows={3}
                     value={answers[q.id]?.text_answer || ''}
                     onChange={(e) => onTextAnswer(q.id, e.target.value)}
@@ -428,7 +526,7 @@ export default function QuizRunner({ quizId, lessonId, onCompleted }: Props) {
           ))}
 
           <div className="flex justify-end pt-2">
-            <Button onClick={onSubmit} disabled={submitting} className="bg-blue-600 hover:bg-blue-700 text-white">
+            <Button onClick={onSubmit} disabled={submitting} className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm">
               {submitting ? 'Submitting…' : 'Submit Quiz'}
             </Button>
           </div>

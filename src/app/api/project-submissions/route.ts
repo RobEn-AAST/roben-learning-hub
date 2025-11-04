@@ -20,7 +20,11 @@ export async function POST(request: NextRequest) {
 
     // Parse request body
     const body = await request.json();
-    const { lessonId, submissionUrl, notes, platform } = body;
+  const { lessonId, submissionUrl, notes, platform } = body;
+  // Normalize platform to allowed set
+  const allowedPlatforms = new Set(['github','gitlab','bitbucket','google_drive','onedrive','dropbox','other']);
+  const normalizedPlatform = (typeof platform === 'string' ? platform.toLowerCase() : '') as string;
+  const submissionPlatform = allowedPlatforms.has(normalizedPlatform) ? normalizedPlatform : 'other';
 
     // Validate required fields
     if (!lessonId || !submissionUrl) {
@@ -89,7 +93,7 @@ export async function POST(request: NextRequest) {
           .from('project_submissions')
           .update({
             submission_link: submissionUrl,
-            submission_platform: platform || 'other',
+            submission_platform: submissionPlatform,
             submitted_at: new Date().toISOString(),
             status: 'submitted',
           })
@@ -126,7 +130,7 @@ export async function POST(request: NextRequest) {
         project_id: projectId,
         user_id: user.id,
         submission_link: submissionUrl,
-        submission_platform: platform || 'other',
+        submission_platform: submissionPlatform,
         status: 'submitted',
         metadata: notes ? { notes } : null,
       })

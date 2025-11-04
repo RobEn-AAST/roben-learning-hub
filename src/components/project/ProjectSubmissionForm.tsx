@@ -217,7 +217,8 @@ export default function ProjectSubmissionForm({
           lessonId,
           submissionUrl,
           notes: notes.trim() || null,
-          platform: projectPlatform || 'custom'
+          // Send a normalized platform value; server will also sanitize
+          platform: projectPlatform || 'other'
         }),
       });
 

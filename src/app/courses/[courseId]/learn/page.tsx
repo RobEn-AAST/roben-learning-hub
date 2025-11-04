@@ -421,7 +421,7 @@ export default function CourseLearnPage() {
   const renderLessonContent = () => {
     if (!currentLesson) return null;
 
-    // Convert YouTube URLs to embed format
+    // Convert YouTube URLs to privacy-enhanced embed format
     const convertToEmbedUrl = (url: string): string => {
       if (!url) return url;
       
@@ -431,7 +431,21 @@ export default function CourseLearnPage() {
       
       if (match && match[1]) {
         const videoId = match[1];
-        return `https://www.youtube.com/embed/${videoId}`;
+        // Use youtube-nocookie (privacy enhanced mode) and modern, lightweight params
+        const params = new URLSearchParams({
+          rel: '0',
+          modestbranding: '1',
+          playsinline: '1',
+          // Hide annotations/overlays that can make the player look like the old UI
+          iv_load_policy: '3',
+          // Keep JS API disabled unless needed to reduce surface for extensions
+          enablejsapi: '0'
+        });
+        // Provide origin for YouTube’s embed best practices when available (client-side only)
+        if (typeof window !== 'undefined' && window.location?.origin) {
+          params.set('origin', window.location.origin);
+        }
+        return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`;
       }
       
       // If it's not a YouTube URL or already an embed URL, return as is
@@ -461,6 +475,8 @@ export default function CourseLearnPage() {
               title={currentLesson.title}
               className="w-full h-full border-0"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              referrerPolicy="strict-origin-when-cross-origin"
+              loading="lazy"
               allowFullScreen
               onLoad={() => console.log('✅ Iframe loaded successfully')}
               onError={(e) => console.error('❌ Iframe error:', e)}
