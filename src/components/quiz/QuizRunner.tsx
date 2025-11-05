@@ -537,6 +537,13 @@ export default function QuizRunner({ quizId, lessonId: _lessonId, onCompleted, o
                     <a
                       key={q.id}
                       href={`#quiz-q-${q.id}`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        const el = typeof document !== 'undefined' ? document.getElementById(`quiz-q-${q.id}`) : null;
+                        if (el && 'scrollIntoView' in el) {
+                          try { (el as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' }); } catch {}
+                        }
+                      }}
                       className={`w-8 h-8 rounded-full text-sm border flex items-center justify-center ${ok ? 'bg-green-50 text-green-800 border-green-200' : bad ? 'bg-red-50 text-red-800 border-red-200' : 'bg-gray-50 text-gray-700 border-gray-200'}`}
                       title={`Question ${i + 1}`}
                     >
@@ -680,7 +687,11 @@ export default function QuizRunner({ quizId, lessonId: _lessonId, onCompleted, o
             const isCorrect = ans?.is_correct ?? null;
             const totalPts = Number(q.points ?? 0);
             return (
-              <div key={q.id} className={`border rounded-md p-4 ${isCorrect === true ? 'border-green-200 bg-green-50' : isCorrect === false ? 'border-red-200 bg-red-50' : 'border-gray-200'}`}>
+              <div
+                key={q.id}
+                id={`quiz-q-${q.id}`}
+                className={`border rounded-md p-4 ${isCorrect === true ? 'border-green-200 bg-green-50' : isCorrect === false ? 'border-red-200 bg-red-50' : 'border-gray-200'}`}
+              >
                 {/* Header with optional required points (no gained points) */}
                 <div className="flex items-start justify-between mb-2">
                   <div className="font-medium text-gray-800">Q{idx + 1}. {q.content}</div>

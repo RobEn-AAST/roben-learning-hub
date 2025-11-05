@@ -201,6 +201,45 @@ export async function GET(request: NextRequest) {
     // Students can only see their own submissions
     if (profile?.role === 'student') {
       query = query.eq('user_id', user.id);
+    } else if (profile?.role === 'instructor') {
+      // Instructors: restrict to projects within their assigned courses
+      const { data: joinedCourses } = await supabase
+        .from('courses')
+        .select('id, lessons!inner(instructor_id)')
+        .eq('lessons.instructor_id', user.id);
+
+      const courseIds = (joinedCourses || []).reduce((acc: string[], c: any) => {
+        if (!acc.includes(c.id)) acc.push(c.id);
+        return acc;
+      }, [] as string[]);
+
+      if (courseIds.length === 0) {
+        return NextResponse.json({ submissions: [] });
+      }
+
+      // Get lessons in those courses via modules
+      const { data: lessonsInCourses } = await supabase
+        .from('lessons')
+        .select('id, modules!inner(course_id)')
+        .in('modules.course_id', courseIds);
+
+      const lessonIds = (lessonsInCourses || []).map((l: any) => l.id);
+      if (lessonIds.length === 0) {
+        return NextResponse.json({ submissions: [] });
+      }
+
+      // Get projects for those lessons
+      const { data: projects } = await supabase
+        .from('projects')
+        .select('id')
+        .in('lesson_id', lessonIds);
+
+      const projectIds = (projects || []).map((p: any) => p.id);
+      if (projectIds.length === 0) {
+        return NextResponse.json({ submissions: [] });
+      }
+
+      query = query.in('project_id', projectIds);
     }
 
     // Filter by project if provided

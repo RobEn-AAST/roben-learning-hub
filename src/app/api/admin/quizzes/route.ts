@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient, getAllowedInstructorCourseIds } from '@/lib/adminHelpers';
 
 export async function GET(request: NextRequest) {
   console.log('🔍 GET /api/admin/quizzes - Fetching all quizzes');
@@ -27,10 +28,42 @@ export async function GET(request: NextRequest) {
     
     console.log(`🔑 User role: ${userRole}, using client type: ${clientType}`);
 
-    // Use server client directly for admin operations
-    const { data: quizzes, error } = await supabase
-      .from('quizzes')
-      .select('id, lesson_id, title, description, time_limit_minutes, created_at');
+    // Role-based scoping: admins see all, instructors see only their lessons' quizzes
+    let quizzes: any[] | null = null;
+    let error: any = null;
+
+    if (userRole === 'admin') {
+      const resp = await supabase
+        .from('quizzes')
+        .select('id, lesson_id, title, description, time_limit_minutes, created_at');
+      quizzes = resp.data;
+      error = resp.error;
+    } else if (userRole === 'instructor') {
+      // Compute allowed lesson IDs based on allowed course IDs (supports course_instructors and legacy lesson assignment)
+      const admin = createAdminClient();
+      const courseIds = await getAllowedInstructorCourseIds(user.id);
+      if (courseIds.length === 0) {
+        quizzes = [];
+      } else {
+        const { data: lessons } = await admin
+          .from('lessons')
+          .select('id, modules!inner(course_id)')
+          .in('modules.course_id', courseIds);
+        const lessonIds = (lessons || []).map((l: any) => l.id);
+        if (lessonIds.length === 0) {
+          quizzes = [];
+        } else {
+          const resp = await admin
+            .from('quizzes')
+            .select('id, lesson_id, title, description, time_limit_minutes, created_at')
+            .in('lesson_id', lessonIds);
+          quizzes = resp.data;
+          error = resp.error;
+        }
+      }
+    } else {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     
     if (error) {
       console.error('❌ Database error:', error);

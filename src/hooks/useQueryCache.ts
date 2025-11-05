@@ -310,7 +310,12 @@ export function useLessonStats() {
   return useQuery({
     queryKey: ['lesson-stats'],
     queryFn: async () => {
-      return await lessonService.getLessonStats();
+      const response = await fetch('/api/admin/lessons/stats');
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to fetch lesson stats');
+      }
+      return await response.json();
     },
     staleTime: 5 * 60 * 1000,
   });
@@ -605,6 +610,21 @@ export function useLandingPageData() {
   });
 }
 
+// Lazy variant to avoid fetching until visible
+export function useLandingPageDataLazy(enabled = true) {
+  return useQuery({
+    queryKey: ['landing-page'],
+    queryFn: async () => {
+      const response = await fetch('/api/landing');
+      if (!response.ok) throw new Error('Failed to fetch landing data');
+      return await response.json();
+    },
+    enabled,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+}
+
 // Public course catalog with caching
 export function usePublicCourses(filters?: { search?: string; status?: string }) {
   return useQuery({
@@ -614,8 +634,8 @@ export function usePublicCourses(filters?: { search?: string; status?: string })
         status: 'published',
         ...(filters?.search && { search: filters.search }),
       });
-      
-      const response = await fetch(`/api/courses?${params}`);
+      // Use the public endpoint that bypasses RLS to ensure consistent visibility (including for instructors)
+      const response = await fetch(`/api/courses/public?${params}`);
       if (!response.ok) throw new Error('Failed to fetch courses');
       return await response.json();
     },

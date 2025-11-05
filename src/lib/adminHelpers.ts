@@ -100,3 +100,43 @@ export async function checkAdminOrInstructorPermission() {
 
   return null;
 }
+
+// Utility: compute all course IDs an instructor is allowed to manage.
+// Covers both legacy per-lesson instructor assignment and the course_instructors M2M table.
+export async function getAllowedInstructorCourseIds(userId: string): Promise<string[]> {
+  const adminClient = createAdminClient();
+
+  // 1) Courses inferred via lessons.instructor_id = userId
+  const { data: lessonCourses, error: lcErr } = await adminClient
+    .from('courses')
+    .select('id, lessons!inner(instructor_id)')
+    .eq('lessons.instructor_id', userId);
+
+  if (lcErr) {
+    console.warn('getAllowedInstructorCourseIds: error loading lesson-linked courses:', lcErr.message || lcErr);
+  }
+
+  const idsFromLessons = (lessonCourses || []).map((c: any) => c.id);
+
+  // 2) Courses explicitly assigned via course_instructors
+  // Guard in case table doesn't exist in some environments
+  let idsFromAssignments: string[] = [];
+  try {
+    const { data: assigned, error: asgErr } = await adminClient
+      .from('course_instructors')
+      .select('course_id')
+      .eq('instructor_id', userId)
+      .eq('is_active', true);
+    if (asgErr) {
+      console.warn('getAllowedInstructorCourseIds: error loading course_instructors:', asgErr.message || asgErr);
+    }
+    idsFromAssignments = (assigned || []).map((r: any) => r.course_id);
+  } catch (e) {
+    // Table may not exist on some deployments; ignore
+    console.warn('getAllowedInstructorCourseIds: course_instructors not available or query failed');
+  }
+
+  // Unique union
+  const set = new Set<string>([...idsFromLessons, ...idsFromAssignments]);
+  return Array.from(set);
+}

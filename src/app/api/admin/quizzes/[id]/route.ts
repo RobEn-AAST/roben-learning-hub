@@ -31,6 +31,26 @@ export async function PUT(request: NextRequest, { params }: any) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
+    if (userRole === 'instructor') {
+      // Verify this quiz belongs to a lesson taught by the instructor
+      const { data: quizRef } = await supabase
+        .from('quizzes')
+        .select('lesson_id')
+        .eq('id', params.id)
+        .single();
+      if (!quizRef) {
+        return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
+      }
+      const { data: lessonRef } = await supabase
+        .from('lessons')
+        .select('instructor_id')
+        .eq('id', quizRef.lesson_id)
+        .single();
+      if (!lessonRef || lessonRef.instructor_id !== user.id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
+
     const body = await request.json();
     const { title, description, timeLimitMinutes } = body;
 
@@ -106,6 +126,26 @@ export async function DELETE(request: NextRequest, { params }: any) {
     if (!['admin', 'instructor'].includes(userRole)) {
       console.log('❌ Insufficient permissions for user role:', userRole);
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    }
+
+    if (userRole === 'instructor') {
+      // Verify this quiz belongs to a lesson taught by the instructor
+      const { data: quizRef } = await supabase
+        .from('quizzes')
+        .select('lesson_id')
+        .eq('id', params.id)
+        .single();
+      if (!quizRef) {
+        return NextResponse.json({ error: 'Quiz not found' }, { status: 404 });
+      }
+      const { data: lessonRef } = await supabase
+        .from('lessons')
+        .select('instructor_id')
+        .eq('id', quizRef.lesson_id)
+        .single();
+      if (!lessonRef || lessonRef.instructor_id !== user.id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
 
     console.log('🗑️ Deleting quiz:', params.id);

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import { createAdminClient } from '@/lib/adminHelpers';
+import { createAdminClient, getAllowedInstructorCourseIds } from '@/lib/adminHelpers';
 
 export async function GET(request: NextRequest) {
   console.log('🔍 GET /api/admin/quiz-questions - Fetching all quiz questions');
@@ -28,11 +28,53 @@ export async function GET(request: NextRequest) {
     
     console.log(`🔑 User role: ${userRole}, using client type: ${clientType}`);
 
-    // Use admin client to bypass RLS for admin operations
+    // Use admin client to bypass RLS but apply role-based scoping
     const adminClient = createAdminClient();
-    const { data: questions, error } = await adminClient
-      .from('questions')
-      .select('id, quiz_id, content, type');
+
+    let questions: any[] | null = null;
+    let error: any = null;
+
+    if (userRole === 'admin') {
+      const resp = await adminClient
+        .from('questions')
+        .select('id, quiz_id, content, type');
+      questions = resp.data;
+      error = resp.error;
+    } else if (userRole === 'instructor') {
+      // Compute allowed quiz IDs: quizzes for lessons within allowed courses
+      const courseIds = await getAllowedInstructorCourseIds(user.id);
+      if (courseIds.length === 0) {
+        questions = [];
+      } else {
+        const { data: lessons } = await adminClient
+          .from('lessons')
+          .select('id, modules!inner(course_id)')
+          .in('modules.course_id', courseIds);
+        const lessonIds = (lessons || []).map((l: any) => l.id);
+        if (!lessonIds.length) {
+          questions = [];
+        } else {
+          const { data: quizzes } = await adminClient
+            .from('quizzes')
+            .select('id, lesson_id')
+            .in('lesson_id', lessonIds);
+          const quizIds = (quizzes || []).map((q: any) => q.id);
+          if (!quizIds.length) {
+            questions = [];
+          } else {
+            const resp = await adminClient
+              .from('questions')
+              .select('id, quiz_id, content, type')
+              .in('quiz_id', quizIds);
+            questions = resp.data;
+            error = resp.error;
+          }
+        }
+      }
+    } else {
+      // Students or unknown roles should not access
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     
     if (error) {
       console.error('❌ Database error:', error);

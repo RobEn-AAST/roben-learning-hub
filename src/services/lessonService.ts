@@ -98,6 +98,7 @@ export const serverLessonService = {
     course_id?: string;
     lesson_type?: string;
     status?: string;
+    allowed_course_ids?: string[];
   }) {
     const offset = (page - 1) * limit;
     
@@ -128,6 +129,9 @@ export const serverLessonService = {
     }
     if (filters?.course_id) {
       query = query.eq('modules.course_id', filters.course_id);
+    }
+    if (filters?.allowed_course_ids && filters.allowed_course_ids.length > 0) {
+      query = query.in('modules.course_id', filters.allowed_course_ids);
     }
     if (filters?.lesson_type) {
       query = query.eq('lesson_type', filters.lesson_type);
@@ -330,8 +334,9 @@ export const lessonService = {
       quizResult
     ] = await Promise.all([
       supabase.from('lessons').select('id', { count: 'exact' }),
-      supabase.from('lessons').select('id', { count: 'exact' }).eq('status', 'published'),
-      supabase.from('lessons').select('id', { count: 'exact' }).eq('status', 'draft'),
+      // Align with UI usage where lesson status is 'visible' | 'hidden'
+      supabase.from('lessons').select('id', { count: 'exact' }).eq('status', 'visible'),
+      supabase.from('lessons').select('id', { count: 'exact' }).eq('status', 'hidden'),
       supabase.from('lessons').select('id', { count: 'exact' }).eq('lesson_type', 'video'),
       supabase.from('lessons').select('id', { count: 'exact' }).eq('lesson_type', 'article'),
       supabase.from('lessons').select('id', { count: 'exact' }).eq('lesson_type', 'project'),

@@ -1,8 +1,9 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
+import { useLandingPageDataLazy } from '@/hooks/useQueryCache';
 
 interface Instructor {
   id: string;
@@ -15,24 +16,27 @@ interface Instructor {
 }
 
 export function DynamicInstructorsSection() {
-  const [instructors, setInstructors] = useState<Instructor[]>([]);
-  const [loading, setLoading] = useState(true);
-
+  const [visible, setVisible] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    async function fetchInstructors() {
-      try {
-        const response = await fetch('/api/landing');
-        const data = await response.json();
-        setInstructors(data.instructors || []);
-      } catch (error) {
-        console.error('Error fetching instructors:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchInstructors();
+    if (!ref.current) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            setVisible(true);
+            obs.disconnect();
+          }
+        });
+      },
+      { rootMargin: '0px 0px -100px 0px', threshold: 0.1 }
+    );
+    obs.observe(ref.current);
+    return () => obs.disconnect();
   }, []);
+
+  const { data, isLoading } = useLandingPageDataLazy(visible);
+  const instructors = (data?.instructors || []) as Instructor[];
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -55,9 +59,9 @@ export function DynamicInstructorsSection() {
     },
   };
 
-  if (loading) {
+  if (!visible || isLoading) {
     return (
-      <section className="w-full py-20 bg-white">
+      <section ref={ref} className="w-full py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-gray-900 mb-4">
@@ -104,7 +108,7 @@ export function DynamicInstructorsSection() {
   };
 
   return (
-    <section className="w-full py-20 bg-gradient-to-b from-blue-50 to-white">
+  <section ref={ref} className="w-full py-20 bg-gradient-to-b from-blue-50 to-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 5 }}

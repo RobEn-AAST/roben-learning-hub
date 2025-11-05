@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient, getAllowedInstructorCourseIds } from '@/lib/adminHelpers';
 
 export async function GET() {
   try {
@@ -25,27 +26,74 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Get all quizzes with lesson information for display
-    const { data: quizzes, error } = await supabase
-      .from('quizzes')
-      .select(`
-        id,
-        title,
-        lesson_id,
-        lessons!inner(
+    // For instructors, scope to their assigned lessons
+    let quizzes: any[] | null = null;
+    let error: any = null;
+
+    if (profile?.role === 'admin') {
+      const resp = await supabase
+        .from('quizzes')
+        .select(`
           id,
           title,
-          modules!inner(
+          lesson_id,
+          lessons!inner(
             id,
             title,
-            courses!inner(
+            modules!inner(
               id,
-              title
+              title,
+              courses!inner(
+                id,
+                title
+              )
             )
           )
-        )
-      `)
-      .order('title');
+        `)
+        .order('title');
+      quizzes = resp.data;
+      error = resp.error;
+    } else {
+      // Instructor: quizzes whose lessons belong to allowed courses
+      const admin = createAdminClient();
+      const courseIds = await getAllowedInstructorCourseIds(user.id);
+      if (courseIds.length === 0) {
+        quizzes = [];
+      } else {
+        const { data: lessons } = await admin
+          .from('lessons')
+          .select('id, modules!inner(course_id)')
+          .in('modules.course_id', courseIds);
+        const lessonIds = (lessons || []).map((l: any) => l.id);
+        if (!lessonIds.length) {
+          quizzes = [];
+        } else {
+          const resp = await admin
+            .from('quizzes')
+            .select(`
+              id,
+              title,
+              lesson_id,
+              lessons!inner(
+                id,
+                title,
+                modules!inner(
+                  id,
+                  title,
+                  courses!inner(
+                    id,
+                    title
+                  )
+                )
+              )
+            `)
+            .in('lesson_id', lessonIds)
+            .order('title');
+          quizzes = resp.data;
+          error = resp.error;
+        }
+      }
+    }
 
     if (error) {
       console.error('❌ GET /api/admin/quiz-questions/quizzes - Error:', error);

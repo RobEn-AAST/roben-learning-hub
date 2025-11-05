@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient, getAllowedInstructorCourseIds } from '@/lib/adminHelpers';
 
 export async function GET() {
   try {
@@ -22,17 +23,25 @@ export async function GET() {
       return NextResponse.json({ error: 'Instructor access required' }, { status: 403 });
     }
 
-    // Get instructor's assigned courses
-    const { data: courses, error: coursesError } = await supabase
-      .from('courses')
-      .select('id, title, description, status, created_at');
-
-    if (coursesError) {
-      return NextResponse.json({ error: coursesError.message }, { status: 500 });
+    // Compute allowed courses (supports course_instructors) and fetch minimal course data via admin client
+    const admin = createAdminClient();
+    const allowedCourseIds = await getAllowedInstructorCourseIds(user.id);
+    let courses: any[] = [];
+    if (allowedCourseIds.length > 0) {
+      const { data: courseRows, error: coursesError } = await admin
+        .from('courses')
+        .select('id, title, description, status, created_at')
+        .in('id', allowedCourseIds);
+      if (coursesError) {
+        return NextResponse.json({ error: coursesError.message }, { status: 500 });
+      }
+      courses = courseRows || [];
     }
 
     // Get modules for instructor's courses
-    const { data: modules, error: modulesError } = await supabase
+    const courseIds = courses.map((c: any) => c.id);
+
+    const { data: modules, error: modulesError } = await admin
       .from('modules')
       .select(`
         id,
@@ -43,6 +52,7 @@ export async function GET() {
         created_at,
         courses(title)
       `)
+      .in('course_id', courseIds.length ? courseIds : ['00000000-0000-0000-0000-000000000000'])
       .order('course_id')
       .order('position');
 
@@ -51,17 +61,18 @@ export async function GET() {
     }
 
     // Get lessons count for each module
-    const { data: lessonCounts, error: lessonsError } = await supabase
+    const moduleIds = (modules || []).map((m: any) => m.id);
+    const { data: lessonCounts, error: lessonsError } = await admin
       .from('lessons')
       .select('module_id')
-      .in('module_id', modules?.map(m => m.id) || []);
+      .in('module_id', moduleIds.length ? moduleIds : ['00000000-0000-0000-0000-000000000000']);
 
     // Calculate stats
     const stats = {
-      totalCourses: courses?.length || 0,
+      totalCourses: courses.length || 0,
       totalModules: modules?.length || 0,
       totalLessons: lessonCounts?.length || 0,
-      coursesByStatus: courses?.reduce((acc: any, course) => {
+      coursesByStatus: courses.reduce((acc: any, course: any) => {
         acc[course.status] = (acc[course.status] || 0) + 1;
         return acc;
       }, {}) || {}

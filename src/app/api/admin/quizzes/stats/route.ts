@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient, getAllowedInstructorCourseIds } from '@/lib/adminHelpers';
 
 export async function GET() {
   try {
@@ -21,34 +22,54 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Get total quizzes count
-    const { count: totalQuizzes } = await supabase
-      .from('quizzes')
-      .select('*', { count: 'exact', head: true });
+    const isAdmin = profile?.role === 'admin';
+    const admin = createAdminClient();
 
-    // Get total questions count
-    const { count: totalQuestions } = await supabase
-      .from('quiz_questions')
-      .select('*', { count: 'exact', head: true });
+    let totalQuizzes = 0;
+    let totalQuestions = 0;
+    let quizzesWithTimeLimit = 0;
+    let quizLessons = 0;
 
-    // Get quizzes with time limits
-    const { count: quizzesWithTimeLimit } = await supabase
-      .from('quizzes')
-      .select('*', { count: 'exact', head: true })
-      .not('time_limit_minutes', 'is', null);
-
-    // Get quiz-type lessons
-    const { count: quizLessons } = await supabase
-      .from('lessons')
-      .select('*', { count: 'exact', head: true })
-      .eq('lesson_type', 'quiz');
+    if (isAdmin) {
+      const tqz = await supabase.from('quizzes').select('*', { count: 'exact', head: true });
+      totalQuizzes = tqz.count || 0;
+      const tqs = await supabase.from('questions').select('*', { count: 'exact', head: true });
+      totalQuestions = tqs.count || 0;
+      const twl = await supabase.from('quizzes').select('*', { count: 'exact', head: true }).not('time_limit_minutes', 'is', null);
+      quizzesWithTimeLimit = twl.count || 0;
+      const ql = await supabase.from('lessons').select('*', { count: 'exact', head: true }).eq('lesson_type', 'quiz');
+      quizLessons = ql.count || 0;
+    } else {
+      const allowedCourseIds = await getAllowedInstructorCourseIds(user.id);
+      if (allowedCourseIds.length) {
+        const { data: lessons } = await admin
+          .from('lessons')
+          .select('id, modules!inner(course_id)')
+          .in('modules.course_id', allowedCourseIds)
+          .eq('lesson_type', 'quiz');
+        const lessonIds = (lessons || []).map((l: any) => l.id);
+        quizLessons = lessonIds.length;
+        if (lessonIds.length) {
+          const qz = await admin.from('quizzes').select('id', { count: 'exact' }).in('lesson_id', lessonIds);
+          totalQuizzes = qz.count || 0;
+          const twl = await admin.from('quizzes').select('id', { count: 'exact' }).in('lesson_id', lessonIds).not('time_limit_minutes', 'is', null);
+          quizzesWithTimeLimit = twl.count || 0;
+          const { data: quizIdsRows } = await admin.from('quizzes').select('id').in('lesson_id', lessonIds);
+          const quizIds = (quizIdsRows || []).map((r: any) => r.id);
+          if (quizIds.length) {
+            const tqs = await admin.from('questions').select('*', { count: 'exact', head: true }).in('quiz_id', quizIds);
+            totalQuestions = tqs.count || 0;
+          }
+        }
+      }
+    }
 
     const stats = {
-      total_quizzes: totalQuizzes || 0,
-      total_questions: totalQuestions || 0,
-      quizzes_with_time_limit: quizzesWithTimeLimit || 0,
-      quiz_lessons: quizLessons || 0,
-      available_lessons: (quizLessons || 0) - (totalQuizzes || 0)
+      total_quizzes: totalQuizzes,
+      total_questions: totalQuestions,
+      quizzes_with_time_limit: quizzesWithTimeLimit,
+      quiz_lessons: quizLessons,
+      available_lessons: Math.max(0, quizLessons - totalQuizzes)
     };
 
     console.log('✅ GET /api/admin/quizzes/stats - Stats:', stats);

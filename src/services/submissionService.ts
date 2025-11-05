@@ -49,6 +49,7 @@ class SubmissionService {
   async getAllSubmissions(
     filters?: {
       project_id?: string;
+      project_ids?: string[];
       user_id?: string;
       status?: SubmissionStatus;
     },
@@ -71,6 +72,10 @@ class SubmissionService {
 
       if (filters?.project_id) {
         query = query.eq('project_id', filters.project_id);
+      }
+
+      if (filters?.project_ids && filters.project_ids.length > 0) {
+        query = query.in('project_id', filters.project_ids);
       }
 
       if (filters?.user_id) {
@@ -193,7 +198,6 @@ class SubmissionService {
       throw error;
     }
   }
-
   /**
    * Create new submission
    */

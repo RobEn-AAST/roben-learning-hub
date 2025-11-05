@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient, getAllowedInstructorCourseIds } from '@/lib/adminHelpers';
 
 export async function GET() {
   try {
@@ -21,33 +22,65 @@ export async function GET() {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Get total questions count
-    const { count: totalQuestions } = await supabase
-      .from('quiz_questions')
-      .select('*', { count: 'exact', head: true });
+    const isAdmin = profile?.role === 'admin';
+    const admin = createAdminClient();
 
-    // Get multiple choice questions count
-    const { count: multipleChoiceQuestions } = await supabase
-      .from('quiz_questions')
-      .select('*', { count: 'exact', head: true })
-      .eq('type', 'multiple_choice');
+    let totalQuestions = 0;
+    let multipleChoiceQuestions = 0;
+    let trueFalseQuestions = 0;
+    let totalOptions = 0;
 
-    // Get true/false questions count
-    const { count: trueFalseQuestions } = await supabase
-      .from('quiz_questions')
-      .select('*', { count: 'exact', head: true })
-      .eq('type', 'true_false');
-
-    // Get total options count
-    const { count: totalOptions } = await supabase
-      .from('question_options')
-      .select('*', { count: 'exact', head: true });
+    if (isAdmin) {
+      const tq = await supabase.from('questions').select('*', { count: 'exact', head: true });
+      totalQuestions = tq.count || 0;
+      const mc = await supabase.from('questions').select('*', { count: 'exact', head: true }).eq('type', 'multiple_choice');
+      multipleChoiceQuestions = mc.count || 0;
+      const tf = await supabase.from('questions').select('*', { count: 'exact', head: true }).eq('type', 'true_false');
+      trueFalseQuestions = tf.count || 0;
+      const to = await supabase.from('question_options').select('*', { count: 'exact', head: true });
+      totalOptions = to.count || 0;
+    } else {
+      // Instructor: scope to quizzes within allowed courses
+      const allowedCourseIds = await getAllowedInstructorCourseIds(user.id);
+      if (allowedCourseIds.length === 0) {
+        // all zeros
+      } else {
+        const { data: lessons } = await admin
+          .from('lessons')
+          .select('id, modules!inner(course_id)')
+          .in('modules.course_id', allowedCourseIds);
+        const lessonIds = (lessons || []).map((l: any) => l.id);
+        if (lessonIds.length) {
+          const { data: quizzes } = await admin
+            .from('quizzes')
+            .select('id, lesson_id')
+            .in('lesson_id', lessonIds);
+          const quizIds = (quizzes || []).map((q: any) => q.id);
+          if (quizIds.length) {
+            // Count questions by type
+            const tq = await admin.from('questions').select('*', { count: 'exact', head: true }).in('quiz_id', quizIds);
+            totalQuestions = tq.count || 0;
+            const mc = await admin.from('questions').select('*', { count: 'exact', head: true }).in('quiz_id', quizIds).eq('type', 'multiple_choice');
+            multipleChoiceQuestions = mc.count || 0;
+            const tf = await admin.from('questions').select('*', { count: 'exact', head: true }).in('quiz_id', quizIds).eq('type', 'true_false');
+            trueFalseQuestions = tf.count || 0;
+            // Count options for the scoped questions: fetch question IDs minimally
+            const { data: qids } = await admin.from('questions').select('id').in('quiz_id', quizIds);
+            const questionIds = (qids || []).map((r: any) => r.id);
+            if (questionIds.length) {
+              const to = await admin.from('question_options').select('*', { count: 'exact', head: true }).in('question_id', questionIds);
+              totalOptions = to.count || 0;
+            }
+          }
+        }
+      }
+    }
 
     const stats = {
-      total_questions: totalQuestions || 0,
-      multiple_choice_questions: multipleChoiceQuestions || 0,
-      true_false_questions: trueFalseQuestions || 0,
-      total_options: totalOptions || 0
+      total_questions: totalQuestions,
+      multiple_choice_questions: multipleChoiceQuestions,
+      true_false_questions: trueFalseQuestions,
+      total_options: totalOptions
     };
 
     console.log('✅ GET /api/admin/quiz-questions/stats - Stats:', stats);

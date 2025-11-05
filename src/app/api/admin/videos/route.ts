@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { videoService } from '@/services/videoService';
 import { createClient } from '@/lib/supabase/server';
-import { createAdminClient, checkAdminOrInstructorPermission } from '@/lib/adminHelpers';
+import { createAdminClient, checkAdminOrInstructorPermission, getAllowedInstructorCourseIds } from '@/lib/adminHelpers';
 import { activityLogService } from '@/services/activityLogService';
 
 export async function GET() {
@@ -13,20 +13,79 @@ export async function GET() {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
-    // Check user role to determine which client to use
-    const adminClient = createAdminClient();
-    const { data: profile } = await adminClient
+    // Determine role
+    const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user!.id)
       .single();
 
     const isAdmin = profile?.role === 'admin';
-    // Use admin client for admins (bypasses RLS), regular client for instructors (respects RLS)
-    const clientToUse = isAdmin ? adminClient : supabase;
 
-    const videos = await videoService.getAllVideos();
-    return NextResponse.json(videos);
+    // Minimal payload + role-based scoping for speed and correct visibility
+    let query = supabase
+      .from('videos')
+      .select(`
+        id,
+        lesson_id,
+        provider,
+        provider_video_id,
+        url,
+        duration_seconds,
+        transcript,
+        created_at,
+        lessons!inner(
+          title,
+          modules!inner(
+            title,
+            courses!inner(title)
+          )
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    let data: any[] | null = null;
+    let error: any = null;
+
+    if (!isAdmin) {
+      // Instructors: only videos for lessons within allowed courses (supports course_instructors)
+      const admin = createAdminClient();
+      const courseIds = await getAllowedInstructorCourseIds(user!.id);
+      if (courseIds.length === 0) {
+        data = [];
+      } else {
+        // Get allowed lesson ids first
+        const { data: lessons } = await admin
+          .from('lessons')
+          .select('id, modules!inner(course_id)')
+          .in('modules.course_id', courseIds);
+        const lessonIds = (lessons || []).map((l: any) => l.id);
+        if (lessonIds.length === 0) {
+          data = [];
+        } else {
+          const resp = await query.in('lesson_id', lessonIds);
+          data = resp.data as any[];
+          error = (resp as any).error;
+        }
+      }
+    } else {
+      const resp = await query;
+      data = resp.data as any[];
+      error = (resp as any).error;
+    }
+    if (error) {
+      console.error('Error fetching videos:', error);
+      return NextResponse.json({ error: 'Failed to fetch videos' }, { status: 500 });
+    }
+
+    const mapped = (data || []).map((video: any) => ({
+      ...video,
+      lesson_title: video.lessons?.title,
+      module_title: video.lessons?.modules?.title,
+      course_title: video.lessons?.modules?.courses?.title,
+    }));
+
+    return NextResponse.json(mapped);
   } catch (error) {
     console.error('Error fetching videos:', error);
     return NextResponse.json(

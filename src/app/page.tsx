@@ -1,11 +1,23 @@
 import Link from "next/link";
+import dynamic from 'next/dynamic';
 import { EnhancedHero } from "@/components/enhanced-hero";
-import { DynamicCoursesSection } from "@/components/dynamic-courses-section";
-import { DynamicInstructorsSection } from "@/components/dynamic-instructors-section";
-import { WhatWeProvideSection } from "@/components/what-we-provide-section";
-import { AdminsSection } from "@/components/admins-section";
-import { ThreeDBackground } from "@/components/3d-elements";
 import { Navigation } from "@/components/navigation";
+import { ThreeDBackground } from "@/components/3d-elements";
+
+// Defer below-the-fold sections to reduce initial JS and speed up first paint
+const WhatWeProvideSection = dynamic(() => import('@/components/what-we-provide-section').then(m => m.WhatWeProvideSection), {
+  loading: () => <div className="py-12" />
+});
+const DynamicCoursesSection = dynamic(() => import('@/components/dynamic-courses-section').then(m => m.DynamicCoursesSection), {
+  loading: () => <div className="py-20 bg-gradient-to-b from-white to-blue-50" />
+});
+const DynamicInstructorsSection = dynamic(() => import('@/components/dynamic-instructors-section').then(m => m.DynamicInstructorsSection), {
+  loading: () => <div className="py-20 bg-gradient-to-b from-blue-50 to-white" />
+});
+const AdminsSection = dynamic(() => import('@/components/admins-section').then(m => m.AdminsSection), {
+  loading: () => <div className="py-12" />
+});
+ 
 
 export default function Home() {
   return (

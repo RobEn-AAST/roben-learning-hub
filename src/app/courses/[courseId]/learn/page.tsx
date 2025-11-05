@@ -677,7 +677,13 @@ export default function CourseLearnPage() {
           {sidebarOpen && (
             <>
               <div className="md:hidden fixed inset-0 bg-black/40 z-40" onClick={() => setSidebarOpen(false)}></div>
-              <motion.div initial={{ x: 300 }} animate={{ x: 0 }} exit={{ x: 300 }} transition={{ duration: 0.3 }} drag="x" dragElastic={0.1} onDragEnd={(e, info) => { if (info.offset.x > 60) setSidebarOpen(false); }} className="fixed md:static inset-y-0 right-0 z-50 md:z-auto w-72 md:w-80 bg-white border-l border-gray-200 shadow-xl md:shadow-inner">
+              <motion.div
+                initial={{ x: 300 }}
+                animate={{ x: 0 }}
+                exit={{ x: 300 }}
+                transition={{ duration: 0.3 }}
+                className="fixed md:static inset-y-0 right-0 z-50 md:z-auto w-72 md:w-80 bg-white border-l border-gray-200 shadow-xl md:shadow-inner"
+              >
                 <div className="sticky md:top-0 h-full md:h-screen overflow-y-auto scrollbar-hide">
                   <div className="p-4">
                     <div className="border-b border-gray-200 pb-3 mb-4">

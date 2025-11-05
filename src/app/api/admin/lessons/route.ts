@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { lessonService, serverLessonService } from '@/services/lessonService';
 import { createClient } from '@/lib/supabase/server';
-import { createAdminClient, checkAdminOrInstructorPermission } from '@/lib/adminHelpers';
+import { createAdminClient, checkAdminOrInstructorPermission, getAllowedInstructorCourseIds } from '@/lib/adminHelpers';
 import { activityLogService } from '@/services/activityLogService';
 
 export async function GET(request: NextRequest) {
@@ -21,9 +21,10 @@ export async function GET(request: NextRequest) {
       .eq('id', user!.id)
       .single();
 
-    const isAdmin = profile?.role === 'admin';
-    // Use admin client for admins (bypasses RLS), regular client for instructors (respects RLS)
-    const clientToUse = isAdmin ? adminClient : supabase;
+  const isAdmin = profile?.role === 'admin';
+  const isInstructor = profile?.role === 'instructor';
+  // Always use admin client to bypass RLS, but apply scoping for instructors via filters
+  const clientToUse = adminClient;
 
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page') || '1');
@@ -33,15 +34,25 @@ export async function GET(request: NextRequest) {
     const lessonType = searchParams.get('lesson_type');
     const status = searchParams.get('status');
 
-    const filters = {
+    const filters: any = {
       ...(moduleId && { module_id: moduleId }),
       ...(courseId && { course_id: courseId }),
       ...(lessonType && { lesson_type: lessonType }),
       ...(status && { status: status })
     };
 
+    if (isInstructor && !courseId) {
+      // Only scope when a specific course filter isn't already provided
+      const allowedCourseIds = await getAllowedInstructorCourseIds(user!.id);
+      // If no allowed courses, return empty early
+      if (allowedCourseIds.length === 0) {
+        return NextResponse.json({ lessons: [], total: 0 });
+      }
+      filters.allowed_course_ids = allowedCourseIds;
+    }
+
     // Use appropriate client based on user role
-    const result = await serverLessonService.getLessons(clientToUse, page, limit, filters);
+  const result = await serverLessonService.getLessons(clientToUse, page, limit, filters);
     
     // Debug: Log the first lesson to see the data structure
     if (result.lessons && result.lessons.length > 0) {

@@ -5,9 +5,10 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { isDirectImageUrl } from '@/lib/imageUtils';
 import Link from 'next/link';
-import { useLandingPageData } from '@/hooks/useQueryCache';
+import { useLandingPageDataLazy } from '@/hooks/useQueryCache';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
+import { useEffect, useRef } from 'react';
 
 interface Course {
   id: string;
@@ -18,8 +19,27 @@ interface Course {
 }
 
 export function DynamicCoursesSection() {
-  // PERFORMANCE: Use React Query for caching - 70% fewer API calls
-  const { data, isLoading: loading } = useLandingPageData();
+  // Use IntersectionObserver to avoid fetching until visible
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    if (!ref.current) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            setVisible(true);
+            obs.disconnect();
+          }
+        });
+      },
+      { rootMargin: '0px 0px -100px 0px', threshold: 0.1 }
+    );
+    obs.observe(ref.current);
+    return () => obs.disconnect();
+  }, []);
+
+  const { data, isLoading: loading } = useLandingPageDataLazy(visible);
   const [showingEnrolled, setShowingEnrolled] = useState(false);
 
   const courses = data?.courses || [];
@@ -47,9 +67,9 @@ export function DynamicCoursesSection() {
     },
   };
 
-  if (loading) {
+  if (!visible || loading) {
     return (
-      <section className="w-full py-20 bg-gradient-to-b from-white to-blue-50">
+      <section ref={ref} className="w-full py-20 bg-gradient-to-b from-white to-blue-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16 space-y-4">
             <Skeleton className="h-12 w-64 mx-auto" />
@@ -76,7 +96,7 @@ export function DynamicCoursesSection() {
   const displayCourses = courses; // Always show all courses on landing page
 
   return (
-    <section className="w-full py-20 bg-gradient-to-b from-white to-blue-50">
+  <section ref={ref} className="w-full py-20 bg-gradient-to-b from-white to-blue-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 5 }}

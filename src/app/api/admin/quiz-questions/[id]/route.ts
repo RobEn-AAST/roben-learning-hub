@@ -31,6 +31,39 @@ export async function PUT(request: NextRequest, { params }: any) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
+    if (userRole === 'instructor') {
+      // Verify this question belongs to a quiz within the instructor's assigned lessons
+      const { data: questionRef } = await supabase
+        .from('questions')
+        .select('quiz_id')
+        .eq('id', params.id)
+        .single();
+
+      if (!questionRef) {
+        return NextResponse.json({ error: 'Quiz question not found' }, { status: 404 });
+      }
+
+      const { data: quizRef } = await supabase
+        .from('quizzes')
+        .select('lesson_id')
+        .eq('id', questionRef.quiz_id)
+        .single();
+
+      if (!quizRef) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+
+      const { data: lessonRef } = await supabase
+        .from('lessons')
+        .select('instructor_id')
+        .eq('id', quizRef.lesson_id)
+        .single();
+
+      if (!lessonRef || lessonRef.instructor_id !== user.id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
+
     const body = await request.json();
     const { text, type } = body;
 
@@ -110,6 +143,39 @@ export async function DELETE(request: NextRequest, { params }: any) {
     if (!['admin', 'instructor'].includes(userRole)) {
       console.log('❌ Insufficient permissions for user role:', userRole);
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
+    }
+
+    if (userRole === 'instructor') {
+      // Verify this question belongs to a quiz within the instructor's assigned lessons
+      const { data: questionRef } = await supabase
+        .from('questions')
+        .select('quiz_id')
+        .eq('id', params.id)
+        .single();
+
+      if (!questionRef) {
+        return NextResponse.json({ error: 'Quiz question not found' }, { status: 404 });
+      }
+
+      const { data: quizRef } = await supabase
+        .from('quizzes')
+        .select('lesson_id')
+        .eq('id', questionRef.quiz_id)
+        .single();
+
+      if (!quizRef) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+
+      const { data: lessonRef } = await supabase
+        .from('lessons')
+        .select('instructor_id')
+        .eq('id', quizRef.lesson_id)
+        .single();
+
+      if (!lessonRef || lessonRef.instructor_id !== user.id) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
 
     console.log('🗑️ Deleting quiz question:', params.id);

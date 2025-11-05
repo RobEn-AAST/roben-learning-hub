@@ -1,8 +1,9 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
+import { useLandingPageDataLazy } from '@/hooks/useQueryCache';
 
 interface Admin {
   id: string;
@@ -14,24 +15,27 @@ interface Admin {
 }
 
 export function AdminsSection() {
-  const [admins, setAdmins] = useState<Admin[]>([]);
-  const [loading, setLoading] = useState(true);
-
+  const [visible, setVisible] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    async function fetchAdmins() {
-      try {
-        const response = await fetch('/api/landing');
-        const data = await response.json();
-        setAdmins(data.admins || []);
-      } catch (error) {
-        console.error('Error fetching admins:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchAdmins();
+    if (!ref.current) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((e) => {
+          if (e.isIntersecting) {
+            setVisible(true);
+            obs.disconnect();
+          }
+        });
+      },
+      { rootMargin: '0px 0px -100px 0px', threshold: 0.1 }
+    );
+    obs.observe(ref.current);
+    return () => obs.disconnect();
   }, []);
+
+  const { data, isLoading } = useLandingPageDataLazy(visible);
+  const admins = (data?.admins || []) as Admin[];
 
   const getInitials = (name: string) => {
     return name
@@ -42,12 +46,12 @@ export function AdminsSection() {
       .slice(0, 2);
   };
 
-  if (loading || admins.length === 0) {
-    return null;
-  }
+  if (!visible || isLoading || admins.length === 0) return (
+    <section ref={ref} className="w-full py-20 bg-gradient-to-b from-white to-blue-50" />
+  );
 
   return (
-    <section className="w-full py-20 bg-gradient-to-b from-white to-blue-50">
+  <section ref={ref} className="w-full py-20 bg-gradient-to-b from-white to-blue-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <motion.div
           initial={{ opacity: 0, y: 5 }}

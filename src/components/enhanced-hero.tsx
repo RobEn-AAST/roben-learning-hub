@@ -6,48 +6,59 @@ import { useAuth } from '@/hooks/useAuth';
 import Link from 'next/link';
 
 function StaticLogo() {
+  // Mobile: gentle, smaller float with faster cycle, no overlap
+  // Desktop/tablet: subtle floating animation with gentle glow
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 50 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.8, ease: "easeOut" }}
-      className="flex justify-center lg:justify-end items-start -mt-8"
-    >
+    <div className="flex justify-center lg:justify-end items-start mt-0 lg:-mt-8 w-full">
+      {/* Mobile (sm:hidden): small, faster float; pointer-events-none so it never blocks clicks */}
       <motion.div
-        animate={{
-          y: [-50, -70, -50],
-        }}
-        transition={{
-          duration: 3,
-          repeat: Infinity,
-          ease: "easeInOut",
-        }}
-        className="relative w-64 h-64 sm:w-80 sm:h-80"
+        className="sm:hidden relative w-48 h-48 pointer-events-none"
+        animate={{ y: [-10, -22, -10] }}
+        transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
       >
-        {/* Animated background glow */}
-        <motion.div 
-          className="absolute inset-0 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full blur-3xl opacity-30"
-          animate={{
-            scale: [1, 1.1, 1],
-            opacity: [0.3, 0.5, 0.3],
-          }}
-          transition={{
-            duration: 4,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
-        />
-        
         <Image
           src="/assets/roben-logo.png"
           alt="RobEn Logo"
-          width={320}
-          height={320}
-          className="relative z-10 drop-shadow-2xl"
+          fill
+          sizes="(max-width: 640px) 192px, 192px"
+          className="object-contain drop-shadow-xl"
           priority
         />
       </motion.div>
-    </motion.div>
+
+      {/* Tablet/Desktop: animated but subtle */}
+      <motion.div
+        initial={{ opacity: 0, x: 50 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
+        className="hidden sm:flex justify-end items-start w-full pointer-events-none"
+      >
+        <motion.div
+          animate={{ y: [-18, -34, -18] }}
+          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+          className="relative w-64 h-64 sm:w-72 sm:h-72 md:w-80 md:h-80"
+        >
+          {/* Animated background glow (hidden on md< for perf) */}
+          <motion.div
+            className="absolute inset-0 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full blur-3xl opacity-20 md:opacity-30 pointer-events-none"
+            animate={{
+              scale: [1, 1.06, 1],
+              opacity: [0.2, 0.35, 0.2],
+            }}
+            transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
+          />
+
+          <Image
+            src="/assets/roben-logo.png"
+            alt="RobEn Logo"
+            fill
+            sizes="(max-width: 768px) 288px, (max-width: 1024px) 320px, 320px"
+            className="relative z-10 object-contain drop-shadow-2xl"
+            priority
+          />
+        </motion.div>
+      </motion.div>
+    </div>
   );
 }
 
@@ -80,41 +91,21 @@ export function EnhancedHero() {
     <div className="relative w-full min-h-[80vh] flex items-center justify-center overflow-hidden bg-gradient-to-br from-white via-blue-50 to-blue-100">
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden">
+        {/* Hide heavy blobs on small screens for performance */}
         <motion.div
-          className="absolute top-20 left-10 w-64 h-64 bg-blue-200 rounded-full mix-blend-multiply filter blur-xl opacity-30"
-          animate={{
-            x: [0, 100, 0],
-            y: [0, 50, 0],
-          }}
-          transition={{
-            duration: 20,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
+          className="hidden sm:block absolute top-20 left-6 w-40 h-40 md:w-64 md:h-64 bg-blue-200 rounded-full mix-blend-multiply blur-xl opacity-25"
+          animate={{ x: [0, 60, 0], y: [0, 40, 0] }}
+          transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
         />
         <motion.div
-          className="absolute top-40 right-10 w-72 h-72 bg-blue-300 rounded-full mix-blend-multiply filter blur-xl opacity-30"
-          animate={{
-            x: [0, -100, 0],
-            y: [0, 100, 0],
-          }}
-          transition={{
-            duration: 25,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
+          className="hidden sm:block absolute top-40 right-6 w-48 h-48 md:w-72 md:h-72 bg-blue-300 rounded-full mix-blend-multiply blur-xl opacity-25"
+          animate={{ x: [0, -60, 0], y: [0, 80, 0] }}
+          transition={{ duration: 24, repeat: Infinity, ease: "easeInOut" }}
         />
         <motion.div
-          className="absolute -bottom-8 left-1/2 w-80 h-80 bg-blue-400 rounded-full mix-blend-multiply filter blur-xl opacity-20"
-          animate={{
-            x: [0, 50, 0],
-            y: [0, -50, 0],
-          }}
-          transition={{
-            duration: 30,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
+          className="hidden sm:block absolute -bottom-8 left-1/2 w-56 h-56 md:w-80 md:h-80 bg-blue-400 rounded-full mix-blend-multiply blur-xl opacity-15"
+          animate={{ x: [0, 40, 0], y: [0, -40, 0] }}
+          transition={{ duration: 28, repeat: Infinity, ease: "easeInOut" }}
         />
       </div>
 
@@ -152,6 +143,11 @@ export function EnhancedHero() {
             >
               Control your future with our comprehensive learning management platform
             </motion.p>
+
+              {/* Mobile-first: show the logo before CTAs on small screens */}
+              <div className="sm:hidden mb-6">
+                <StaticLogo />
+              </div>
 
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -191,18 +187,20 @@ export function EnhancedHero() {
             </motion.div>
           </motion.div>
 
-          {/* Right side - Logo */}
-          <StaticLogo />
+          {/* Right side - Logo (hidden on mobile; shown from sm and up) */}
+          <div className="hidden sm:block">
+            <StaticLogo />
+          </div>
         </div>
       </div>
 
-      {/* Scroll indicator */}
+      {/* Scroll indicator (hidden on mobile to avoid clutter) */}
       <motion.div
-        className="absolute bottom-8 left-1/2 transform -translate-x-1/2"
+        className="hidden sm:block absolute bottom-8 left-1/2 -translate-x-1/2"
         animate={{ y: [0, 10, 0] }}
         transition={{ duration: 2, repeat: Infinity }}
       >
-        <div className="w-6 h-10 border-2 border-blue-600 rounded-full p-1">
+        <div className="w-6 h-10 border-2 border-blue-600/70 rounded-full p-1">
           <motion.div
             className="w-1.5 h-1.5 bg-blue-600 rounded-full mx-auto"
             animate={{ y: [0, 20, 0] }}

@@ -24,7 +24,51 @@ export async function GET(
       .eq('id', user.id)
       .single();
 
-    const clientToUse = (profile?.role === 'admin' || profile?.role === 'instructor') ? 'admin' : 'regular';
+    let clientToUse: 'admin' | 'regular' = 'regular';
+    if (profile?.role === 'admin') {
+      clientToUse = 'admin';
+    } else if (profile?.role === 'instructor') {
+      clientToUse = 'admin';
+      // Restrict instructor access to only their assigned courses' submissions
+      const adminClient = createAdminClient();
+      // Get lesson_id for the submission's project
+      const { data: subWithProject } = await adminClient
+        .from('project_submissions')
+        .select('project:projects(lesson_id)')
+        .eq('id', params.id)
+        .single();
+
+      // @ts-ignore
+      const lessonId = subWithProject?.project?.lesson_id as string | undefined;
+      if (!lessonId) {
+        return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
+      }
+
+      // Get course_id for this lesson via modules
+      const { data: lessonWithModule } = await adminClient
+        .from('lessons')
+        .select('id, modules!inner(course_id)')
+        .eq('id', lessonId)
+        .single();
+
+      // @ts-ignore
+      const courseId = lessonWithModule?.modules?.course_id as string | undefined;
+      if (!courseId) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+
+      // Compute instructor assigned course IDs
+      const { data: joinedCourses } = await supabase
+        .from('courses')
+        .select('id, lessons!inner(instructor_id)')
+        .eq('lessons.instructor_id', user.id);
+
+      const allowedCourseIds = (joinedCourses || []).map((c: any) => c.id);
+      if (!allowedCourseIds.includes(courseId)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
+
     const submission = await submissionService.getSubmissionById(params.id, clientToUse);
 
     if (!submission) {
@@ -83,7 +127,43 @@ export async function PUT(
     if (feedback !== undefined) updateData.feedback = feedback;
     if (grade !== undefined) updateData.grade = grade;
 
-    const clientToUse = (profile?.role === 'admin' || profile?.role === 'instructor') ? 'admin' : 'regular';
+    let clientToUse: 'admin' | 'regular' = 'regular';
+    if (profile?.role === 'admin') {
+      clientToUse = 'admin';
+    } else if (profile?.role === 'instructor') {
+      clientToUse = 'admin';
+      // Restrict instructor updates to only their assigned courses' submissions
+      const adminClient = createAdminClient();
+      const { data: subWithProject } = await adminClient
+        .from('project_submissions')
+        .select('project:projects(lesson_id)')
+        .eq('id', params.id)
+        .single();
+      // @ts-ignore
+      const lessonId = subWithProject?.project?.lesson_id as string | undefined;
+      if (!lessonId) {
+        return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
+      }
+      const { data: lessonWithModule } = await adminClient
+        .from('lessons')
+        .select('id, modules!inner(course_id)')
+        .eq('id', lessonId)
+        .single();
+      // @ts-ignore
+      const courseId = lessonWithModule?.modules?.course_id as string | undefined;
+      if (!courseId) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      const { data: joinedCourses } = await supabase
+        .from('courses')
+        .select('id, lessons!inner(instructor_id)')
+        .eq('lessons.instructor_id', user.id);
+      const allowedCourseIds = (joinedCourses || []).map((c: any) => c.id);
+      if (!allowedCourseIds.includes(courseId)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
+
     const submission = await submissionService.updateSubmission(params.id, updateData, clientToUse);
 
     // If status is approved, automatically complete the lesson for the student
@@ -193,7 +273,43 @@ export async function DELETE(
 
     console.log('🗑️ DELETE /api/submissions/[id] - Deleting submission:', params.id);
 
-    const clientToUse = (profile?.role === 'admin' || profile?.role === 'instructor') ? 'admin' : 'regular';
+    let clientToUse: 'admin' | 'regular' = 'regular';
+    if (profile?.role === 'admin') {
+      clientToUse = 'admin';
+    } else if (profile?.role === 'instructor') {
+      clientToUse = 'admin';
+      // Restrict instructor deletes to only their assigned courses' submissions
+      const adminClient = createAdminClient();
+      const { data: subWithProject } = await adminClient
+        .from('project_submissions')
+        .select('project:projects(lesson_id)')
+        .eq('id', params.id)
+        .single();
+      // @ts-ignore
+      const lessonId = subWithProject?.project?.lesson_id as string | undefined;
+      if (!lessonId) {
+        return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
+      }
+      const { data: lessonWithModule } = await adminClient
+        .from('lessons')
+        .select('id, modules!inner(course_id)')
+        .eq('id', lessonId)
+        .single();
+      // @ts-ignore
+      const courseId = lessonWithModule?.modules?.course_id as string | undefined;
+      if (!courseId) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      const { data: joinedCourses } = await supabase
+        .from('courses')
+        .select('id, lessons!inner(instructor_id)')
+        .eq('lessons.instructor_id', user.id);
+      const allowedCourseIds = (joinedCourses || []).map((c: any) => c.id);
+      if (!allowedCourseIds.includes(courseId)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+    }
+
     await submissionService.deleteSubmission(params.id, clientToUse);
 
     // Log the submission deletion

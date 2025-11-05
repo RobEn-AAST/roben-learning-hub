@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { submissionService } from '@/services/submissionService';
+import { createAdminClient, getAllowedInstructorCourseIds } from '@/lib/adminHelpers';
 import { activityLogService } from '@/services/activityLogService';
 
 export async function GET(request: NextRequest) {
@@ -34,11 +35,57 @@ export async function GET(request: NextRequest) {
     if (user_id) filters.user_id = user_id;
     if (status) filters.status = status;
 
-    // Role-based client selection
-    const clientToUse = (profile?.role === 'admin' || profile?.role === 'instructor') ? 'admin' : 'regular';
+    // Role-based filtering and client selection
+    let clientToUse: 'admin' | 'regular' = 'regular';
+    let projectIdsFilter: string[] | undefined = undefined;
+
+    if (profile?.role === 'admin') {
+      clientToUse = 'admin';
+    } else if (profile?.role === 'instructor') {
+      // Instructors use admin client but are restricted to their assigned courses' projects
+      clientToUse = 'admin';
+
+      // Use admin client for consistent, RLS-bypassed scoping calculations
+      const admin = createAdminClient();
+      const courseIds = await getAllowedInstructorCourseIds(user.id);
+
+      if (courseIds.length > 0) {
+        // 2) Find lessons in those courses (through modules)
+        const { data: lessonsInCourses } = await admin
+          .from('lessons')
+          .select('id, modules!inner(course_id)')
+          .in('modules.course_id', courseIds);
+
+        const lessonIds = (lessonsInCourses || []).map((l: any) => l.id);
+
+        if (lessonIds.length > 0) {
+          // 3) Find projects for those lessons
+          const { data: projects } = await admin
+            .from('projects')
+            .select('id')
+            .in('lesson_id', lessonIds);
+
+          projectIdsFilter = (projects || []).map((p: any) => p.id);
+        } else {
+          projectIdsFilter = [];
+        }
+      } else {
+        projectIdsFilter = [];
+      }
+
+      // If instructor has no assigned projects, return empty list quickly
+      if (projectIdsFilter && projectIdsFilter.length === 0) {
+        console.log('ℹ️ GET /api/submissions - Instructor has no assigned projects');
+        return NextResponse.json([]);
+      }
+    }
+
     console.log('🎯 GET /api/submissions - Using client type:', clientToUse);
 
-    const submissions = await submissionService.getAllSubmissions(filters, clientToUse);
+    const submissions = await submissionService.getAllSubmissions(
+      { ...filters, project_ids: projectIdsFilter },
+      clientToUse
+    );
     console.log('✅ GET /api/submissions - Successfully fetched', submissions?.length || 0, 'submissions');
     return NextResponse.json(submissions);
   } catch (error) {
