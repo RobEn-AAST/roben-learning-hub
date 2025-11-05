@@ -87,17 +87,11 @@ export default function CourseLearnPage() {
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [quizActive, setQuizActive] = useState(false);
-  // Open sidebar by default on md+ screens
+  const [highlightLessonId, setHighlightLessonId] = useState<string | null>(null);
+  // Open sidebar by default on md+ screens (initial only; do not force on resize so manual close sticks)
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const init = () => setSidebarOpen(window.innerWidth >= 768);
-      init();
-      const onResize = () => {
-        if (window.innerWidth >= 768) setSidebarOpen(true);
-        else setSidebarOpen(false);
-      };
-      window.addEventListener('resize', onResize);
-      return () => window.removeEventListener('resize', onResize);
+      setSidebarOpen(window.innerWidth >= 768);
     }
   }, []);
   const [markingComplete, setMarkingComplete] = useState(false);
@@ -105,6 +99,15 @@ export default function CourseLearnPage() {
   useEffect(() => {
     if (quizActive) setSidebarOpen(false);
   }, [quizActive]);
+
+  // Allow Escape key to close sidebar for accessibility/usability
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && sidebarOpen) setSidebarOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [sidebarOpen]);
 
   useEffect(() => {
     if (courseId) {
@@ -317,7 +320,21 @@ export default function CourseLearnPage() {
           });
         }
         
-        // Note: Auto-advance removed by request. User can navigate manually to the next lesson.
+        // After marking complete, if there's a next lesson: open the sidebar, scroll to it, and briefly highlight it
+        const nxt = getNextLesson();
+        if (nxt?.lesson?.id) {
+          setSidebarOpen(true);
+          setHighlightLessonId(nxt.lesson.id);
+          // Defer until sidebar renders
+          setTimeout(() => {
+            const el = document.querySelector(`[data-lesson-id="${nxt.lesson.id}"]`);
+            if (el && 'scrollIntoView' in el) {
+              try { (el as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch {}
+            }
+          }, 150);
+          // Remove highlight after a short period
+          setTimeout(() => setHighlightLessonId(prev => (prev === nxt.lesson.id ? null : prev)), 2500);
+        }
       } else {
         console.error('Failed to mark lesson complete:', data.error, data.details);
       }
@@ -486,7 +503,7 @@ export default function CourseLearnPage() {
           </div>
         )}
         
-        {currentLesson.lesson_type === 'quiz' && (
+            {currentLesson.lesson_type === 'quiz' && (
           <div className="max-w-4xl mx-auto">
             {currentLesson.quizId ? (
               <QuizRunner
@@ -495,9 +512,7 @@ export default function CourseLearnPage() {
                 onCompleted={handleMarkComplete}
                 onPhaseChange={(p) => {
                   setQuizActive(p === 'active');
-                  if (p === 'completed') {
-                    setSidebarOpen(true);
-                  }
+                      // Do not auto-open sidebar on completed; allow user to control visibility
                 }}
               />
             ) : (
@@ -662,11 +677,23 @@ export default function CourseLearnPage() {
           {sidebarOpen && (
             <>
               <div className="md:hidden fixed inset-0 bg-black/40 z-40" onClick={() => setSidebarOpen(false)}></div>
-              <motion.div initial={{ x: 300 }} animate={{ x: 0 }} exit={{ x: 300 }} transition={{ duration: 0.3 }} className="fixed md:static inset-y-0 right-0 z-50 md:z-auto w-72 md:w-80 bg-white border-l border-gray-200 shadow-xl md:shadow-inner">
+              <motion.div initial={{ x: 300 }} animate={{ x: 0 }} exit={{ x: 300 }} transition={{ duration: 0.3 }} drag="x" dragElastic={0.1} onDragEnd={(e, info) => { if (info.offset.x > 60) setSidebarOpen(false); }} className="fixed md:static inset-y-0 right-0 z-50 md:z-auto w-72 md:w-80 bg-white border-l border-gray-200 shadow-xl md:shadow-inner">
                 <div className="sticky md:top-0 h-full md:h-screen overflow-y-auto scrollbar-hide">
                   <div className="p-4">
                     <div className="border-b border-gray-200 pb-3 mb-4">
-                      <h3 className="text-gray-800 font-bold">Course Content</h3>
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-gray-800 font-bold">Course Content</h3>
+                        <button
+                          type="button"
+                          className="md:hidden text-gray-500 hover:text-gray-700 p-1 rounded"
+                          aria-label="Close sidebar"
+                          onClick={() => setSidebarOpen(false)}
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
                       <div className="flex items-center justify-between text-sm text-gray-500 mt-1">
                         <div>
                           {courseData.modules.length} {courseData.modules.length === 1 ? 'module' : 'modules'} • {courseData.modules.reduce((acc, m) => acc + m.lessons.length, 0)} {courseData.modules.reduce((acc, m) => acc + m.lessons.length, 0) === 1 ? 'lesson' : 'lessons'}
@@ -701,9 +728,10 @@ export default function CourseLearnPage() {
 
                             // Lock navigation during active quiz: only current lesson is clickable
                             const canClick = quizActive ? (lesson.id === currentLesson.id) : isAccessible;
+                            const isHighlighted = highlightLessonId === lesson.id;
 
                             return (
-                              <button key={lesson.id} onClick={() => { if (canClick) { handleLessonSelect(lesson, module); } }} disabled={!canClick} className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${isCurrent ? 'bg-blue-100 text-blue-800 border-l-4 border-blue-600' : canClick ? 'text-gray-700 hover:bg-gray-100' : 'text-gray-400 cursor-not-allowed'}`}>
+                              <button key={lesson.id} data-lesson-id={lesson.id} onClick={() => { if (canClick) { handleLessonSelect(lesson, module); } }} disabled={!canClick} className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${isCurrent ? 'bg-blue-100 text-blue-800 border-l-4 border-blue-600' : canClick ? 'text-gray-700 hover:bg-gray-100' : 'text-gray-400 cursor-not-allowed'} ${isHighlighted ? 'ring-2 ring-blue-400' : ''}`}>
                                 <div className="flex flex-col w-full">
                                   <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">

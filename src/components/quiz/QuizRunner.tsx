@@ -429,20 +429,20 @@ export default function QuizRunner({ quizId, lessonId: _lessonId, onCompleted, o
             <p className="text-sm text-gray-500">Start the quiz when you’re ready. You can retake it later.</p>
           )}
           {lastAttempt && (
-            <div className="mt-4 p-4 rounded-lg border bg-gray-50 flex items-center justify-between">
-              <div>
+            <div className="mt-4 p-4 rounded-lg border bg-gray-50 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <div className="sm:text-left text-center">
                 <div className="text-xs uppercase tracking-wide text-gray-500">Last result</div>
-                <div className="mt-1 flex items-center gap-3">
-                  <div className={`w-12 h-12 rounded-full flex items-center justify-center text-base font-bold ${lastAttempt.passed ? 'bg-white text-green-700 border border-green-200' : 'bg-white text-red-700 border border-red-200'}`}>{Math.round(lastAttempt.score)}%</div>
+                <div className="mt-1 flex flex-col sm:flex-row sm:items-center gap-3">
+                  <div className={`w-12 h-12 rounded-full flex items-center justify-center text-base font-bold mx-auto sm:mx-0 ${lastAttempt.passed ? 'bg-white text-green-700 border border-green-200' : 'bg-white text-red-700 border border-red-200'}`}>{Math.round(lastAttempt.score)}%</div>
                   <div className="text-sm">
                     <div className="font-medium text-gray-900">{lastAttempt.passed ? 'Passed' : 'Completed'}</div>
                     <div className="text-gray-600">{lastAttempt.completed_at ? new Date(lastAttempt.completed_at).toLocaleString() : ''}</div>
                   </div>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={reviewLastAttempt}>View Results</Button>
-                <Button onClick={() => { forceRestartRef.current = true; startQuiz(); }} className="bg-blue-600 hover:bg-blue-700 text-white">Start New Attempt</Button>
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                <Button variant="outline" onClick={reviewLastAttempt} className="w-full sm:w-auto">View Results</Button>
+                <Button onClick={() => { forceRestartRef.current = true; startQuiz(); }} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white">Start New Attempt</Button>
               </div>
             </div>
           )}
@@ -481,7 +481,7 @@ export default function QuizRunner({ quizId, lessonId: _lessonId, onCompleted, o
       {phase === 'completed' && result && (
           <>
             <div className={`p-5 rounded-xl border ${result.passed ? 'bg-green-50 text-green-800 border-green-200' : 'bg-red-50 text-red-800 border-red-200'}`}>
-              <div className="flex items-center gap-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                 {/* Large percent with no circle */}
                 <div className={`text-4xl font-extrabold ${result.passed ? 'text-green-700' : 'text-red-700'}`}>{Math.round(result.score)}%</div>
                 <div className="space-y-1">
