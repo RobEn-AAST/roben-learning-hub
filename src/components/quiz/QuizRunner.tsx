@@ -40,12 +40,14 @@ export default function QuizRunner({ quizId, lessonId: _lessonId, onCompleted, o
   const [startError, setStartError] = React.useState<string | null>(null);
   const [currentIndex, setCurrentIndex] = React.useState<number>(0); // show one question at a time
   const [direction, setDirection] = React.useState<number>(0); // -1 left, 1 right
+  const [timedOutNotice, setTimedOutNotice] = React.useState<boolean>(false);
   const startTimeRef = React.useRef<number>(Date.now());
   const [remainingSeconds, setRemainingSeconds] = React.useState<number | null>(null);
   const timerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const timedOutRef = React.useRef<boolean>(false);
   const startingRef = React.useRef<boolean>(false); // prevent double-attempt creation
   const forceRestartRef = React.useRef<boolean>(false); // retake should reuse/reset prior attempt
+  const submitFnRef = React.useRef<((opts?: { timedOut?: boolean }) => void) | null>(null);
 
   // Note: To avoid extra server load, we do not auto-save per answer.
 
@@ -105,7 +107,8 @@ export default function QuizRunner({ quizId, lessonId: _lessonId, onCompleted, o
           timerRef.current && clearInterval(timerRef.current);
           // Auto-submit when time expires (treat unanswered as incorrect)
           timedOutRef.current = true;
-          onSubmit({ timedOut: true });
+          setTimedOutNotice(true);
+          try { submitFnRef.current?.({ timedOut: true }); } catch (e) { console.error('Auto-submit failed:', e); }
           return 0;
         }
         return next;
@@ -197,6 +200,7 @@ export default function QuizRunner({ quizId, lessonId: _lessonId, onCompleted, o
       // Reset answers and result state
       setAnswers({});
       setResult(null);
+  setTimedOutNotice(false);
       setStartError(null);
       startTimeRef.current = Date.now();
       setPhase('active');
@@ -233,6 +237,8 @@ export default function QuizRunner({ quizId, lessonId: _lessonId, onCompleted, o
 
   const onSubmit = async (opts?: { timedOut?: boolean }) => {
     if (!attemptId) return;
+    // Clear any prior timeout notice for manual submissions
+    if (!opts?.timedOut) setTimedOutNotice(false);
     // Guard: require all questions answered before manual submit
     const total = questions.length;
     const answered = Object.values(answers).filter(a => (a.selected_option_id || (a.text_answer && a.text_answer.trim().length > 0))).length;
@@ -300,6 +306,13 @@ export default function QuizRunner({ quizId, lessonId: _lessonId, onCompleted, o
           }
         });
         setAnswers(prev => ({ ...prev, ...merged }));
+
+        // Always compute percentage by total questions to avoid backend mis-scores on unanswered
+        const correctLocal = questions.reduce((acc, q) => acc + (merged[q.id]?.is_correct === true ? 1 : 0), 0);
+        const percentLocal = questions.length > 0 ? Math.round((correctLocal / questions.length) * 100) : 0;
+        const passLocal = typeof quizMeta?.passing_score === 'number' ? percentLocal >= (quizMeta.passing_score ?? 0) : passed;
+        setResult({ passed: passLocal, score: percentLocal, earned_points: correctLocal, total_points: questions.length });
+        setLastAttempt({ id: attemptId, score: percentLocal, passed: passLocal, completed_at: new Date().toISOString() });
       } catch (e) {
         console.warn('Could not load review answers:', e);
       }
@@ -324,6 +337,9 @@ export default function QuizRunner({ quizId, lessonId: _lessonId, onCompleted, o
     }
   };
 
+  // Keep submit function ref in sync to avoid stale closures inside timer callback
+  React.useEffect(() => { submitFnRef.current = onSubmit; }, [onSubmit]);
+
   const reviewLastAttempt = React.useCallback(async () => {
     try {
       if (!lastAttempt) return;
@@ -345,10 +361,16 @@ export default function QuizRunner({ quizId, lessonId: _lessonId, onCompleted, o
       (ua || []).forEach(a => {
         merged[a.question_id] = { selected_option_id: a.selected_option_id || null, text_answer: a.text_answer || null, is_correct: a.is_correct ?? null };
       });
+      // Ensure unanswered are marked incorrect for display
+      (qs || []).forEach((q: any) => {
+        if (!merged[q.id]) merged[q.id] = { selected_option_id: null, text_answer: null, is_correct: false };
+      });
   setAnswers(merged);
-  const totalPts = (qs || []).reduce((acc: number, q: any) => acc + (q.points ?? 0), 0);
-  const earnedPts = (qs || []).reduce((acc: number, q: any) => acc + ((merged[q.id]?.is_correct ? (q.points ?? 0) : 0)), 0);
-  setResult({ score: lastAttempt.score, passed: lastAttempt.passed, earned_points: earnedPts, total_points: totalPts });
+  // Always compute percent by question count for display to account for unanswered
+  const correct = (qs || []).reduce((acc: number, q: any) => acc + (merged[q.id]?.is_correct === true ? 1 : 0), 0);
+  const percent = (qs || []).length > 0 ? Math.round((correct / (qs as any[]).length) * 100) : 0;
+  const passByPercent = typeof quizMeta?.passing_score === 'number' ? percent >= (quizMeta.passing_score ?? 0) : lastAttempt.passed;
+  setResult({ score: percent, passed: passByPercent, earned_points: correct, total_points: (qs as any[]).length });
   setPhase('completed');
     } catch (e) {
       console.error('Failed to review last attempt:', e);
@@ -356,7 +378,7 @@ export default function QuizRunner({ quizId, lessonId: _lessonId, onCompleted, o
     } finally {
       setLoading(false);
     }
-  }, [lastAttempt, quizId, supabase]);
+  }, [lastAttempt, quizId, supabase, quizMeta?.passing_score]);
 
   React.useEffect(() => {
     return () => {
@@ -480,6 +502,11 @@ export default function QuizRunner({ quizId, lessonId: _lessonId, onCompleted, o
       {/* Completed banner */}
       {phase === 'completed' && result && (
           <>
+            {timedOutNotice && (
+              <div className="p-3 rounded-md bg-orange-50 border border-orange-200 text-orange-800">
+                Time has finished. Unanswered questions were marked incorrect.
+              </div>
+            )}
             <div className={`p-5 rounded-xl border ${result.passed ? 'bg-green-50 text-green-800 border-green-200' : 'bg-red-50 text-red-800 border-red-200'}`}>
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                 {/* Large percent with no circle */}
@@ -657,7 +684,6 @@ export default function QuizRunner({ quizId, lessonId: _lessonId, onCompleted, o
                 {/* Header with optional required points (no gained points) */}
                 <div className="flex items-start justify-between mb-2">
                   <div className="font-medium text-gray-800">Q{idx + 1}. {q.content}</div>
-                  {typeof q.points === 'number' && <div className="text-sm text-gray-600">Required: {totalPts} pts</div>}
                 </div>
                 {q.type !== 'short_answer' ? (
                   <div className="mt-3 space-y-2">
@@ -677,6 +703,9 @@ export default function QuizRunner({ quizId, lessonId: _lessonId, onCompleted, o
                         </div>
                       );
                     })}
+                    {(!ans || !ans.selected_option_id) && (
+                      <div className="text-xs text-red-700 mt-2">No answer provided</div>
+                    )}
                   </div>
                 ) : (
                   <div className="mt-3">
