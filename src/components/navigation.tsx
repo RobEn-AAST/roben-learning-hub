@@ -91,13 +91,20 @@ export function Navigation({ className = '' }: NavigationProps) {
           {/* Authentication State */}
           {isLoading ? (
             <div className="flex gap-2">
-              <div className="animate-pulse bg-white bg-opacity-20 h-8 w-20 rounded"></div>
-              <div className="animate-pulse bg-white bg-opacity-20 h-8 w-16 rounded"></div>
+              <div className="animate-pulse bg-white/20 h-8 w-24 rounded"></div>
+              <div className="animate-pulse bg-white/20 h-8 w-16 rounded"></div>
             </div>
           ) : user ? (
             <div className="flex items-center gap-4">
-              <Button asChild size="sm" variant="outline" className="bg-white text-blue-600 border-white hover:bg-blue-50">
-                <Link href={getDashboardLink()}>{getDashboardLabel()}</Link>
+              {/* For admin/instructor show both role dashboard and My Learning */}
+              {['admin','instructor'].includes(role || '') && (
+                <Button asChild size="sm" className="bg-white text-blue-600 hover:text-black hover:bg-white">
+                  <Link href={getDashboardLink()}>{getDashboardLabel()}</Link>
+                </Button>
+              )}
+              {/* Always show My Learning for authenticated users */}
+              <Button asChild size="sm" className="bg-white text-blue-600 hover:text-black hover:bg-white">
+                <Link href="/dashboard">My Learning</Link>
               </Button>
               <LogoutButton />
             </div>
@@ -167,9 +174,16 @@ export function Navigation({ className = '' }: NavigationProps) {
                           <div className="animate-pulse bg-white/20 h-8 w-16 rounded" />
                         </div>
                       ) : user ? (
-                        <div className="flex items-center gap-2">
-                          <Button asChild size="sm" variant="secondary" className="bg-white text-blue-600 hover:bg-blue-50 w-full justify-center">
-                            <Link href={getDashboardLink()} onClick={() => setMobileOpen(false)}>{getDashboardLabel()}</Link>
+                        <div className="flex flex-col gap-3">
+                          {/* Role-specific dashboard */}
+                          {['admin','instructor'].includes(role || '') && (
+                            <Button asChild size="sm" className="bg-white text-blue-600 hover:text-black hover:bg-white w-full justify-center">
+                              <Link href={getDashboardLink()} onClick={() => setMobileOpen(false)}>{getDashboardLabel()}</Link>
+                            </Button>
+                          )}
+                          {/* My Learning always */}
+                          <Button asChild size="sm" className="bg-white text-blue-600 hover:text-black hover:bg-white w-full justify-center">
+                            <Link href="/dashboard" onClick={() => setMobileOpen(false)}>My Learning</Link>
                           </Button>
                           <LogoutButton />
                         </div>

@@ -163,27 +163,6 @@ export function EnhancedHero() {
               >
                 Explore Courses
               </motion.a>
-              {!isLoading && !user && (
-                <motion.a
-                  href="/auth"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className="bg-white text-blue-600 border-2 border-blue-600 px-8 py-4 rounded-lg font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300"
-                >
-                  Sign In
-                </motion.a>
-              )}
-              {!isLoading && user && (
-                <Link href={getDashboardLink()}>
-                  <motion.div
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="bg-white text-blue-600 border-2 border-blue-600 px-8 py-4 rounded-lg font-semibold text-lg shadow-lg hover:shadow-xl transition-all duration-300"
-                  >
-                    {getDashboardLabel()}
-                  </motion.div>
-                </Link>
-              )}
             </motion.div>
           </motion.div>
 

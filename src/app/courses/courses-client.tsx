@@ -32,16 +32,19 @@ function CourseCard({ course, isEnrolled, isAuthenticated }: {
   isEnrolled: boolean; 
   isAuthenticated: boolean; 
 }) {
+  const createdAt = new Date(course.created_at);
+  const daysSince = Math.floor((Date.now() - createdAt.getTime()) / (1000 * 60 * 60 * 24));
+  const isNew = daysSince <= 30;
   return (
     <Link href={`/courses/${course.id}`} className="block h-full">
-      <div className="group bg-white rounded-xl shadow-lg overflow-hidden transition-all duration-300 hover:shadow-2xl border border-gray-100 h-full flex flex-col hover:-translate-y-2 hover:scale-[1.02] cursor-pointer">
-        <div className="relative h-48 bg-gradient-to-br from-blue-400 to-blue-600 overflow-hidden">
+      <div className="group bg-white rounded-2xl shadow-lg overflow-hidden transition-all duration-300 hover:shadow-2xl border border-gray-100 h-full flex flex-col hover:-translate-y-2 hover:scale-[1.01] cursor-pointer">
+        <div className="relative h-52 bg-gradient-to-br from-blue-400 to-blue-600 overflow-hidden">
           {course.cover_image && isDirectImageUrl(course.cover_image) ? (
             <Image 
               src={course.cover_image} 
               alt={course.title} 
               fill 
-              className="object-cover transition-transform duration-300 group-hover:scale-110" 
+              className="object-cover transition-transform duration-500 group-hover:scale-110" 
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
               priority={false}
             />
@@ -52,7 +55,10 @@ function CourseCard({ course, isEnrolled, isAuthenticated }: {
               </svg>
             </div>
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+          {isNew && (
+            <div className="absolute top-4 left-4 bg-white text-blue-700 px-3 py-1 rounded-full text-xs font-semibold shadow">New</div>
+          )}
           {isAuthenticated && isEnrolled && (
             <div className="absolute top-4 right-4 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
               Enrolled
@@ -60,17 +66,20 @@ function CourseCard({ course, isEnrolled, isAuthenticated }: {
           )}
         </div>
         <div className="p-6 flex-1 flex flex-col">
-          <h3 className="text-xl font-bold text-gray-900 mb-3 line-clamp-2 group-hover:text-blue-600 transition-colors">
+          <h3 className="text-lg md:text-xl font-bold text-gray-900 mb-2 line-clamp-2 group-hover:text-blue-600 transition-colors">
             {course.title}
           </h3>
           <p className="text-gray-600 mb-4 line-clamp-3 flex-1">
             {course.description}
           </p>
-          <div className="inline-flex items-center text-blue-600 font-semibold mt-auto">
-            {isAuthenticated ? (isEnrolled ? 'Continue Learning' : 'View Course') : 'Preview Course'}
-            <svg className="w-5 h-5 ml-2 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
+          <div className="flex items-center justify-between mt-auto">
+            <div className="text-xs text-gray-500">Updated {new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(-Math.max(1, Math.floor(daysSince/7)), 'week')}</div>
+            <div className="inline-flex items-center text-blue-600 font-semibold">
+              {isAuthenticated ? (isEnrolled ? 'Continue' : 'View Course') : 'Preview'}
+              <svg className="w-5 h-5 ml-2 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
           </div>
         </div>
       </div>
@@ -80,6 +89,7 @@ function CourseCard({ course, isEnrolled, isAuthenticated }: {
 
 export default function CoursesClient({ initialData }: CoursesClientProps) {
   const [filter, setFilter] = useState<'all' | 'enrolled' | 'available'>('all');
+  const [sort, setSort] = useState<'newest' | 'oldest' | 'title'>('newest');
   const [searchQuery, setSearchQuery] = useState('');
   
   // PERFORMANCE: Use React Query for caching - instant revisits
@@ -110,9 +120,14 @@ export default function CoursesClient({ initialData }: CoursesClientProps) {
         course.description.toLowerCase().includes(query)
       );
     }
-    
+    // Sort
+    coursesToFilter = [...coursesToFilter].sort((a, b) => {
+      if (sort === 'title') return a.title.localeCompare(b.title);
+      if (sort === 'oldest') return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
     return coursesToFilter;
-  }, [filter, courses, enrolledCourses, isAuthenticated, searchQuery]);
+  }, [filter, courses, enrolledCourses, isAuthenticated, searchQuery, sort]);
 
   // Memoize enrolled course IDs for performance
   const enrolledIds = useMemo(() => 
@@ -141,9 +156,9 @@ export default function CoursesClient({ initialData }: CoursesClientProps) {
 
   return (
     <>
-      {/* Search Bar */}
+      {/* Search + Sort */}
       <div className="mb-8 animate-in slide-in-from-top-4 duration-500">
-        <div className="relative max-w-md mx-auto">
+        <div className="relative max-w-3xl mx-auto">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -154,12 +169,26 @@ export default function CoursesClient({ initialData }: CoursesClientProps) {
             placeholder="Search courses by title or description..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="block w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+            className="block w-full pl-10 pr-40 py-3 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
           />
+          {/* Sort dropdown */}
+          <div className="absolute inset-y-0 right-0 pr-2 flex items-center">
+            <label className="hidden sm:block mr-2 text-sm text-gray-500">Sort</label>
+            <select
+              aria-label="Sort courses"
+              value={sort}
+              onChange={(e) => setSort(e.target.value as any)}
+              className="h-9 text-sm border border-gray-300 rounded-md px-3 bg-white hover:border-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="newest">Newest</option>
+              <option value="oldest">Oldest</option>
+              <option value="title">Title A–Z</option>
+            </select>
+          </div>
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
+              className="absolute inset-y-0 right-28 sm:right-36 flex items-center text-gray-400 hover:text-gray-600 transition-colors"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

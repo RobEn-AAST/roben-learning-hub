@@ -3,8 +3,57 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Target, Users, Award, BookOpen, Lightbulb, Heart, Globe, Rocket } from "lucide-react";
+import { createClient } from "@/lib/supabase/server";
 
-export default function AboutPage() {
+type AdminProfile = {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+};
+
+export const dynamic = 'force-dynamic';
+
+async function getAdmins(): Promise<AdminProfile[]> {
+  try {
+    // Prefer relative path; works server-side on Next.js
+    const res = await fetch('/api/public/admins', { cache: 'no-store' });
+    if (!res?.ok) return [];
+    const json = await res.json();
+    return json?.admins || [];
+  } catch {
+    // Fallback: try direct service-role query if available
+    try {
+      const { createClient: createSb } = await import('@supabase/supabase-js');
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+      const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+      if (!url || !serviceRole) return [];
+      const adminClient = createSb(url, serviceRole, { auth: { autoRefreshToken: false, persistSession: false } });
+      const { data, error } = await adminClient
+        .from('profiles')
+        .select('id, first_name, last_name, avatar_url, bio')
+        .eq('role', 'admin')
+        .order('created_at', { ascending: true });
+      if (error) return [];
+      return (data || []).map((p: any) => ({
+        id: p.id,
+        first_name: p.first_name || null,
+        last_name: p.last_name || null,
+        avatar_url: p.avatar_url || null,
+        bio: p.bio || null,
+      }));
+    } catch {
+      return [];
+    }
+  }
+}
+
+export default async function AboutPage() {
+  const admins = await getAdmins();
+  // Determine viewer auth state for CTA rendering
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
@@ -160,72 +209,63 @@ export default function AboutPage() {
           </div>
         </section>
 
-        {/* Team Section */}
+        {/* Team Section - Real Admins */}
         <section className="mb-16">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 mb-4">Meet Our Team</h2>
-            <p className="text-lg text-gray-600">
-              Passionate educators, developers, and innovators working together to transform education
-            </p>
+            <p className="text-lg text-gray-600">Our platform is led by real admins who keep everything running smoothly.</p>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <Card className="shadow-lg text-center">
-              <CardContent className="pt-6">
-                <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full mx-auto mb-4 flex items-center justify-center">
-                  <span className="text-2xl font-bold text-white">RB</span>
-                </div>
-                <h3 className="text-xl font-semibold mb-2">Robert Ben</h3>
-                <p className="text-blue-600 font-medium mb-2">CEO & Co-Founder</p>
-                <p className="text-sm text-gray-600">
-                  Visionary leader with 15+ years in education technology and a passion for making learning accessible.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="shadow-lg text-center">
-              <CardContent className="pt-6">
-                <div className="w-24 h-24 bg-gradient-to-br from-green-500 to-green-600 rounded-full mx-auto mb-4 flex items-center justify-center">
-                  <span className="text-2xl font-bold text-white">SA</span>
-                </div>
-                <h3 className="text-xl font-semibold mb-2">Sarah Ahmed</h3>
-                <p className="text-green-600 font-medium mb-2">CTO & Co-Founder</p>
-                <p className="text-sm text-gray-600">
-                  Technology expert and former Google engineer, dedicated to building scalable learning platforms.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="shadow-lg text-center">
-              <CardContent className="pt-6">
-                <div className="w-24 h-24 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full mx-auto mb-4 flex items-center justify-center">
-                  <span className="text-2xl font-bold text-white">MR</span>
-                </div>
-                <h3 className="text-xl font-semibold mb-2">Dr. Maria Rodriguez</h3>
-                <p className="text-purple-600 font-medium mb-2">Head of Curriculum</p>
-                <p className="text-sm text-gray-600">
-                  Educational psychologist with expertise in curriculum design and personalized learning approaches.
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+          {admins.length === 0 ? (
+            <div className="text-center text-gray-600">Our admin team will appear here once configured.</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {admins.map((a) => {
+                const initials = `${(a.first_name?.[0] || '').toUpperCase()}${(a.last_name?.[0] || '').toUpperCase()}` || 'AD';
+                const fullName = `${a.first_name || ''} ${a.last_name || ''}`.trim() || 'Admin';
+                return (
+                  <Card key={a.id} className="shadow-lg text-center hover:shadow-xl transition-shadow">
+                    <CardContent className="pt-6">
+                      {a.avatar_url ? (
+                        <img
+                          src={a.avatar_url}
+                          alt={fullName}
+                          className="w-24 h-24 rounded-full mx-auto mb-4 object-cover border"
+                        />
+                      ) : (
+                        <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full mx-auto mb-4 flex items-center justify-center">
+                          <span className="text-2xl font-bold text-white">{initials}</span>
+                        </div>
+                      )}
+                      <h3 className="text-xl font-semibold mb-1">{fullName}</h3>
+                      <p className="text-blue-600 font-medium mb-2">Administrator</p>
+                      {a.bio && (
+                        <p className="text-sm text-gray-600 line-clamp-3">{a.bio}</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </section>
 
-        {/* Call to Action */}
-        <div className="text-center bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-8 text-white">
-          <h2 className="text-3xl font-bold mb-4">Join Our Learning Community</h2>
-          <p className="text-xl mb-6 text-blue-100">
-            Be part of a global community of learners, educators, and innovators
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button asChild size="lg" variant="outline" className="bg-white text-blue-600 hover:bg-gray-100">
-              <Link href="/courses">Explore Courses</Link>
-            </Button>
-            <Button asChild size="lg" variant="outline" className="bg-white text-blue-600 hover:bg-gray-100 hover:text-black">
-              <Link href="/auth">Sign In</Link>
-            </Button>
+        {/* Call to Action - hidden when signed in */}
+        {!user && (
+          <div className="text-center bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-8 text-white">
+            <h2 className="text-3xl font-bold mb-4">Join Our Learning Community</h2>
+            <p className="text-xl mb-6 text-blue-100">
+              Be part of a global community of learners, educators, and innovators
+            </p>
+            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+              <Button asChild size="lg" variant="outline" className="bg-white text-blue-600 hover:bg-gray-100">
+                <Link href="/courses">Explore Courses</Link>
+              </Button>
+              <Button asChild size="lg" variant="outline" className="bg-white text-blue-600 hover:bg-gray-100 hover:text-black">
+                <Link href="/auth">Sign In</Link>
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Footer */}
