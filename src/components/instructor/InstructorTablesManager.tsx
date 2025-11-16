@@ -483,8 +483,51 @@ export function InstructorTablesManager() {
           <span>←</span>
           <span>Back to Dashboard</span>
         </Button>
-      </div>
+      </div>{" "}
+      {/* Summary Cards */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="bg-white border border-gray-200">
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Icons.Table />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600">
+                  Available Tables
+                </p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {
+                    databaseTables.filter((t) => t.status === "available")
+                      .length
+                  }
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
+        <Card className="bg-white border border-gray-200">
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 bg-green-100 rounded-lg">
+                <Icons.Book />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600">
+                  Content Types
+                </p>
+                <p className="text-2xl font-bold text-gray-900">
+                  {
+                    databaseTables.filter((t) => t.category === "content")
+                      .length
+                  }
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
       {/* Category Filter */}
       <div className="flex flex-wrap gap-2">
         {categories.map((category) => (
@@ -500,7 +543,6 @@ export function InstructorTablesManager() {
           </Button>
         ))}
       </div>
-
       {/* Tables Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {filteredTables.map((table) => (
@@ -551,52 +593,6 @@ export function InstructorTablesManager() {
           </Card>
         ))}
       </div>
-
-      {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="bg-white border border-gray-200">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Icons.Table />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  Available Tables
-                </p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {
-                    databaseTables.filter((t) => t.status === "available")
-                      .length
-                  }
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-white border border-gray-200">
-          <CardContent className="p-4">
-            <div className="flex items-center space-x-3">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <Icons.Book />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-600">
-                  Content Types
-                </p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {
-                    databaseTables.filter((t) => t.category === "content")
-                      .length
-                  }
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Instructions */}
       <Card className="bg-blue-50 border-blue-200">
         <CardHeader>
