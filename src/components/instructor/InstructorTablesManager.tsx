@@ -429,14 +429,6 @@ export function InstructorTablesManager() {
     return (
       <div className="space-y-6 bg-gray-50 min-h-screen p-4">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900">
-              Question Options Management
-            </h1>
-            <p className="text-gray-600">
-              Manage answer options for quiz questions
-            </p>
-          </div>
           <Button
             variant="outline"
             onClick={handleBackToTables}

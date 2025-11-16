@@ -665,6 +665,7 @@ export default function QuizAdminDashboard() {
       </div>
     );
   }
+  console.log('📋 QuizAdminDashboard - Rendering main dashboard' , localStats);
 
   return (
     <div className="space-y-6">

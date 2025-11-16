@@ -391,7 +391,7 @@ export default function QuestionOptionAdminDashboard() {
           </div>
 
           {/* Stats Cards */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2 mb-8">
             <Card className="bg-white">
               <CardContent className="p-6">
                 <div className="flex items-center space-x-4">
@@ -417,36 +417,54 @@ export default function QuestionOptionAdminDashboard() {
           </div>
 
           {/* Filters and Search */}
-          <Card className="bg-white mb-8">
-            <CardHeader>
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <div className="relative">
-                    <div className="absolute left-3 top-1/2 transform -translate-y-1/2">
-                      <Icons.Option />
-                    </div>
-                    <Input
-                      placeholder="Search options..."
-                      value={search}
-                      onChange={e => setSearch(e.target.value)}
-                      className="pl-10 w-full sm:w-64"
-                      style={{ backgroundColor: 'white', color: 'black' }}
-                    />
+            <Card className="bg-white mb-8 w-full">
+              <CardHeader>
+              <div className="flex flex-col md:flex-row justify-between items-center gap-4 w-full">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full">
+                <div className="relative flex-1">
+                  <div className="absolute left-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
+                  <Icons.Option />
                   </div>
-                  <select
-                    value={filterQuestion}
-                    onChange={e => setFilterQuestion(e.target.value)}
-                    className="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
-                  >
-                    <option value="">All Questions</option>
-                    {questions.map((question) => (
-                      <option key={question.id} value={question.id}>{question.text}</option>
-                    ))}
-                  </select>
+                  <Input
+                  id="search-options"
+                  aria-label="Search options"
+                  placeholder="Search options and questions..."
+                  value={search}
+                  onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
+                  className="pl-10 w-full h-12 text-sm"
+                  style={{ backgroundColor: 'white', color: 'black' }}
+                  />
+                </div>
+
+                <select
+                  id="filter-question"
+                  aria-label="Filter by question"
+                  value={filterQuestion}
+                  onChange={e => { setFilterQuestion(e.target.value); setCurrentPage(1); }}
+                  className="p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black min-w-[160px] sm:min-w-[220px]"
+                >
+                  <option value="">All Questions</option>
+                  {questions.map((question) => (
+                  <option key={question.id} value={question.id}>{question.text}</option>
+                  ))}
+                </select>
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => { setSearch(''); setFilterQuestion(''); setCurrentPage(1); }}
+                  aria-label="Reset filters"
+                  className="w-full sm:w-auto"
+                >
+                  <Icons.Cancel />
+                  <span className="ml-2">Reset</span>
+                </Button>
                 </div>
               </div>
-            </CardHeader>
-          </Card>
+              </CardHeader>
+            </Card>
 
           {/* Options Table */}
           <Card className="bg-white">
@@ -517,7 +535,7 @@ export default function QuestionOptionAdminDashboard() {
              
               {/* Pagination */}
               {totalPages > 1 && (
-                <div className="flex justify-center space-x-2 mt-6">
+                <div className="flex justify-center space-x-2 mt-6 pb-4">
                   <Button
                     variant="outline"
                     onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
