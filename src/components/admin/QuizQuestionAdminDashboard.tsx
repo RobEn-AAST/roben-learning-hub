@@ -317,7 +317,7 @@ export default function QuizQuestionAdminDashboard() {
     totalQuestions: questions.length,
     quizzesWithQuestions: quizzes.filter((qz: any) => questions.some((q: QuizQuestion) => q.quizId === qz.id)).length
   };
-
+  console.log('Local Stats:', localStats);
   // PERFORMANCE: Elegant loading skeleton while React Query fetches data
   if (loading) {
     return (
@@ -342,7 +342,7 @@ export default function QuizQuestionAdminDashboard() {
     );
   }
 
-
+console.log(quizzes)
   return (
     <div className="space-y-6">
       {showForm ? (
@@ -350,7 +350,7 @@ export default function QuizQuestionAdminDashboard() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-2xl font-bold text-black">
-                {editingQuestion ? 'Edit Question' : 'Create New Question'}
+                {editingQuestion ? "Edit Question" : "Create New Question"}
               </h2>
             </div>
             <Button variant="outline" onClick={resetForm}>
@@ -361,75 +361,118 @@ export default function QuizQuestionAdminDashboard() {
             <CardHeader>
               <CardTitle className="text-black">Question Details</CardTitle>
               <CardDescription className="text-gray-600">
-                {editingQuestion ? 'Update question information' : 'Enter question information for the selected quiz.'}
+                {editingQuestion
+                  ? "Update question information"
+                  : "Enter question information for the selected quiz."}
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="quizId" className="text-black font-semibold text-sm mb-2 block">Quiz *</Label>
+                    <Label
+                      htmlFor="quizId"
+                      className="text-black font-semibold text-sm mb-2 block"
+                    >
+                      Quiz *
+                    </Label>
                     <select
                       id="quizId"
                       name="quizId"
                       value={formData.quizId}
-                      onChange={e => setFormData({ ...formData, quizId: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, quizId: e.target.value })
+                      }
                       className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
                       required
                       disabled={!!editingQuestion || quizzesLoading}
                     >
-                      <option value="" style={{ backgroundColor: 'white', color: 'black' }}>
-                        {quizzesLoading ? 'Loading quizzes...' : 'Select a quiz'}
+                      <option
+                        value=""
+                        style={{ backgroundColor: "white", color: "black" }}
+                      >
+                        {quizzesLoading
+                          ? "Loading quizzes..."
+                          : "Select a quiz"}
                       </option>
-                      {quizzes && quizzes.length > 0 ? (
-                        quizzes.map((quiz: any) => (
-                          <option key={quiz.id} value={quiz.id} style={{ backgroundColor: 'white', color: 'black' }}>
-                            {quiz.course_title} → {quiz.module_title} → {quiz.lesson_title} → {quiz.title}
-                          </option>
-                        ))
-                      ) : (
-                        !quizzesLoading && (
-                          <option disabled style={{ backgroundColor: 'white', color: 'gray' }}>
-                            No quizzes available. Create a quiz first.
-                          </option>
-                        )
-                      )}
+                      {quizzes && quizzes.length > 0
+                        ? quizzes.map((quiz: any) => (
+                            <option
+                              key={quiz.id}
+                              value={quiz.id}
+                              style={{
+                                backgroundColor: "white",
+                                color: "black",
+                              }}
+                            >
+                              {quiz.course_title} → {quiz.module_title} →{" "}
+                              {quiz.lesson_title} → {quiz.title}
+                            </option>
+                          ))
+                        : !quizzesLoading && (
+                            <option
+                              disabled
+                              style={{
+                                backgroundColor: "white",
+                                color: "gray",
+                              }}
+                            >
+                              No quizzes available. Create a quiz first.
+                            </option>
+                          )}
                     </select>
                     {editingQuestion && (
                       <p className="text-sm text-gray-500 mt-1">
                         Quiz cannot be changed when editing a question
                       </p>
                     )}
-                    {!quizzesLoading && quizzes.length === 0 && !editingQuestion && (
-                      <p className="text-amber-600 text-sm mt-1 flex items-center gap-1">
-                        <span>💡</span>
-                        <span>
-                          Tip: Go to Quiz Management and create a quiz before adding questions
-                        </span>
-                      </p>
-                    )}
+                    {!quizzesLoading &&
+                      quizzes.length === 0 &&
+                      !editingQuestion && (
+                        <p className="text-amber-600 text-sm mt-1 flex items-center gap-1">
+                          <span>💡</span>
+                          <span>
+                            Tip: Go to Quiz Management and create a quiz before
+                            adding questions
+                          </span>
+                        </p>
+                      )}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="text" className="text-black font-semibold text-sm mb-2 block">Question Text *</Label>
+                    <Label
+                      htmlFor="text"
+                      className="text-black font-semibold text-sm mb-2 block"
+                    >
+                      Question Text *
+                    </Label>
                     <Input
                       id="text"
                       name="text"
                       value={formData.text}
-                      onChange={e => setFormData({ ...formData, text: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, text: e.target.value })
+                      }
                       placeholder="Enter question text"
                       className="mt-2"
-                      style={{ backgroundColor: 'white', color: 'black' }}
+                      style={{ backgroundColor: "white", color: "black" }}
                       required
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="type" className="text-black font-semibold text-sm mb-2 block">Type *</Label>
+                  <Label
+                    htmlFor="type"
+                    className="text-black font-semibold text-sm mb-2 block"
+                  >
+                    Type *
+                  </Label>
                   <select
                     id="type"
                     name="type"
                     value={formData.type}
-                    onChange={e => setFormData({ ...formData, type: e.target.value })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, type: e.target.value })
+                    }
                     className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
                     required
                   >
@@ -437,10 +480,18 @@ export default function QuizQuestionAdminDashboard() {
                     <option value="short_answer">Short Answer</option>
                     <option value="true_false">True/False</option>
                   </select>
-                  {formData.type === 'true_false' && (
+                  {formData.type === "true_false" && (
                     <p className="text-sm text-blue-600 mt-2 flex items-center">
-                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                      <svg
+                        className="w-4 h-4 mr-1"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                          clipRule="evenodd"
+                        />
                       </svg>
                       True and False options will be automatically created
                     </p>
@@ -451,16 +502,22 @@ export default function QuizQuestionAdminDashboard() {
                     Cancel
                   </Button>
                   <Button type="submit" disabled={loading}>
-                    {loading ? (editingQuestion ? 'Updating...' : 'Creating...') : (editingQuestion ? 'Update Question' : 'Create Question')}
+                    {loading
+                      ? editingQuestion
+                        ? "Updating..."
+                        : "Creating..."
+                      : editingQuestion
+                      ? "Update Question"
+                      : "Create Question"}
                   </Button>
                 </div>
                 {error && <div className="text-red-600">{error}</div>}
               </form>
 
               {/* Create Option Button - shown after question is created (not for true_false) */}
-              {currentQuestionId && formData.type !== 'true_false' && (
+              {currentQuestionId && formData.type !== "true_false" && (
                 <div className="mt-6 pt-6 border-t">
-                  <Button 
+                  <Button
                     onClick={() => setShowOptionForm(true)}
                     variant="outline"
                     className="w-full"
@@ -470,18 +527,32 @@ export default function QuizQuestionAdminDashboard() {
                   </Button>
                 </div>
               )}
-              
+
               {/* Show message for true_false questions */}
-              {currentQuestionId && formData.type === 'true_false' && (
+              {currentQuestionId && formData.type === "true_false" && (
                 <div className="mt-6 pt-6 border-t">
                   <div className="bg-green-50 border border-green-200 p-4 rounded-lg">
                     <div className="flex items-center">
-                      <svg className="w-5 h-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      <svg
+                        className="w-5 h-5 text-green-500 mr-2"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                          clipRule="evenodd"
+                        />
                       </svg>
                       <div>
-                        <p className="text-green-800 font-medium">True/False Options Created!</p>
-                        <p className="text-green-700 text-sm">True and False options have been automatically created. You can edit which option is correct in the question list below.</p>
+                        <p className="text-green-800 font-medium">
+                          True/False Options Created!
+                        </p>
+                        <p className="text-green-700 text-sm">
+                          True and False options have been automatically
+                          created. You can edit which option is correct in the
+                          question list below.
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -492,20 +563,26 @@ export default function QuizQuestionAdminDashboard() {
               {showOptionForm && currentQuestionId && (
                 <Card className="mt-4 bg-gray-50 border-2 border-green-200">
                   <CardHeader>
-                    <CardTitle className="text-lg text-green-800">Create Option</CardTitle>
-                    <CardDescription>Add an option to your question</CardDescription>
+                    <CardTitle className="text-lg text-green-800">
+                      Create Option
+                    </CardTitle>
+                    <CardDescription>
+                      Add an option to your question
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <form onSubmit={handleOptionSubmit} className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="optionText" className="text-black">Option Text *</Label>
+                        <Label htmlFor="optionText" className="text-black">
+                          Option Text *
+                        </Label>
                         <Input
                           id="optionText"
                           name="text"
                           value={optionFormData.text}
                           onChange={handleOptionFormChange}
                           placeholder="Enter option text"
-                          style={{ backgroundColor: 'white', color: 'black' }}
+                          style={{ backgroundColor: "white", color: "black" }}
                           required
                         />
                       </div>
@@ -518,10 +595,16 @@ export default function QuizQuestionAdminDashboard() {
                           onChange={handleOptionFormChange}
                           className="h-4 w-4"
                         />
-                        <Label htmlFor="isCorrect" className="text-black">This is the correct answer</Label>
+                        <Label htmlFor="isCorrect" className="text-black">
+                          This is the correct answer
+                        </Label>
                       </div>
                       <div className="flex justify-end space-x-2">
-                        <Button type="button" variant="outline" onClick={() => setShowOptionForm(false)}>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => setShowOptionForm(false)}
+                        >
                           Cancel
                         </Button>
                         <Button type="submit">Create Option</Button>
@@ -531,12 +614,24 @@ export default function QuizQuestionAdminDashboard() {
                     {/* Display created options */}
                     {options.length > 0 && (
                       <div className="mt-4">
-                        <h4 className="font-semibold text-black mb-2">Created Options:</h4>
+                        <h4 className="font-semibold text-black mb-2">
+                          Created Options:
+                        </h4>
                         <div className="space-y-2">
                           {options.map((option, index) => (
-                            <div key={option.id} className="flex items-center justify-between p-2 bg-white rounded border">
+                            <div
+                              key={option.id}
+                              className="flex items-center justify-between p-2 bg-white rounded border"
+                            >
                               <span className="text-black">{option.text}</span>
-                              {option.isCorrect && <Badge variant="secondary" className="bg-green-100 text-green-800">Correct</Badge>}
+                              {option.isCorrect && (
+                                <Badge
+                                  variant="secondary"
+                                  className="bg-green-100 text-green-800"
+                                >
+                                  Correct
+                                </Badge>
+                              )}
                             </div>
                           ))}
                         </div>
@@ -552,7 +647,9 @@ export default function QuizQuestionAdminDashboard() {
         <>
           <div className="flex justify-between items-start">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-black">Quiz Questions Management</h1>
+              <h1 className="text-3xl font-bold tracking-tight text-black">
+                Quiz Questions Management
+              </h1>
               <p className="text-gray-600">
                 Manage all quiz questions linked to quizzes.
               </p>
@@ -564,36 +661,48 @@ export default function QuizQuestionAdminDashboard() {
           </div>
 
           {/* Stats */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <Card className="bg-white">
               <CardContent className="p-6">
                 <div className="flex items-center space-x-4">
                   <Icons.Quiz />
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Total Questions</p>
-                    <p className="text-2xl font-bold text-black">{localStats.totalQuestions}</p>
+                    <p className="text-sm font-medium text-gray-600">
+                      Total Questions
+                    </p>
+                    <p className="text-2xl font-bold text-black">
+                      {localStats.total_questions}
+                    </p>
                   </div>
                 </div>
               </CardContent>
             </Card>
-            <Card className="bg-white">
+            {/* <Card className="bg-white">
               <CardContent className="p-6">
                 <div className="flex items-center space-x-4">
                   <Icons.Quiz />
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Quizzes with Questions</p>
-                    <p className="text-2xl font-bold text-black">{localStats.quizzesWithQuestions}</p>
+                    <p className="text-sm font-medium text-gray-600">
+                      Quizzes with Questions
+                    </p>
+                    <p className="text-2xl font-bold text-black">
+                      {localStats.quizzesWithQuestions}
+                    </p>
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </Card> */}
             <Card className="bg-white">
               <CardContent className="p-6">
                 <div className="flex items-center space-x-4">
                   <Icons.Filter />
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Total Quizzes</p>
-                    <p className="text-2xl font-bold text-black">{quizzes.length}</p>
+                    <p className="text-sm font-medium text-gray-600">
+                      Total Quizzes
+                    </p>
+                    <p className="text-2xl font-bold text-black">
+                      {quizzes.length}
+                    </p>
                   </div>
                 </div>
               </CardContent>
@@ -603,8 +712,17 @@ export default function QuizQuestionAdminDashboard() {
                 <div className="flex items-center space-x-4">
                   <Icons.Quiz />
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Avg Questions/Quiz</p>
-                    <p className="text-2xl font-bold text-black">{quizzes.length ? (localStats.totalQuestions / quizzes.length).toFixed(2) : 0}</p>
+                    <p className="text-sm font-medium text-gray-600">
+                      Avg Questions/Quiz
+                    </p>
+                    <p className="text-2xl font-bold text-black">
+                      {quizzes.length
+                        ? (
+                            Number(localStats.totalQuestions ?? 0) /
+                            quizzes.length
+                          ).toFixed(2)
+                        : "0.00"}
+                    </p>
                   </div>
                 </div>
               </CardContent>
@@ -622,30 +740,49 @@ export default function QuizQuestionAdminDashboard() {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="filter-quiz" className="text-black">Quiz</Label>
+                  <Label htmlFor="filter-quiz" className="text-black">
+                    Quiz
+                  </Label>
                   <select
                     id="filter-quiz"
                     value={filterQuiz}
-                    onChange={e => { setFilterQuiz(e.target.value); setCurrentPage(1); }}
+                    onChange={(e) => {
+                      setFilterQuiz(e.target.value);
+                      setCurrentPage(1);
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    style={{ backgroundColor: 'white', color: 'black' }}
+                    style={{ backgroundColor: "white", color: "black" }}
                   >
-                    <option value="" style={{ backgroundColor: 'white', color: 'black' }}>All Quizzes</option>
+                    <option
+                      value=""
+                      style={{ backgroundColor: "white", color: "black" }}
+                    >
+                      All Quizzes
+                    </option>
                     {quizzes.map((quiz: any) => (
-                      <option key={quiz.id} value={quiz.id} style={{ backgroundColor: 'white', color: 'black' }}>
+                      <option
+                        key={quiz.id}
+                        value={quiz.id}
+                        style={{ backgroundColor: "white", color: "black" }}
+                      >
                         {quiz.title}
                       </option>
                     ))}
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="filter-search" className="text-black">Search</Label>
+                  <Label htmlFor="filter-search" className="text-black">
+                    Search
+                  </Label>
                   <div className="relative">
                     <Input
                       id="filter-search"
                       type="text"
                       value={search}
-                      onChange={e => { setSearch(e.target.value); setCurrentPage(1); }}
+                      onChange={(e) => {
+                        setSearch(e.target.value);
+                        setCurrentPage(1);
+                      }}
                       placeholder="Search questions by text..."
                       className="pl-10 bg-white text-black"
                     />
@@ -676,22 +813,36 @@ export default function QuizQuestionAdminDashboard() {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b">
-                        <th className="text-left p-4 font-medium text-black">Question Details</th>
-                        <th className="text-left p-4 font-medium text-black">Quiz</th>
-                        <th className="text-left p-4 font-medium text-black">Type</th>
-                        <th className="text-left p-4 font-medium text-black">Actions</th>
+                        <th className="text-left p-4 font-medium text-black">
+                          Question Details
+                        </th>
+                        <th className="text-left p-4 font-medium text-black">
+                          Quiz
+                        </th>
+                        <th className="text-left p-4 font-medium text-black">
+                          Type
+                        </th>
+                        <th className="text-left p-4 font-medium text-black">
+                          Actions
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {paginatedQuestions.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="text-center py-8 text-gray-600">
+                          <td
+                            colSpan={4}
+                            className="text-center py-8 text-gray-600"
+                          >
                             No questions found.
                           </td>
                         </tr>
                       ) : (
                         paginatedQuestions.map((question: QuizQuestion) => (
-                          <tr key={question.id} className="border-b hover:bg-gray-50">
+                          <tr
+                            key={question.id}
+                            className="border-b hover:bg-gray-50"
+                          >
                             <td className="p-4">
                               <div>
                                 <div className="font-medium text-black flex items-center space-x-2">
@@ -701,25 +852,42 @@ export default function QuizQuestionAdminDashboard() {
                               </div>
                             </td>
                             <td className="p-4">
-                              <div className="font-medium text-black">{quizzes.find((q: any) => q.id === question.quizId)?.title || question.quizId}</div>
+                              <div className="font-medium text-black">
+                                {quizzes.find(
+                                  (q: any) => q.id === question.quizId
+                                )?.title || question.quizId}
+                              </div>
                             </td>
                             <td className="p-4">
                               <div className="flex flex-col space-y-1">
-                                <Badge className={`${
-                                  question.type === 'multiple_choice' 
-                                    ? 'bg-blue-100 text-blue-800 border-blue-300' 
-                                    : question.type === 'true_false' 
-                                      ? 'bg-green-100 text-green-800 border-green-300' 
-                                      : 'bg-purple-100 text-purple-800 border-purple-300'
-                                }`}>
-                                  {question.type === 'multiple_choice' && 'Multiple Choice'}
-                                  {question.type === 'short_answer' && 'Short Answer'}
-                                  {question.type === 'true_false' && 'True/False'}
+                                <Badge
+                                  className={`${
+                                    question.type === "multiple_choice"
+                                      ? "bg-blue-100 text-blue-800 border-blue-300"
+                                      : question.type === "true_false"
+                                      ? "bg-green-100 text-green-800 border-green-300"
+                                      : "bg-purple-100 text-purple-800 border-purple-300"
+                                  }`}
+                                >
+                                  {question.type === "multiple_choice" &&
+                                    "Multiple Choice"}
+                                  {question.type === "short_answer" &&
+                                    "Short Answer"}
+                                  {question.type === "true_false" &&
+                                    "True/False"}
                                 </Badge>
-                                {question.type === 'true_false' && (
+                                {question.type === "true_false" && (
                                   <span className="text-xs text-green-600 flex items-center">
-                                    <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                    <svg
+                                      className="w-3 h-3 mr-1"
+                                      fill="currentColor"
+                                      viewBox="0 0 20 20"
+                                    >
+                                      <path
+                                        fillRule="evenodd"
+                                        d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                                        clipRule="evenodd"
+                                      />
                                     </svg>
                                     Auto options
                                   </span>
@@ -770,7 +938,9 @@ export default function QuizQuestionAdminDashboard() {
                   </span>
                   <Button
                     variant="outline"
-                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    onClick={() =>
+                      setCurrentPage(Math.min(totalPages, currentPage + 1))
+                    }
                     disabled={currentPage === totalPages}
                   >
                     Next

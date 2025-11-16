@@ -1,83 +1,225 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Skeleton } from '@/components/ui/skeleton';
-import type { Project, ProjectStats, Lesson, CreateProjectData, UpdateProjectData, SubmissionPlatform } from '@/types/project';
-import { PLATFORM_NAMES } from '@/types/project';
-import { activityLogService } from '@/services/activityLogService';
-import { useProjects, useProjectLessons, useProjectStats } from '@/hooks/useQueryCache';
-import { toast } from 'sonner';
+import React, { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
+import type {
+  Project,
+  ProjectStats,
+  Lesson,
+  CreateProjectData,
+  UpdateProjectData,
+  SubmissionPlatform,
+} from "@/types/project";
+import { PLATFORM_NAMES } from "@/types/project";
+import { activityLogService } from "@/services/activityLogService";
+import {
+  useProjects,
+  useProjectLessons,
+  useProjectStats,
+} from "@/hooks/useQueryCache";
+import { toast } from "sonner";
 
-type ViewMode = 'list' | 'create' | 'edit';
+type ViewMode = "list" | "create" | "edit";
 
 // Icons
 const Icons = {
   Edit: () => (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+    <svg
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+      />
     </svg>
   ),
   Delete: () => (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    <svg
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+      />
     </svg>
   ),
   View: () => (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+    <svg
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+      />
     </svg>
   ),
   Plus: () => (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+    <svg
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M12 4v16m8-8H4"
+      />
     </svg>
   ),
   Project: () => (
-    <svg className="h-4 w-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+    <svg
+      className="h-4 w-4 text-purple-600"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+      />
     </svg>
   ),
   Save: () => (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+    <svg
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
+      />
     </svg>
   ),
   Cancel: () => (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+    <svg
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M6 18L18 6M6 6l12 12"
+      />
     </svg>
   ),
   Link: () => (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+    <svg
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+      />
     </svg>
   ),
   Instructions: () => (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+    <svg
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+      />
     </svg>
   ),
   Book: () => (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+    <svg
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+      />
     </svg>
   ),
   Search: () => (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+    <svg
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+      />
     </svg>
   ),
   ChartBar: () => (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+    <svg
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+      />
     </svg>
-  )
+  ),
 };
 
 interface FormData {
@@ -85,7 +227,7 @@ interface FormData {
   title: string;
   description: string;
   submission_instructions: string;
-  submission_platform: SubmissionPlatform | '';
+  submission_platform: SubmissionPlatform | "";
 }
 
 export default function ProjectAdminDashboard() {
@@ -93,39 +235,41 @@ export default function ProjectAdminDashboard() {
   const { data: projects = [], isLoading: projectsLoading } = useProjects();
   const { data: lessons = [], isLoading: lessonsLoading } = useProjectLessons();
   const { data: stats = null, isLoading: statsLoading } = useProjectStats();
-  
+
   const loading = projectsLoading || lessonsLoading || statsLoading;
-  
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
+
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [editingProject, setEditingProject] = useState<Project | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedLesson, setSelectedLesson] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedLesson, setSelectedLesson] = useState<string>("");
 
   const [formData, setFormData] = useState<FormData>({
-    lesson_id: '',
-    title: '',
-    description: '',
-    submission_instructions: '',
-    submission_platform: ''
+    lesson_id: "",
+    title: "",
+    description: "",
+    submission_instructions: "",
+    submission_platform: "",
   });
 
-  const [formErrors, setFormErrors] = useState<Partial<Record<keyof FormData, string>>>({});
+  const [formErrors, setFormErrors] = useState<
+    Partial<Record<keyof FormData, string>>
+  >({});
 
   useEffect(() => {
     // Log dashboard access
     activityLogService.logActivity({
-      action: 'VIEW',
-      table_name: 'projects',
-      description: 'Accessed project management dashboard'
+      action: "VIEW",
+      table_name: "projects",
+      description: "Accessed project management dashboard",
     });
   }, []);
 
   // Debug: Log lessons data
   useEffect(() => {
-    console.log('📋 ProjectAdminDashboard - Lessons data:', {
+    console.log("📋 ProjectAdminDashboard - Lessons data:", {
       loading: lessonsLoading,
       count: lessons?.length || 0,
-      lessons: lessons
+      lessons: lessons,
     });
   }, [lessons, lessonsLoading]);
 
@@ -133,15 +277,15 @@ export default function ProjectAdminDashboard() {
     const errors: Partial<Record<keyof FormData, string>> = {};
 
     if (!formData.title.trim()) {
-      errors.title = 'Title is required';
+      errors.title = "Title is required";
     }
 
     if (!formData.description.trim()) {
-      errors.description = 'Description is required';
+      errors.description = "Description is required";
     }
 
     if (!formData.lesson_id) {
-      errors.lesson_id = 'Lesson is required';
+      errors.lesson_id = "Lesson is required";
     }
 
     setFormErrors(errors);
@@ -158,46 +302,54 @@ export default function ProjectAdminDashboard() {
         title: formData.title,
         description: formData.description,
         submission_instructions: formData.submission_instructions || undefined,
-        submission_platform: formData.submission_platform as SubmissionPlatform || undefined
+        submission_platform:
+          (formData.submission_platform as SubmissionPlatform) || undefined,
       };
 
       if (editingProject) {
         // Update existing project
-        const response = await fetch(`/api/admin/projects/${editingProject.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(projectData)
-        });
+        const response = await fetch(
+          `/api/admin/projects/${editingProject.id}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(projectData),
+          }
+        );
 
-        if (!response.ok) throw new Error('Failed to update project');
+        if (!response.ok) throw new Error("Failed to update project");
       } else {
         // Create new project
-        const response = await fetch('/api/admin/projects', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(projectData)
+        const response = await fetch("/api/admin/projects", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(projectData),
         });
 
-        if (!response.ok) throw new Error('Failed to create project');
+        if (!response.ok) throw new Error("Failed to create project");
       }
 
       // Reset form
       setFormData({
-        lesson_id: '',
-        title: '',
-        description: '',
-        submission_instructions: '',
-        submission_platform: ''
+        lesson_id: "",
+        title: "",
+        description: "",
+        submission_instructions: "",
+        submission_platform: "",
       });
-      setViewMode('list');
+      setViewMode("list");
       setEditingProject(null);
       setFormErrors({});
-      
+
       // PERFORMANCE: React Query auto-refetches - no manual reload needed
-      toast.success(editingProject ? 'Project updated successfully!' : 'Project created successfully!');
+      toast.success(
+        editingProject
+          ? "Project updated successfully!"
+          : "Project created successfully!"
+      );
     } catch (error) {
-      console.error('Error saving project:', error);
-      toast.error('Failed to save project. Please try again.');
+      console.error("Error saving project:", error);
+      toast.error("Failed to save project. Please try again.");
     }
   };
 
@@ -207,10 +359,10 @@ export default function ProjectAdminDashboard() {
       lesson_id: project.lesson_id,
       title: project.title,
       description: project.description,
-      submission_instructions: project.submission_instructions || '',
-      submission_platform: project.submission_platform || ''
+      submission_instructions: project.submission_instructions || "",
+      submission_platform: project.submission_platform || "",
     });
-    setViewMode('edit');
+    setViewMode("edit");
   };
 
   const handleDelete = async (project: Project) => {
@@ -218,41 +370,48 @@ export default function ProjectAdminDashboard() {
 
     try {
       const response = await fetch(`/api/admin/projects/${project.id}`, {
-        method: 'DELETE'
+        method: "DELETE",
       });
 
-      if (!response.ok) throw new Error('Failed to delete project');
+      if (!response.ok) throw new Error("Failed to delete project");
 
       // PERFORMANCE: React Query auto-refetches - no manual reload needed
-      toast.success('Project deleted successfully!');
+      toast.success("Project deleted successfully!");
     } catch (error) {
-      console.error('Error deleting project:', error);
-      toast.error('Failed to delete project. Please try again.');
+      console.error("Error deleting project:", error);
+      toast.error("Failed to delete project. Please try again.");
     }
   };
 
   const handleCancelEdit = () => {
-    setViewMode('list');
+    setViewMode("list");
     setEditingProject(null);
     setFormData({
-      lesson_id: '',
-      title: '',
-      description: '',
-      submission_instructions: '',
-      submission_platform: ''
+      lesson_id: "",
+      title: "",
+      description: "",
+      submission_instructions: "",
+      submission_platform: "",
     });
     setFormErrors({});
   };
 
   const filteredProjects = projects.filter((project: Project) => {
-    const matchesSearch = project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         project.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         project.lesson_title?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesLesson = !selectedLesson || project.lesson_id === selectedLesson;
+    const matchesSearch =
+      project.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      project.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      project.lesson_title?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesLesson =
+      !selectedLesson || project.lesson_id === selectedLesson;
     return matchesSearch && matchesLesson;
   });
 
-  const StatsCard = ({ icon: IconComponent, title, value, bgColor }: {
+  const StatsCard = ({
+    icon: IconComponent,
+    title,
+    value,
+    bgColor,
+  }: {
     icon: React.ComponentType;
     title: string;
     value: number;
@@ -281,7 +440,7 @@ export default function ProjectAdminDashboard() {
           <Skeleton className="h-8 w-64" />
           <Skeleton className="h-10 w-32" />
         </div>
-        
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <Skeleton className="h-32 w-full" />
           <Skeleton className="h-32 w-full" />
@@ -298,13 +457,17 @@ export default function ProjectAdminDashboard() {
     );
   }
 
-  if (viewMode === 'create' || viewMode === 'edit') {
+  if (viewMode === "create" || viewMode === "edit") {
     return (
       <div className="p-6">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-2">{viewMode === 'edit' ? 'Edit Project' : 'Create New Project'}</h1>
+          <h1 className="text-3xl font-bold mb-2">
+            {viewMode === "edit" ? "Edit Project" : "Create New Project"}
+          </h1>
           <p className="text-gray-600">
-            {viewMode === 'edit' ? 'Update the project information below' : 'Fill in the details to create a new project'}
+            {viewMode === "edit"
+              ? "Update the project information below"
+              : "Fill in the details to create a new project"}
           </p>
         </div>
 
@@ -317,36 +480,41 @@ export default function ProjectAdminDashboard() {
                 <select
                   id="lesson_id"
                   value={formData.lesson_id}
-                  onChange={(e) => setFormData({ ...formData, lesson_id: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, lesson_id: e.target.value })
+                  }
                   className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
                   required
                   disabled={lessonsLoading}
                 >
                   <option value="">
-                    {lessonsLoading ? 'Loading lessons...' : 'Select a lesson'}
+                    {lessonsLoading ? "Loading lessons..." : "Select a lesson"}
                   </option>
-                  {lessons && lessons.length > 0 ? (
-                    lessons.map((lesson: Lesson) => (
-                      <option key={lesson.id} value={lesson.id}>
-                        {lesson.course_title} → {lesson.module_title} → {lesson.title}
-                      </option>
-                    ))
-                  ) : (
-                    !lessonsLoading && (
-                      <option value="" disabled>
-                        No project-type lessons found. Create a lesson with type "project" first.
-                      </option>
-                    )
-                  )}
+                  {lessons && lessons.length > 0
+                    ? lessons.map((lesson: Lesson) => (
+                        <option key={lesson.id} value={lesson.id}>
+                          {lesson.course_title} → {lesson.module_title} →{" "}
+                          {lesson.title}
+                        </option>
+                      ))
+                    : !lessonsLoading && (
+                        <option value="" disabled>
+                          No project-type lessons found. Create a lesson with
+                          type "project" first.
+                        </option>
+                      )}
                 </select>
                 {formErrors.lesson_id && (
-                  <p className="text-red-500 text-sm mt-1">{formErrors.lesson_id}</p>
+                  <p className="text-red-500 text-sm mt-1">
+                    {formErrors.lesson_id}
+                  </p>
                 )}
                 {!lessonsLoading && lessons.length === 0 && (
                   <p className="text-amber-600 text-sm mt-1 flex items-center gap-1">
                     <span>💡</span>
                     <span>
-                      Tip: Go to Lesson Management and create a lesson with lesson type set to "project"
+                      Tip: Go to Lesson Management and create a lesson with
+                      lesson type set to "project"
                     </span>
                   </p>
                 )}
@@ -358,13 +526,17 @@ export default function ProjectAdminDashboard() {
                 <Input
                   id="title"
                   value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, title: e.target.value })
+                  }
                   placeholder="Project title"
                   className="mt-2"
                   required
                 />
                 {formErrors.title && (
-                  <p className="text-red-500 text-sm mt-1">{formErrors.title}</p>
+                  <p className="text-red-500 text-sm mt-1">
+                    {formErrors.title}
+                  </p>
                 )}
               </div>
 
@@ -374,27 +546,39 @@ export default function ProjectAdminDashboard() {
                 <textarea
                   id="description"
                   value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, description: e.target.value })
+                  }
                   placeholder="Project description and requirements. You can include links in the description."
                   className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
                   rows={4}
                   required
                 />
                 <p className="text-sm text-gray-500 mt-1">
-                  💡 Tip: You can include links and formatting in the description
+                  💡 Tip: You can include links and formatting in the
+                  description
                 </p>
                 {formErrors.description && (
-                  <p className="text-red-500 text-sm mt-1">{formErrors.description}</p>
+                  <p className="text-red-500 text-sm mt-1">
+                    {formErrors.description}
+                  </p>
                 )}
               </div>
 
               {/* Submission Instructions */}
               <div>
-                <Label htmlFor="submission_instructions">Submission Instructions</Label>
+                <Label htmlFor="submission_instructions">
+                  Submission Instructions
+                </Label>
                 <textarea
                   id="submission_instructions"
                   value={formData.submission_instructions}
-                  onChange={(e) => setFormData({ ...formData, submission_instructions: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      submission_instructions: e.target.value,
+                    })
+                  }
                   placeholder="Instructions for how students should submit their work (optional)"
                   className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
                   rows={3}
@@ -407,10 +591,17 @@ export default function ProjectAdminDashboard() {
                 <select
                   id="submission_platform"
                   value={formData.submission_platform}
-                  onChange={(e) => setFormData({ ...formData, submission_platform: e.target.value as SubmissionPlatform })}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      submission_platform: e.target.value as SubmissionPlatform,
+                    })
+                  }
                   className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-black"
                 >
-                  <option value="">Select submission platform (optional)</option>
+                  <option value="">
+                    Select submission platform (optional)
+                  </option>
                   {Object.entries(PLATFORM_NAMES).map(([value, label]) => (
                     <option key={value} value={value}>
                       {label}
@@ -418,14 +609,15 @@ export default function ProjectAdminDashboard() {
                   ))}
                 </select>
                 <p className="text-sm text-gray-500 mt-1">
-                  ℹ️ This determines what link format students must provide when submitting
+                  ℹ️ This determines what link format students must provide when
+                  submitting
                 </p>
               </div>
 
               <div className="flex justify-end space-x-3 pt-6">
-                <Button 
-                  type="button" 
-                  variant="outline" 
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={handleCancelEdit}
                 >
                   <Icons.Cancel />
@@ -433,7 +625,9 @@ export default function ProjectAdminDashboard() {
                 </Button>
                 <Button type="submit">
                   <Icons.Save />
-                  <span className="ml-2">{viewMode === 'edit' ? 'Update' : 'Create'} Project</span>
+                  <span className="ml-2">
+                    {viewMode === "edit" ? "Update" : "Create"} Project
+                  </span>
                 </Button>
               </div>
             </form>
@@ -444,16 +638,18 @@ export default function ProjectAdminDashboard() {
   }
 
   return (
-    <div className="p-6">
+    <div className="">
       {/* Header */}
       <div className="mb-8">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-3xl font-bold">Project Management</h1>
-            <p className="text-gray-600 mt-2">Manage student projects and assignments for lessons</p>
+            <p className="text-gray-600 mt-2">
+              Manage student projects and assignments for lessons
+            </p>
           </div>
-          <Button 
-            onClick={() => setViewMode('create')}
+          <Button
+            onClick={() => setViewMode("create")}
             className="flex items-center space-x-2"
           >
             <Icons.Plus />
@@ -498,7 +694,9 @@ export default function ProjectAdminDashboard() {
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <CardTitle>Projects Management</CardTitle>
-              <CardDescription>Manage all your projects and assignments</CardDescription>
+              <CardDescription>
+                Manage all your projects and assignments
+              </CardDescription>
             </div>
             <div className="flex flex-col sm:flex-row gap-4">
               <div className="relative">
@@ -520,7 +718,8 @@ export default function ProjectAdminDashboard() {
                 <option value="">All Lessons</option>
                 {lessons.map((lesson: Lesson) => (
                   <option key={lesson.id} value={lesson.id}>
-                    {lesson.course_title} → {lesson.module_title} → {lesson.title}
+                    {lesson.course_title} → {lesson.module_title} →{" "}
+                    {lesson.title}
                   </option>
                 ))}
               </select>
@@ -533,11 +732,21 @@ export default function ProjectAdminDashboard() {
             <table className="w-full">
               <thead>
                 <tr className="border-b">
-                  <th className="text-left p-4 font-medium text-black">Project Details</th>
-                  <th className="text-left p-4 font-medium text-black">Lesson</th>
-                  <th className="text-left p-4 font-medium text-black">Features</th>
-                  <th className="text-left p-4 font-medium text-black">Created</th>
-                  <th className="text-left p-4 font-medium text-black">Actions</th>
+                  <th className="text-left p-4 font-medium text-black">
+                    Project Details
+                  </th>
+                  <th className="text-left p-4 font-medium text-black">
+                    Lesson
+                  </th>
+                  <th className="text-left p-4 font-medium text-black">
+                    Features
+                  </th>
+                  <th className="text-left p-4 font-medium text-black">
+                    Created
+                  </th>
+                  <th className="text-left p-4 font-medium text-black">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -549,9 +758,13 @@ export default function ProjectAdminDashboard() {
                           <Icons.Project />
                         </div>
                       </div>
-                      <h3 className="text-lg font-medium text-black mb-2">No projects found</h3>
+                      <h3 className="text-lg font-medium text-black mb-2">
+                        No projects found
+                      </h3>
                       <p className="text-gray-600 mb-4">
-                        {searchTerm || selectedLesson ? 'Try adjusting your filters' : 'Create your first project to get started!'}
+                        {searchTerm || selectedLesson
+                          ? "Try adjusting your filters"
+                          : "Create your first project to get started!"}
                       </p>
                     </td>
                   </tr>
@@ -560,7 +773,9 @@ export default function ProjectAdminDashboard() {
                     <tr key={project.id} className="border-b hover:bg-gray-50">
                       <td className="p-4">
                         <div>
-                          <div className="font-medium text-black mb-1">{project.title}</div>
+                          <div className="font-medium text-black mb-1">
+                            {project.title}
+                          </div>
                           <div className="text-sm text-gray-600 truncate max-w-xs">
                             {project.description}
                           </div>
@@ -568,7 +783,9 @@ export default function ProjectAdminDashboard() {
                       </td>
                       <td className="p-4">
                         <div className="text-sm text-gray-600">
-                          <div className="font-medium text-black">{project.lesson_title}</div>
+                          <div className="font-medium text-black">
+                            {project.lesson_title}
+                          </div>
                           <div>{project.course_title}</div>
                         </div>
                       </td>
@@ -577,7 +794,13 @@ export default function ProjectAdminDashboard() {
                           {project.submission_platform && (
                             <Badge variant="outline" className="w-fit">
                               <Icons.Link />
-                              <span className="ml-1">{PLATFORM_NAMES[project.submission_platform as SubmissionPlatform]}</span>
+                              <span className="ml-1">
+                                {
+                                  PLATFORM_NAMES[
+                                    project.submission_platform as SubmissionPlatform
+                                  ]
+                                }
+                              </span>
                             </Badge>
                           )}
                           {project.submission_instructions && (

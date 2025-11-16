@@ -1,64 +1,165 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
-import type { ProjectSubmission } from '@/types/submission';
-import { PLATFORM_NAMES } from '@/types/submission';
-import { activityLogService } from '@/services/activityLogService';
+import React, { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import type { ProjectSubmission } from "@/types/submission";
+import { PLATFORM_NAMES } from "@/types/submission";
+import { activityLogService } from "@/services/activityLogService";
 
-type ViewMode = 'list' | 'view' | 'edit';
+type ViewMode = "list" | "view" | "edit";
 
 // Icons
 const Icons = {
   Edit: () => (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+    <svg
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+      />
     </svg>
   ),
   Delete: () => (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    <svg
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+      />
     </svg>
   ),
   View: () => (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+    <svg
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+      />
     </svg>
   ),
   Link: () => (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+    <svg
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+      />
     </svg>
   ),
   Search: () => (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+    <svg
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+      />
     </svg>
   ),
   Check: () => (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+    <svg
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M5 13l4 4L19 7"
+      />
     </svg>
   ),
   X: () => (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+    <svg
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M6 18L18 6M6 6l12 12"
+      />
     </svg>
   ),
   Save: () => (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+    <svg
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"
+      />
     </svg>
   ),
   ChartBar: () => (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+    <svg
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      viewBox="0 0 24 24"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+      />
     </svg>
   ),
 };
@@ -80,14 +181,15 @@ interface FormData {
 export default function ProjectSubmissionsAdminDashboard() {
   const [submissions, setSubmissions] = useState<ExtendedSubmission[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [selectedSubmission, setSelectedSubmission] = useState<ExtendedSubmission | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [selectedSubmission, setSelectedSubmission] =
+    useState<ExtendedSubmission | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [formData, setFormData] = useState<FormData>({
-    status: '',
-    feedback: '',
-    grade: ''
+    status: "",
+    feedback: "",
+    grade: "",
   });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
@@ -98,14 +200,17 @@ export default function ProjectSubmissionsAdminDashboard() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const qs = statusFilter !== 'all' ? `?status=${encodeURIComponent(statusFilter)}` : '';
+      const qs =
+        statusFilter !== "all"
+          ? `?status=${encodeURIComponent(statusFilter)}`
+          : "";
       const response = await fetch(`/api/submissions${qs}`);
-      if (!response.ok) throw new Error('Failed to fetch submissions');
-      
+      if (!response.ok) throw new Error("Failed to fetch submissions");
+
       const data = await response.json();
       setSubmissions(data);
     } catch (error) {
-      console.error('Error loading submissions:', error);
+      console.error("Error loading submissions:", error);
     } finally {
       setLoading(false);
     }
@@ -113,17 +218,17 @@ export default function ProjectSubmissionsAdminDashboard() {
 
   const handleView = (submission: ExtendedSubmission) => {
     setSelectedSubmission(submission);
-    setViewMode('view');
+    setViewMode("view");
   };
 
   const handleEdit = (submission: ExtendedSubmission) => {
     setSelectedSubmission(submission);
     setFormData({
       status: submission.status,
-      feedback: submission.feedback || '',
-      grade: submission.grade?.toString() || ''
+      feedback: submission.feedback || "",
+      grade: submission.grade?.toString() || "",
     });
-    setViewMode('edit');
+    setViewMode("edit");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -131,9 +236,12 @@ export default function ProjectSubmissionsAdminDashboard() {
     if (!selectedSubmission) return;
 
     const errors: Record<string, string> = {};
-    
-    if (formData.grade && (parseInt(formData.grade) < 0 || parseInt(formData.grade) > 100)) {
-      errors.grade = 'Grade must be between 0 and 100';
+
+    if (
+      formData.grade &&
+      (parseInt(formData.grade) < 0 || parseInt(formData.grade) > 100)
+    ) {
+      errors.grade = "Grade must be between 0 and 100";
     }
 
     if (Object.keys(errors).length > 0) {
@@ -145,23 +253,26 @@ export default function ProjectSubmissionsAdminDashboard() {
       const updateData: any = {
         status: formData.status,
         feedback: formData.feedback || null,
-        grade: formData.grade ? parseInt(formData.grade) : null
+        grade: formData.grade ? parseInt(formData.grade) : null,
       };
 
-      const response = await fetch(`/api/submissions/${selectedSubmission.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updateData)
-      });
+      const response = await fetch(
+        `/api/submissions/${selectedSubmission.id}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updateData),
+        }
+      );
 
-      if (!response.ok) throw new Error('Failed to update submission');
+      if (!response.ok) throw new Error("Failed to update submission");
 
       await loadData();
       handleCancelEdit();
-      toast.success('Submission updated successfully!');
+      toast.success("Submission updated successfully!");
     } catch (error) {
-      console.error('Error updating submission:', error);
-      toast.error('Failed to update submission. Please try again.');
+      console.error("Error updating submission:", error);
+      toast.error("Failed to update submission. Please try again.");
     }
   };
 
@@ -170,108 +281,133 @@ export default function ProjectSubmissionsAdminDashboard() {
 
     try {
       const response = await fetch(`/api/submissions/${submission.id}`, {
-        method: 'DELETE'
+        method: "DELETE",
       });
 
-      if (!response.ok) throw new Error('Failed to delete submission');
+      if (!response.ok) throw new Error("Failed to delete submission");
 
       await loadData();
-      toast.success('Submission deleted successfully!');
+      toast.success("Submission deleted successfully!");
     } catch (error) {
-      console.error('Error deleting submission:', error);
-      toast.error('Failed to delete submission. Please try again.');
+      console.error("Error deleting submission:", error);
+      toast.error("Failed to delete submission. Please try again.");
     }
   };
 
   const handleCancelEdit = () => {
-    setViewMode('list');
+    setViewMode("list");
     setSelectedSubmission(null);
-    setFormData({ status: '', feedback: '', grade: '' });
+    setFormData({ status: "", feedback: "", grade: "" });
     setFormErrors({});
   };
 
   const handleQuickApprove = async (submission: ExtendedSubmission) => {
-    if (!confirm(`Approve submission for "${submission.project_title}" by ${submission.student_name}?`)) return;
+    if (
+      !confirm(
+        `Approve submission for "${submission.project_title}" by ${submission.student_name}?`
+      )
+    )
+      return;
 
     try {
       const response = await fetch(`/api/submissions/${submission.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status: 'approved',
-          grade: 100 // Auto-assign 100% on quick approve
-        })
+          status: "approved",
+          grade: 100, // Auto-assign 100% on quick approve
+        }),
       });
 
-      if (!response.ok) throw new Error('Failed to approve submission');
+      if (!response.ok) throw new Error("Failed to approve submission");
 
       await loadData();
-      toast.success('✅ Submission approved! Student can now proceed to the next lesson.');
+      toast.success(
+        "✅ Submission approved! Student can now proceed to the next lesson."
+      );
     } catch (error) {
-      console.error('Error approving submission:', error);
-      toast.error('Failed to approve submission. Please try again.');
+      console.error("Error approving submission:", error);
+      toast.error("Failed to approve submission. Please try again.");
     }
   };
 
   const handleQuickReject = async (submission: ExtendedSubmission) => {
-    const feedback = prompt(`Reject submission for "${submission.project_title}"?\n\nPlease provide feedback for the student:`);
-    
+    const feedback = prompt(
+      `Reject submission for "${submission.project_title}"?\n\nPlease provide feedback for the student:`
+    );
+
     if (feedback === null) return; // User cancelled
-    
+
     if (!feedback.trim()) {
-      toast.error('Please provide feedback when rejecting a submission');
+      toast.error("Please provide feedback when rejecting a submission");
       return;
     }
 
     try {
       const response = await fetch(`/api/submissions/${submission.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          status: 'resubmission_required',
-          feedback: feedback.trim()
-        })
+          status: "resubmission_required",
+          feedback: feedback.trim(),
+        }),
       });
 
-      if (!response.ok) throw new Error('Failed to reject submission');
+      if (!response.ok) throw new Error("Failed to reject submission");
 
       await loadData();
-      toast.success('Submission marked for resubmission. Student has been notified.');
+      toast.success(
+        "Submission marked for resubmission. Student has been notified."
+      );
     } catch (error) {
-      console.error('Error rejecting submission:', error);
-      toast.error('Failed to reject submission. Please try again.');
+      console.error("Error rejecting submission:", error);
+      toast.error("Failed to reject submission. Please try again.");
     }
   };
 
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { color: string; label: string }> = {
-      submitted: { color: 'bg-blue-100 text-blue-800', label: 'Submitted' },
-      pending_review: { color: 'bg-yellow-100 text-yellow-800', label: 'Pending Review' },
-      approved: { color: 'bg-green-100 text-green-800', label: '✓ Approved' },
-      rejected: { color: 'bg-red-100 text-red-800', label: '✗ Rejected' },
-      resubmission_required: { color: 'bg-orange-100 text-orange-800', label: 'Resubmission Required' },
+      submitted: { color: "bg-blue-100 text-blue-800", label: "Submitted" },
+      pending_review: {
+        color: "bg-yellow-100 text-yellow-800",
+        label: "Pending Review",
+      },
+      approved: { color: "bg-green-100 text-green-800", label: "✓ Approved" },
+      rejected: { color: "bg-red-100 text-red-800", label: "✗ Rejected" },
+      resubmission_required: {
+        color: "bg-orange-100 text-orange-800",
+        label: "Resubmission Required",
+      },
     };
     const config = statusConfig[status] || statusConfig.submitted;
     return <Badge className={config.color}>{config.label}</Badge>;
   };
 
-  const filteredSubmissions = submissions.filter(submission => {
-    const matchesSearch = 
-      submission.project_title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      submission.student_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      submission.student_email?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'all' || submission.status === statusFilter;
-    
+  const filteredSubmissions = submissions.filter((submission) => {
+    const matchesSearch =
+      submission.project_title
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      submission.student_name
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      submission.student_email
+        ?.toLowerCase()
+        .includes(searchTerm.toLowerCase());
+
+    const matchesStatus =
+      statusFilter === "all" || submission.status === statusFilter;
+
     return matchesSearch && matchesStatus;
   });
 
   const stats = {
     total: submissions.length,
-    submitted: submissions.filter(s => s.status === 'submitted').length,
-    pending_review: submissions.filter(s => s.status === 'pending_review').length,
-    approved: submissions.filter(s => s.status === 'approved').length,
-    rejected: submissions.filter(s => s.status === 'rejected').length,
+    submitted: submissions.filter((s) => s.status === "submitted").length,
+    pending_review: submissions.filter((s) => s.status === "pending_review")
+      .length,
+    approved: submissions.filter((s) => s.status === "approved").length,
+    rejected: submissions.filter((s) => s.status === "rejected").length,
   };
 
   if (loading) {
@@ -284,12 +420,12 @@ export default function ProjectSubmissionsAdminDashboard() {
     );
   }
 
-  if (viewMode === 'view' && selectedSubmission) {
+  if (viewMode === "view" && selectedSubmission) {
     return (
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">View Submission</h1>
-          <Button variant="outline" onClick={() => setViewMode('list')}>
+          <Button variant="outline" onClick={() => setViewMode("list")}>
             ← Back to List
           </Button>
         </div>
@@ -298,14 +434,17 @@ export default function ProjectSubmissionsAdminDashboard() {
           <CardHeader>
             <CardTitle>{selectedSubmission.project_title}</CardTitle>
             <CardDescription>
-              Submitted by {selectedSubmission.student_name} ({selectedSubmission.student_email})
+              Submitted by {selectedSubmission.student_name} (
+              {selectedSubmission.student_email})
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label className="text-gray-600">Status</Label>
-                <div className="mt-1">{getStatusBadge(selectedSubmission.status)}</div>
+                <div className="mt-1">
+                  {getStatusBadge(selectedSubmission.status)}
+                </div>
               </div>
               <div>
                 <Label className="text-gray-600">Platform</Label>
@@ -318,21 +457,25 @@ export default function ProjectSubmissionsAdminDashboard() {
               <div>
                 <Label className="text-gray-600">Grade</Label>
                 <div className="mt-1 text-lg font-semibold">
-                  {selectedSubmission.grade !== null ? `${selectedSubmission.grade}/100` : 'No grade for this project'}
+                  {selectedSubmission.grade !== null
+                    ? `${selectedSubmission.grade}/100`
+                    : "No grade for this project"}
                 </div>
               </div>
               <div>
                 <Label className="text-gray-600">Submitted At</Label>
-                <div className="mt-1">{new Date(selectedSubmission.submitted_at).toLocaleString()}</div>
+                <div className="mt-1">
+                  {new Date(selectedSubmission.submitted_at).toLocaleString()}
+                </div>
               </div>
             </div>
 
             <div>
               <Label className="text-gray-600">Submission Link</Label>
               <div className="mt-1">
-                <a 
-                  href={selectedSubmission.submission_link} 
-                  target="_blank" 
+                <a
+                  href={selectedSubmission.submission_link}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:underline flex items-center gap-2"
                 >
@@ -356,7 +499,7 @@ export default function ProjectSubmissionsAdminDashboard() {
                 <Icons.Edit />
                 <span className="ml-2">Edit / Review</span>
               </Button>
-              <Button variant="outline" onClick={() => setViewMode('list')}>
+              <Button variant="outline" onClick={() => setViewMode("list")}>
                 Close
               </Button>
             </div>
@@ -366,7 +509,7 @@ export default function ProjectSubmissionsAdminDashboard() {
     );
   }
 
-  if (viewMode === 'edit' && selectedSubmission) {
+  if (viewMode === "edit" && selectedSubmission) {
     return (
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between">
@@ -387,9 +530,9 @@ export default function ProjectSubmissionsAdminDashboard() {
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
                 <Label className="text-gray-600">Submission Link</Label>
-                <a 
-                  href={selectedSubmission.submission_link} 
-                  target="_blank" 
+                <a
+                  href={selectedSubmission.submission_link}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="text-blue-600 hover:underline flex items-center gap-2 mt-1"
                 >
@@ -403,7 +546,9 @@ export default function ProjectSubmissionsAdminDashboard() {
                 <select
                   id="status"
                   value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, status: e.target.value })
+                  }
                   className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-black"
                   required
                 >
@@ -411,7 +556,9 @@ export default function ProjectSubmissionsAdminDashboard() {
                   <option value="pending_review">Pending Review</option>
                   <option value="approved">Approved</option>
                   <option value="rejected">Rejected</option>
-                  <option value="resubmission_required">Resubmission Required</option>
+                  <option value="resubmission_required">
+                    Resubmission Required
+                  </option>
                 </select>
               </div>
 
@@ -423,12 +570,16 @@ export default function ProjectSubmissionsAdminDashboard() {
                   min="0"
                   max="100"
                   value={formData.grade}
-                  onChange={(e) => setFormData({ ...formData, grade: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, grade: e.target.value })
+                  }
                   placeholder="Enter grade (optional)"
                   className="mt-2"
                 />
                 {formErrors.grade && (
-                  <p className="text-red-500 text-sm mt-1">{formErrors.grade}</p>
+                  <p className="text-red-500 text-sm mt-1">
+                    {formErrors.grade}
+                  </p>
                 )}
               </div>
 
@@ -437,7 +588,9 @@ export default function ProjectSubmissionsAdminDashboard() {
                 <textarea
                   id="feedback"
                   value={formData.feedback}
-                  onChange={(e) => setFormData({ ...formData, feedback: e.target.value })}
+                  onChange={(e) =>
+                    setFormData({ ...formData, feedback: e.target.value })
+                  }
                   placeholder="Provide feedback to the student (optional)"
                   className="w-full mt-2 p-3 border rounded-lg focus:ring-2 focus:ring-blue-500 bg-white text-black"
                   rows={4}
@@ -445,7 +598,11 @@ export default function ProjectSubmissionsAdminDashboard() {
               </div>
 
               <div className="flex justify-end space-x-3 pt-6">
-                <Button type="button" variant="outline" onClick={handleCancelEdit}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleCancelEdit}
+                >
                   <Icons.X />
                   <span className="ml-2">Cancel</span>
                 </Button>
@@ -462,11 +619,13 @@ export default function ProjectSubmissionsAdminDashboard() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold mb-2">Project Submissions</h1>
-        <p className="text-gray-600">Review and manage student project submissions</p>
+        <p className="text-gray-600">
+          Review and manage student project submissions
+        </p>
       </div>
 
       {/* Stats */}
@@ -484,7 +643,7 @@ export default function ProjectSubmissionsAdminDashboard() {
             </div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center">
@@ -574,7 +733,9 @@ export default function ProjectSubmissionsAdminDashboard() {
                 <option value="pending_review">Pending Review</option>
                 <option value="approved">Approved</option>
                 <option value="rejected">Rejected</option>
-                <option value="resubmission_required">Resubmission Required</option>
+                <option value="resubmission_required">
+                  Resubmission Required
+                </option>
               </select>
             </div>
           </div>
@@ -609,24 +770,39 @@ export default function ProjectSubmissionsAdminDashboard() {
                   </tr>
                 ) : (
                   filteredSubmissions.map((submission) => (
-                    <tr key={submission.id} className="border-b hover:bg-gray-50">
+                    <tr
+                      key={submission.id}
+                      className="border-b hover:bg-gray-50"
+                    >
                       <td className="p-3">
-                        <div className="font-medium">{submission.project_title}</div>
-                        <div className="text-sm text-gray-500">{submission.lesson_title}</div>
+                        <div className="font-medium">
+                          {submission.project_title}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {submission.lesson_title}
+                        </div>
                       </td>
                       <td className="p-3">
-                        <div className="font-medium">{submission.student_name}</div>
-                        <div className="text-sm text-gray-500">{submission.student_email}</div>
+                        <div className="font-medium">
+                          {submission.student_name}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {submission.student_email}
+                        </div>
                       </td>
                       <td className="p-3">
                         <Badge variant="outline">
                           {PLATFORM_NAMES[submission.submission_platform]}
                         </Badge>
                       </td>
-                      <td className="p-3">{getStatusBadge(submission.status)}</td>
+                      <td className="p-3">
+                        {getStatusBadge(submission.status)}
+                      </td>
                       <td className="p-3">
                         {submission.grade !== null ? (
-                          <span className="font-semibold">{submission.grade}/100</span>
+                          <span className="font-semibold">
+                            {submission.grade}/100
+                          </span>
                         ) : (
                           <span className="text-gray-400">No grade</span>
                         )}
@@ -637,7 +813,8 @@ export default function ProjectSubmissionsAdminDashboard() {
                       <td className="p-3">
                         <div className="flex justify-end gap-2">
                           {/* Quick Actions for pending submissions */}
-                          {(submission.status === 'submitted' || submission.status === 'pending_review') && (
+                          {(submission.status === "submitted" ||
+                            submission.status === "pending_review") && (
                             <>
                               <Button
                                 size="sm"
@@ -661,7 +838,7 @@ export default function ProjectSubmissionsAdminDashboard() {
                               </Button>
                             </>
                           )}
-                          
+
                           {/* Standard Actions */}
                           <Button
                             size="sm"
