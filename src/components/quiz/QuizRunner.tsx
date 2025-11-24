@@ -623,19 +623,16 @@ export default function QuizRunner({ quizId, lessonId: _lessonId, onCompleted, o
 
                     {q.type === 'true_false' && (
                       <div className="mt-3 space-y-2">
-                        {['True','False'].map((label, i) => (
-                          <label key={label} className="flex items-center gap-3 cursor-pointer rounded-lg px-3 py-3 border border-gray-200 hover:bg-gray-50">
+                        {(q.question_options || []).sort((a,b) => (a.position ?? 0) - (b.position ?? 0)).map(opt => (
+                          <label key={opt.id} className="flex items-center gap-3 cursor-pointer rounded-lg px-3 py-3 border border-gray-200 hover:bg-gray-50">
                             <input
                               type="radio"
                               name={`q-${q.id}`}
                               className="h-5 w-5"
-                              checked={answers[q.id]?.selected_option_id === (q.question_options?.[i]?.id || '')}
-                              onChange={() => {
-                                const optId = q.question_options?.[i]?.id;
-                                if (optId) onSelectOption(q.id, optId);
-                              }}
+                              checked={answers[q.id]?.selected_option_id === opt.id}
+                              onChange={() => onSelectOption(q.id, opt.id)}
                             />
-                            <span className="text-sm sm:text-base">{label}</span>
+                            <span className="text-gray-800 text-sm sm:text-base">{opt.content}</span>
                           </label>
                         ))}
                       </div>
