@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -231,7 +233,7 @@ export default function ProjectSubmissionForm({
       setSuccess(true);
       setSubmissionUrl('');
       setNotes('');
-      
+
       // Note: We don't call onSubmitSuccess here because project submissions
       // need to be approved by an instructor before the lesson can be marked complete.
       // The lesson will be automatically completed when the instructor approves the submission.
@@ -256,13 +258,12 @@ export default function ProjectSubmissionForm({
 
       {/* Existing Submission Status */}
       {!isLoading && existingSubmission && (
-        <div className={`rounded-lg border p-6 ${
-          existingSubmission.status === 'approved' 
-            ? 'bg-green-50 border-green-200' 
-            : existingSubmission.status === 'rejected' 
+        <div className={`rounded-lg border p-6 ${existingSubmission.status === 'approved'
+          ? 'bg-green-50 border-green-200'
+          : existingSubmission.status === 'rejected'
             ? 'bg-red-50 border-red-200'
             : 'bg-blue-50 border-blue-200'
-        }`}>
+          }`}>
           <div className="flex items-start">
             <div className="flex-shrink-0">
               {existingSubmission.status === 'approved' && (
@@ -330,191 +331,176 @@ export default function ProjectSubmissionForm({
       {/* Don't show form if approved */}
       {existingSubmission?.status === 'approved' ? null : (
         <>
-      {/* Project Header */}
-      <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-6 border border-purple-100">
-        <div className="flex items-start gap-4">
-          <div className="flex-shrink-0 w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-            <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-          </div>
-          <div className="flex-1">
-            <h3 className="text-xl font-bold text-gray-900">
-              {projectTitle || 'Project Submission'}
-            </h3>
-          </div>
-        </div>
-      </div>
-
-      {/* Description */}
-      {projectDescription && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h4 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-            <svg className="w-5 h-5 mr-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
-            </svg>
-            Project Description
-          </h4>
-          <p className="text-gray-700">
-            {projectDescription}
-          </p>
-        </div>
-      )}
-
-      {/* Instructions */}
-      {projectInstructions && (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-          <h4 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
-            <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-            </svg>
-            Project Instructions
-          </h4>
-          <div 
-            className="prose max-w-none text-gray-700"
-            dangerouslySetInnerHTML={{ __html: projectInstructions }}
-          />
-        </div>
-      )}
-
-      {/* Submission Form */}
-      <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-gray-200 p-6 space-y-6">
-        <div className="space-y-2">
-          <Label htmlFor="submissionUrl" className="text-gray-900 font-semibold flex items-center">
-            <span className="text-xl mr-2">{platform.icon}</span>
-            {platform.name} Project URL *
-          </Label>
-          <Input
-            id="submissionUrl"
-            type="url"
-            value={submissionUrl}
-            onChange={handleUrlChange}
-            placeholder={`${platform.placeholder} - ${platform.helpText}`}
-            className={`${validationError ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'}`}
-            required
-            disabled={isSubmitting}
-          />
-          {validationError && (
-            <p className="text-sm text-red-600 flex items-center mt-1">
-              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-              {validationError}
-            </p>
-          )}
-          {!validationError && submissionUrl && platform.urlPattern.test(submissionUrl) && (
-            <p className="text-sm text-green-600 flex items-center mt-1">
-              <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              Valid {platform.name} URL
-            </p>
-          )}
-          <p className="text-xs text-gray-500 mt-1">
-            Example: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">{platform.example}</code>
-          </p>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="notes" className="text-gray-900 font-semibold flex items-center">
-            <svg className="w-4 h-4 mr-1.5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-            </svg>
-            Additional Notes (Optional)
-          </Label>
-          <textarea
-            id="notes"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Add any additional notes, comments, or context about your submission..."
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
-            rows={4}
-            disabled={isSubmitting}
-          />
-          <p className="text-xs text-gray-500">
-            Optional: Share details about your implementation, challenges faced, or features added
-          </p>
-        </div>
-
-        {/* Error Message */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-start">
-              <svg className="w-5 h-5 text-red-600 mt-0.5 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
+          {/* Project Header */}
+          <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-6 border border-purple-100">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
               <div className="flex-1">
-                <h4 className="text-sm font-semibold text-red-900">Submission Failed</h4>
-                <p className="text-sm text-red-700 mt-1">{error}</p>
+                <h3 className="text-xl font-bold text-gray-900">
+                  {projectTitle || 'Project Submission'}
+                </h3>
               </div>
             </div>
           </div>
-        )}
 
-        {/* Success Message */}
-        {success && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="flex items-start">
-              <svg className="w-5 h-5 text-green-600 mt-0.5 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <div className="flex-1">
-                <h4 className="text-sm font-semibold text-green-900">Project Submitted Successfully! 🎉</h4>
-                <p className="text-sm text-green-700 mt-1">
-                  Your project has been submitted and is awaiting instructor review.
-                </p>
-                <p className="text-sm text-green-600 mt-2">
-                  ℹ️ This lesson will be marked complete once your instructor approves your submission.
-                </p>
-              </div>
+          {/* Description */}
+          {projectDescription && (
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <h4 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                <svg className="w-5 h-5 mr-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" />
+                </svg>
+                Project Description
+              </h4>
+              <article className="prose prose-lg max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-blue-600 prose-strong:text-gray-900 prose-code:text-gray-800 prose-code:bg-gray-100 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-pre:bg-gray-50 prose-pre:text-gray-800 prose-pre:border prose-pre:border-gray-200 prose-ul:list-disc prose-ol:list-decimal">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {projectDescription}
+                </ReactMarkdown>
+              </article>
             </div>
-          </div>
-        )}
-
-        {/* Submit Button */}
-        <Button
-          type="submit"
-          disabled={isSubmitting || !!validationError}
-          className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white py-3 font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isSubmitting ? (
-            <span className="flex items-center justify-center">
-              <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white mr-2"></div>
-              Submitting Project...
-            </span>
-          ) : (
-            <span className="flex items-center justify-center">
-              <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
-              </svg>
-              Submit Project
-            </span>
           )}
-        </Button>
 
-        <p className="text-xs text-center text-gray-500">
-          Your submission will be pending until reviewed and approved by your instructor
-        </p>
-      </form>
+          {/* Instructions */}
+          {projectInstructions && (
+            <div className="bg-white rounded-lg border border-gray-200 p-6">
+              <h4 className="text-lg font-semibold text-gray-900 mb-3 flex items-center">
+                <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                Project Instructions
+              </h4>
+              <article className="prose prose-lg max-w-none prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-blue-600 prose-strong:text-gray-900 prose-code:text-gray-800 prose-code:bg-gray-100 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-pre:bg-gray-50 prose-pre:text-gray-800 prose-pre:border prose-pre:border-gray-200 prose-ul:list-disc prose-ol:list-decimal">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {projectInstructions}
+                </ReactMarkdown>
+              </article>
+            </div>
+          )}
 
-      {/* Help Section */}
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-        <div className="flex items-start gap-3">
-          <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-          </svg>
-          <div className="flex-1">
-            <h5 className="text-sm font-semibold text-amber-900 mb-1">Submission Tips</h5>
-            <ul className="text-sm text-amber-800 space-y-1 list-disc list-inside">
-              <li>Make sure your repository/project is public or shared properly</li>
-              <li>Include a README file with project documentation</li>
-              <li>Test your submission link before submitting</li>
-              <li>You can resubmit if you need to make changes</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-      </>
+          {/* Submission Form */}
+          <form onSubmit={handleSubmit} className="bg-white rounded-lg border border-gray-200 p-6 space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="submissionUrl" className="text-gray-900 font-semibold flex items-center">
+                <span className="text-xl mr-2">{platform.icon}</span>
+                {platform.name} Project URL *
+              </Label>
+              <Input
+                id="submissionUrl"
+                type="url"
+                value={submissionUrl}
+                onChange={handleUrlChange}
+                placeholder={`${platform.placeholder} - ${platform.helpText}`}
+                className={`${validationError ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'}`}
+                required
+                disabled={isSubmitting}
+              />
+              {validationError && (
+                <p className="text-sm text-red-600 flex items-center mt-1">
+                  <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                  {validationError}
+                </p>
+              )}
+              {!validationError && submissionUrl && platform.urlPattern.test(submissionUrl) && (
+                <p className="text-sm text-green-600 flex items-center mt-1">
+                  <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  Valid {platform.name} URL
+                </p>
+              )}
+              <p className="text-xs text-gray-500 mt-1">
+                Example: <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs">{platform.example}</code>
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="notes" className="text-gray-900 font-semibold flex items-center">
+                <svg className="w-4 h-4 mr-1.5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                </svg>
+                Additional Notes (Optional)
+              </Label>
+              <textarea
+                id="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Add any additional notes, comments, or context about your submission..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                rows={4}
+                disabled={isSubmitting}
+              />
+              <p className="text-xs text-gray-500">
+                Optional: Share details about your implementation, challenges faced, or features added
+              </p>
+            </div>
+
+            {/* Error Message */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <div className="flex items-start">
+                  <svg className="w-5 h-5 text-red-600 mt-0.5 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                  <div className="flex-1">
+                    <h4 className="text-sm font-semibold text-red-900">Submission Failed</h4>
+                    <p className="text-sm text-red-700 mt-1">{error}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Success Message */}
+            {success && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <div className="flex items-start">
+                  <svg className="w-5 h-5 text-green-600 mt-0.5 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <div className="flex-1">
+                    <h4 className="text-sm font-semibold text-green-900">Project Submitted Successfully! 🎉</h4>
+                    <p className="text-sm text-green-700 mt-1">
+                      Your project has been submitted and is awaiting instructor review.
+                    </p>
+                    <p className="text-sm text-green-600 mt-2">
+                      ℹ️ This lesson will be marked complete once your instructor approves your submission.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Submit Button */}
+            <Button
+              type="submit"
+              disabled={isSubmitting || !!validationError}
+              className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white py-3 font-semibold shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? (
+                <span className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-white mr-2"></div>
+                  Submitting Project...
+                </span>
+              ) : (
+                <span className="flex items-center justify-center">
+                  <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
+                  </svg>
+                  Submit Project
+                </span>
+              )}
+            </Button>
+
+            <p className="text-xs text-center text-gray-500">
+              Your submission will be pending until reviewed and approved by your instructor
+            </p>
+          </form>
+        </>
       )}
     </div>
   );
