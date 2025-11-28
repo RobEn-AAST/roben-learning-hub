@@ -1216,6 +1216,26 @@ export function useInstructorCourses() {
   });
 }
 
+// Get student progress for a specific course (instructor only)
+export function useCourseStudentProgress(courseId: string) {
+  return useQuery({
+    queryKey: ['course-student-progress', courseId],
+    queryFn: async () => {
+      const response = await fetch(`/api/instructor/courses/${courseId}/students`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch student progress');
+      }
+      return await response.json();
+    },
+    enabled: !!courseId,
+    staleTime: 5 * 60 * 1000, // 5 minutes - longer cache for better server performance
+    gcTime: 15 * 60 * 1000, // 15 minutes - keep in memory longer
+    refetchOnWindowFocus: false, // Don't refetch on window focus to reduce server calls
+    refetchOnMount: false, // Don't refetch on component remount
+  });
+}
+
 // ============================================================================
 // ENROLLMENTS - Course enrollment management
 // ============================================================================

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { useInstructorDashboard } from '@/hooks/useQueryCache';
+import { StudentProgressDashboard } from '@/components/instructor/StudentProgressDashboard';
 
 // Icons
 const Icons = {
@@ -84,6 +85,7 @@ export function InstructorDashboardNew() {
   // PERFORMANCE: React Query hook - automatic caching and refetching!
   const { data, isLoading, error, refetch } = useInstructorDashboard();
   const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'overview' | 'students'>('overview');
 
   // Skeleton loading for initial fetch
   if (isLoading) {
@@ -173,6 +175,36 @@ export function InstructorDashboardNew() {
     [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') ||
     profile?.email ||
     'Instructor';
+
+  // If viewing student progress for a specific course
+  if (viewMode === 'students' && selectedCourse) {
+    const course = data.courses.find(
+      (c: { id: string }) => c.id === selectedCourse
+    );
+    return (
+      <div className="space-y-6 bg-gray-50 min-h-screen p-4">
+        <div className="bg-white border border-gray-200 p-6 rounded-lg shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <Button 
+                variant="outline" 
+                onClick={() => setViewMode('overview')}
+                className="flex items-center space-x-2"
+              >
+                <span>←</span>
+                <span>Back to Dashboard</span>
+              </Button>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Student Progress</h1>
+                <p className="text-gray-600">{course?.title || 'Course'}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <StudentProgressDashboard courseId={selectedCourse} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 bg-gray-50 min-h-screen p-4">
@@ -283,13 +315,27 @@ export function InstructorDashboardNew() {
                     </span>
                   </div>
                   
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setSelectedCourse(selectedCourse === course.id ? null : course.id)}
-                  >
-                    {selectedCourse === course.id ? 'Hide Modules' : 'View Modules'}
-                  </Button>
+                  <div className="flex items-center space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedCourse(selectedCourse === course.id ? null : course.id)}
+                    >
+                      {selectedCourse === course.id ? 'Hide Modules' : 'View Modules'}
+                    </Button>
+                    
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedCourse(course.id);
+                        setViewMode('students');
+                      }}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      View Students
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Course Modules */}

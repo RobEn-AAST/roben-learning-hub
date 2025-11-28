@@ -45,3 +45,4 @@ schema.txt
 
 database-scripts
 database-scripts-backup
+volumes/db/data
