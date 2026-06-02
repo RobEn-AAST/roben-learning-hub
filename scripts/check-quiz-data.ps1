@@ -62,7 +62,7 @@ if ($LASTEXITCODE -eq 0) {
         Write-Host "If quizzes still don't show in your app:" -ForegroundColor Yellow
         Write-Host "   1. Hard refresh your browser (Ctrl + Shift + R)" -ForegroundColor White
         Write-Host "   2. Check browser console for errors (F12)" -ForegroundColor White
-        Write-Host "   3. Verify your .env.local has SUPABASE_SERVICE_ROLE_KEY" -ForegroundColor White
+        Write-Host "   3. Verify your .env has SUPABASE_SERVICE_ROLE_KEY" -ForegroundColor White
         Write-Host ""
         
         # Show detailed breakdown

@@ -26,7 +26,7 @@ export function ConnectSupabaseSteps() {
           </span>{" "}
           file in your Next.js app to{" "}
           <span className="relative rounded bg-muted px-[0.3rem] py-[0.2rem] font-mono text-xs font-medium text-secondary-foreground border">
-            .env.local
+            .env
           </span>{" "}
           and populate with values from{" "}
           <a

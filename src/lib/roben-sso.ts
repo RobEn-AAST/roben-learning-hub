@@ -33,7 +33,7 @@ export class RobenSSO {
     this.redirectUri = process.env.NEXT_PUBLIC_ROBEN_SSO_REDIRECT_URI || '';
 
     if (!this.clientId || !this.clientSecret || !this.redirectUri) {
-      throw new Error('Roben SSO credentials not configured in .env.local');
+      throw new Error('Roben SSO credentials not configured in .env');
     }
   }
 
