@@ -13,7 +13,6 @@ export async function GET(
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
-      console.log('❌ GET /api/admin/articles/[id] - Auth error:', authError);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -24,7 +23,6 @@ export async function GET(
       .eq('id', user.id)
       .single();
 
-    console.log('🔍 GET /api/admin/articles/[id] - User role:', profile?.role, 'for article:', id);
 
     if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -32,16 +30,13 @@ export async function GET(
 
     // Role-based client selection
     const clientToUse = profile?.role === 'admin' ? 'admin' : 'regular';
-    console.log('🎯 GET /api/admin/articles/[id] - Using client type:', clientToUse);
 
     const article = await articleService.getArticleById(id, clientToUse);
     
     if (!article) {
-      console.log('❌ GET /api/admin/articles/[id] - Article not found:', id);
       return NextResponse.json({ error: 'Article not found' }, { status: 404 });
     }
 
-    console.log('✅ GET /api/admin/articles/[id] - Article found:', article.title);
     return NextResponse.json(article);
   } catch (error) {
     console.error('❌ GET /api/admin/articles/[id] - Error:', error);
@@ -62,7 +57,6 @@ export async function PUT(
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
-      console.log('❌ PUT /api/admin/articles/[id] - Auth error:', authError);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -73,7 +67,6 @@ export async function PUT(
       .eq('id', user.id)
       .single();
 
-    console.log('🔍 PUT /api/admin/articles/[id] - User role:', profile?.role, 'for article:', id);
 
     if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -82,7 +75,6 @@ export async function PUT(
     const body = await request.json();
     const updateData = { ...body };
 
-    console.log('✏️ PUT /api/admin/articles/[id] - Updating article:', id, 'with data:', Object.keys(updateData));
 
     // Remove undefined values
     Object.keys(updateData).forEach(key => {
@@ -93,7 +85,6 @@ export async function PUT(
 
     // Role-based client selection
     const clientToUse = profile?.role === 'admin' ? 'admin' : 'regular';
-    console.log('🎯 PUT /api/admin/articles/[id] - Using client type:', clientToUse);
 
     const updatedArticle = await articleService.updateArticle(id, updateData, clientToUse);
     
@@ -105,7 +96,6 @@ export async function PUT(
       description: `Updated article: ${updatedArticle.title}`
     });
 
-    console.log('✅ PUT /api/admin/articles/[id] - Article updated successfully:', updatedArticle.title);
     return NextResponse.json(updatedArticle);
   } catch (error) {
     console.error('❌ PUT /api/admin/articles/[id] - Error:', error);
@@ -126,7 +116,6 @@ export async function DELETE(
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
-      console.log('❌ DELETE /api/admin/articles/[id] - Auth error:', authError);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -137,7 +126,6 @@ export async function DELETE(
       .eq('id', user.id)
       .single();
 
-    console.log('🔍 DELETE /api/admin/articles/[id] - User role:', profile?.role, 'for article:', id);
 
     if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -145,17 +133,14 @@ export async function DELETE(
 
     // Role-based client selection
     const clientToUse = profile?.role === 'admin' ? 'admin' : 'regular';
-    console.log('🎯 DELETE /api/admin/articles/[id] - Using client type:', clientToUse);
 
     // Get article info before deletion for logging
     const article = await articleService.getArticleById(id, clientToUse);
     
     if (!article) {
-      console.log('❌ DELETE /api/admin/articles/[id] - Article not found:', id);
       return NextResponse.json({ error: 'Article not found' }, { status: 404 });
     }
 
-    console.log('🗑️ DELETE /api/admin/articles/[id] - Deleting article:', article.title);
     await articleService.deleteArticle(id, clientToUse);
     
     // Log the action
@@ -166,7 +151,6 @@ export async function DELETE(
       description: `Deleted article: ${article.title}`
     });
 
-    console.log('✅ DELETE /api/admin/articles/[id] - Article deleted successfully:', article.title);
     return NextResponse.json({ message: 'Article deleted successfully' });
   } catch (error) {
     console.error('❌ DELETE /api/admin/articles/[id] - Error:', error);

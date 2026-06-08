@@ -1,34 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { videoService } from '@/services/videoService';
 import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/adminHelpers';
 import { activityLogService } from '@/services/activityLogService';
 
 export async function GET(
   request: NextRequest,
   { params }: any
 ) {
+  const { id } = await params;
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
+
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is admin
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single();
 
-    if (profile?.role !== 'admin') {
+    if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const video = await videoService.getVideoById(params.id);
-    
-    if (!video) {
+    const admin = createAdminClient();
+    const { data: video, error } = await admin
+      .from('videos')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error || !video) {
       return NextResponse.json({ error: 'Video not found' }, { status: 404 });
     }
 
@@ -46,35 +51,54 @@ export async function PUT(
   request: NextRequest,
   { params }: any
 ) {
+  const { id } = await params;
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
+
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is admin
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single();
 
-    if (profile?.role !== 'admin') {
+    if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const videoData = await request.json();
-    const video = await videoService.updateVideo(params.id, videoData);
-    
+    const body = await request.json();
+    const allowedFields = ['url', 'title', 'description', 'duration_seconds', 'provider', 'provider_video_id', 'transcript'] as const;
+    const videoData: Record<string, any> = { updated_at: new Date().toISOString() };
+    for (const key of allowedFields) {
+      if (body[key] !== undefined) videoData[key] = body[key];
+    }
+
+    const admin = createAdminClient();
+    const { data: video, error } = await admin
+      .from('videos')
+      .update(videoData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating video:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
     // Log activity
-    await activityLogService.logActivity({
-      action: 'update_video',
-      table_name: 'videos',
-      record_id: video.id,
-      description: `Updated video: ${video.url}`
-    });
+    try {
+      await activityLogService.logActivity({
+        action: 'update_video',
+        table_name: 'videos',
+        record_id: video.id,
+        description: `Updated video: ${video.url}`
+      });
+    } catch { /* don't fail on log error */ }
 
     return NextResponse.json(video);
   } catch (error) {
@@ -90,37 +114,51 @@ export async function DELETE(
   request: NextRequest,
   { params }: any
 ) {
+  const { id } = await params;
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
+
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Check if user is admin
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single();
 
-    if (profile?.role !== 'admin') {
+    if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    const admin = createAdminClient();
+
     // Get video info before deletion for logging
-    const video = await videoService.getVideoById(params.id);
-    
-    await videoService.deleteVideo(params.id);
-    
+    const { data: video } = await admin
+      .from('videos')
+      .select('url')
+      .eq('id', id)
+      .single();
+
+    // Delete questions first, then video
+    await admin.from('video_questions').delete().eq('video_id', id);
+    const { error } = await admin.from('videos').delete().eq('id', id);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
     // Log activity
-    await activityLogService.logActivity({
-      action: 'delete_video',
-      table_name: 'videos',
-      record_id: params.id,
-      description: `Deleted video: ${video?.url || 'Unknown'}`
-    });
+    try {
+      await activityLogService.logActivity({
+        action: 'delete_video',
+        table_name: 'videos',
+        record_id: id,
+        description: `Deleted video: ${video?.url || 'Unknown'}`
+      });
+    } catch { /* don't fail on log error */ }
 
     return NextResponse.json({ success: true });
   } catch (error) {

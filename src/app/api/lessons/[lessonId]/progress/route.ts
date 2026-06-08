@@ -58,8 +58,6 @@ export async function POST(
           .from('lesson_progress')
           .delete()
           .in('id', duplicateIds);
-        
-        console.log(`Cleaned up ${duplicateIds.length} duplicate progress records for lesson ${lessonId}`);
       }
     }
 
@@ -85,7 +83,6 @@ export async function POST(
         );
       }
 
-      console.log('Successfully updated lesson progress:', { lessonId, userId: user.id, progressId: existingProgress.id });
       return NextResponse.json({
         success: true,
         progress: updatedProgress
@@ -214,7 +211,6 @@ export async function POST(
         );
       }
 
-      console.log('Successfully created lesson progress:', { lessonId, userId: user.id, progressId: newProgress.id });
       return NextResponse.json({
         success: true,
         progress: newProgress

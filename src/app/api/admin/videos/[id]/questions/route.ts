@@ -7,6 +7,7 @@ export async function GET(
   request: NextRequest,
   { params }: any
 ) {
+  const { id } = await params;
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -22,11 +23,11 @@ export async function GET(
       .eq('id', user.id)
       .single();
 
-    if (profile?.role !== 'admin') {
+    if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const questions = await videoService.getVideoQuestions(params.id);
+    const questions = await videoService.getVideoQuestions(id);
     return NextResponse.json(questions);
   } catch (error) {
     console.error('Error fetching video questions:', error);
@@ -41,6 +42,7 @@ export async function POST(
   request: NextRequest,
   { params }: any
 ) {
+  const { id } = await params;
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -56,14 +58,14 @@ export async function POST(
       .eq('id', user.id)
       .single();
 
-    if (profile?.role !== 'admin') {
+    if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const questionData = await request.json();
     const question = await videoService.createVideoQuestion({
       ...questionData,
-      video_id: params.id
+      video_id: id
     });
     
     // Log activity
@@ -71,7 +73,7 @@ export async function POST(
       action: 'create_video_question',
       table_name: 'video_questions',
       record_id: question.id,
-      description: `Created question for video ${params.id}`
+      description: `Created question for video ${id}`
     });
 
     return NextResponse.json(question, { status: 201 });

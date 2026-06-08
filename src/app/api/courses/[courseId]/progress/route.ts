@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/adminHelpers';
 
 // GET /api/courses/[courseId]/progress
-export async function GET(req: NextRequest, { params }: { params: { courseId: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ courseId: string }> }) {
+  const { courseId } = await params;
   try {
     const supabase = await createAdminClient();
     // Get user from session cookie (client must be authenticated)
@@ -10,7 +11,6 @@ export async function GET(req: NextRequest, { params }: { params: { courseId: st
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    const courseId = params.courseId;
     // Get all lessons for the course
     const { data: lessons, error: lessonsError } = await supabase
       .from('lessons')

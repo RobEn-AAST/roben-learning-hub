@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { videoService } from '@/services/videoService';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient, checkAdminOrInstructorPermission, getAllowedInstructorCourseIds } from '@/lib/adminHelpers';
 import { activityLogService } from '@/services/activityLogService';
@@ -97,18 +96,14 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('[VIDEOS API POST] Request received');
-    
     // Check admin or instructor permission
     const permissionError = await checkAdminOrInstructorPermission();
     if (permissionError) {
-      console.log('[VIDEOS API POST] Permission denied');
       return permissionError;
     }
 
     const videoData = await request.json();
-    console.log('[VIDEOS API POST] Video data received:', JSON.stringify(videoData, null, 2));
-    
+
     // Validate required fields with detailed error messages
     const missingFields: string[] = [];
     if (!videoData.lesson_id) missingFields.push('lesson_id');
@@ -117,7 +112,6 @@ export async function POST(request: NextRequest) {
     if (!videoData.url) missingFields.push('url');
     
     if (missingFields.length > 0) {
-      console.log('[VIDEOS API POST] Missing required fields:', missingFields);
       return NextResponse.json(
         { 
           error: `Missing required fields: ${missingFields.join(', ')}`,
@@ -184,7 +178,6 @@ export async function POST(request: NextRequest) {
       .single();
     
     if (existingVideo) {
-      console.log('[VIDEOS API POST] Video already exists for this lesson');
       return NextResponse.json(
         { 
           error: 'Video already exists',
@@ -214,8 +207,6 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
-    
-    console.log('[VIDEOS API POST] Video created successfully:', video.id);
     
     // Log activity
     try {

@@ -24,13 +24,10 @@ const createAdminClient = () => {
 
 async function checkAdminPermission(request: NextRequest) {
   try {
-    // Debug: Log the cookies being received
     const cookies = request.cookies.getAll();
-    console.log('Received cookies count:', cookies.length);
-    
+
     const supabase = await createServerClient();
     
-    // Get current user - try both getUser and getSession for debugging
     const [userResult, sessionResult] = await Promise.all([
       supabase.auth.getUser(),
       supabase.auth.getSession()
@@ -38,22 +35,11 @@ async function checkAdminPermission(request: NextRequest) {
     
     const { data: { user }, error: userError } = userResult;
     const { data: { session }, error: sessionError } = sessionResult;
-    
-    console.log('Auth debug:', {
-      hasUser: !!user,
-      hasSession: !!session,
-      userError: userError?.message,
-      sessionError: sessionError?.message,
-      userId: user?.id,
-      userEmail: user?.email
-    });
-    
+
     if (userError || !user) {
       console.error('Auth error or no user:', { userError, hasUser: !!user, hasSession: !!session });
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    console.log('Current user ID:', user.id, 'Email:', user.email);
 
     // Use admin client to bypass RLS for role checking
     // This is necessary because RLS policies might prevent reading profile roles
@@ -64,14 +50,6 @@ async function checkAdminPermission(request: NextRequest) {
       .select('role')
       .eq('id', user.id)
       .single();
-
-    console.log('Profile check result (using admin client):', { 
-      profile, 
-      error: profileError, 
-      userId: user.id,
-      hasProfile: !!profile,
-      role: profile?.role 
-    });
 
     if (profileError || profile?.role !== 'admin') {
       console.error('Not admin or profile error:', { 
@@ -136,10 +114,7 @@ export async function GET(request: NextRequest) {
         role: profile?.role || 'student',
         bio: profile?.bio || null
       };
-      
-      // Debug logging
-      console.log('API Debug - User:', authUser.email, 'Profile role:', profile?.role, 'Combined role:', combinedUser.role);
-      
+
       return combinedUser;
     });
 

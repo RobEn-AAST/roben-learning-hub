@@ -214,8 +214,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('✅ Lesson progress created successfully:', data.id);
-
     return NextResponse.json(
       { 
         message: 'Lesson progress created successfully', 

@@ -28,11 +28,9 @@ class SubmissionService {
   // Helper method to get appropriate client based on user role
   private async getClientForRole(clientType?: 'admin' | 'regular'): Promise<any> {
     if (clientType === 'admin') {
-      console.log('🔧 SubmissionService - Using admin client (service role)');
       // Use service-role client to bypass RLS for admin/instructor operations
       return createAdminClient();
     }
-    console.log('🔧 SubmissionService - Using regular server client (RLS enforced)');
     return createServerClient();
   }
 
@@ -57,14 +55,13 @@ class SubmissionService {
   ): Promise<ProjectSubmission[]> {
     try {
       const supabaseClient = await this.getClientForRole(clientType);
-      console.log('📚 SubmissionService.getAllSubmissions - Filters:', filters);
 
       // Minimal projection for list view to reduce payload; details are fetched per-item when needed
       let query = supabaseClient
         .from('project_submissions')
         .select(`
           id, project_id, user_id, submission_link, submission_platform, status, grade, submitted_at,
-          projects!inner(title),
+          projects!inner(title, lesson_id, lessons!inner(id, title, modules!inner(id, course_id, courses!inner(id, title)))),
           profiles!project_submissions_user_id_fkey(first_name, last_name, email),
           reviewer:profiles!project_submissions_reviewed_by_fkey(first_name, last_name)
         `)
@@ -96,14 +93,15 @@ class SubmissionService {
       const submissions = data.map((submission: any) => ({
         ...submission,
         project_title: submission.projects?.title,
+        lesson_title: submission.projects?.lessons?.title,
+        course_id: submission.projects?.lessons?.modules?.courses?.id,
+        course_title: submission.projects?.lessons?.modules?.courses?.title,
         user_name: `${submission.profiles?.first_name || ''} ${submission.profiles?.last_name || ''}`.trim(),
         reviewer_name: `${submission.reviewer?.first_name || ''} ${submission.reviewer?.last_name || ''}`.trim(),
-        // Admin dashboard expects these:
         student_name: `${submission.profiles?.first_name || ''} ${submission.profiles?.last_name || ''}`.trim(),
         student_email: submission.profiles?.email || ''
       }));
 
-      console.log('✅ SubmissionService.getAllSubmissions - Found', submissions.length, 'submissions');
       return submissions;
     } catch (error) {
       console.error('❌ SubmissionService.getAllSubmissions - Error:', error);
@@ -117,13 +115,12 @@ class SubmissionService {
   async getSubmissionById(id: string, clientType?: 'admin' | 'regular'): Promise<ProjectSubmission | null> {
     try {
       const supabaseClient = await this.getClientForRole(clientType);
-      console.log('🔍 SubmissionService.getSubmissionById - ID:', id);
 
       const { data, error } = await supabaseClient
         .from('project_submissions')
         .select(`
           *,
-          projects!inner(title),
+          projects!inner(title, lesson_id, lessons!inner(id, title, modules!inner(id, course_id, courses!inner(id, title)))),
           profiles!project_submissions_user_id_fkey(first_name, last_name, email),
           reviewer:profiles!project_submissions_reviewed_by_fkey(first_name, last_name)
         `)
@@ -135,10 +132,12 @@ class SubmissionService {
         return null;
       }
 
-      console.log('✅ SubmissionService.getSubmissionById - Submission found');
       return {
         ...data,
         project_title: data.projects?.title,
+        lesson_title: data.projects?.lessons?.title,
+        course_id: data.projects?.lessons?.modules?.courses?.id,
+        course_title: data.projects?.lessons?.modules?.courses?.title,
         user_name: `${data.profiles?.first_name || ''} ${data.profiles?.last_name || ''}`.trim(),
         reviewer_name: `${data.reviewer?.first_name || ''} ${data.reviewer?.last_name || ''}`.trim(),
         student_name: `${data.profiles?.first_name || ''} ${data.profiles?.last_name || ''}`.trim(),
@@ -160,13 +159,12 @@ class SubmissionService {
   ): Promise<ProjectSubmission | null> {
     try {
       const supabaseClient = await this.getClientForRole(clientType);
-      console.log('🔍 SubmissionService.getUserProjectSubmission - Project:', projectId, 'User:', userId);
 
       const { data, error } = await supabaseClient
         .from('project_submissions')
         .select(`
           *,
-          projects!inner(title),
+          projects!inner(title, lesson_id, lessons!inner(id, title, modules!inner(id, course_id, courses!inner(id, title)))),
           profiles!project_submissions_user_id_fkey(first_name, last_name, email),
           reviewer:profiles!project_submissions_reviewed_by_fkey(first_name, last_name)
         `)
@@ -177,17 +175,18 @@ class SubmissionService {
       if (error) {
         if (error.code === 'PGRST116') {
           // No submission found
-          console.log('ℹ️ SubmissionService.getUserProjectSubmission - No submission found');
           return null;
         }
         console.error('❌ SubmissionService.getUserProjectSubmission - Error:', error);
         throw error;
       }
 
-      console.log('✅ SubmissionService.getUserProjectSubmission - Submission found');
       return {
         ...data,
         project_title: data.projects?.title,
+        lesson_title: data.projects?.lessons?.title,
+        course_id: data.projects?.lessons?.modules?.courses?.id,
+        course_title: data.projects?.lessons?.modules?.courses?.title,
         user_name: `${data.profiles?.first_name || ''} ${data.profiles?.last_name || ''}`.trim(),
         reviewer_name: `${data.reviewer?.first_name || ''} ${data.reviewer?.last_name || ''}`.trim(),
         student_name: `${data.profiles?.first_name || ''} ${data.profiles?.last_name || ''}`.trim(),
@@ -218,7 +217,6 @@ class SubmissionService {
       }
 
       const supabaseClient = await this.getClientForRole(clientType);
-      console.log('➕ SubmissionService.createSubmission - Creating submission for project:', submissionData.project_id);
 
       const { data, error } = await supabaseClient
         .from('project_submissions')
@@ -238,7 +236,6 @@ class SubmissionService {
         throw new Error('Failed to create submission');
       }
 
-      console.log('✅ SubmissionService.createSubmission - Submission created:', data.id);
       return data;
     } catch (error) {
       console.error('❌ SubmissionService.createSubmission - Error:', error);
@@ -268,7 +265,6 @@ class SubmissionService {
       }
 
       const supabaseClient = await this.getClientForRole(clientType);
-      console.log('✏️ SubmissionService.updateSubmission - Updating submission:', id);
 
       // If status is being updated to approved/rejected, set reviewed_at
       const updateData = { ...submissionData };
@@ -288,7 +284,6 @@ class SubmissionService {
         throw new Error('Failed to update submission');
       }
 
-      console.log('✅ SubmissionService.updateSubmission - Submission updated:', data.id);
       return data;
     } catch (error) {
       console.error('❌ SubmissionService.updateSubmission - Error:', error);
@@ -302,7 +297,6 @@ class SubmissionService {
   async deleteSubmission(id: string, clientType?: 'admin' | 'regular'): Promise<boolean> {
     try {
       const supabaseClient = await this.getClientForRole(clientType);
-      console.log('🗑️ SubmissionService.deleteSubmission - Deleting submission:', id);
 
       const { error } = await supabaseClient
         .from('project_submissions')
@@ -314,7 +308,6 @@ class SubmissionService {
         throw new Error('Failed to delete submission');
       }
 
-      console.log('✅ SubmissionService.deleteSubmission - Submission deleted:', id);
       return true;
     } catch (error) {
       console.error('❌ SubmissionService.deleteSubmission - Error:', error);
@@ -328,7 +321,6 @@ class SubmissionService {
   async getProjectSubmissionStats(projectId: string, clientType?: 'admin' | 'regular'): Promise<SubmissionStats> {
     try {
       const supabaseClient = await this.getClientForRole(clientType);
-      console.log('📊 SubmissionService.getProjectSubmissionStats - Project:', projectId);
 
       const { data, error } = await supabaseClient
         .rpc('get_project_submission_stats', { p_project_id: projectId });
@@ -338,7 +330,6 @@ class SubmissionService {
         throw new Error('Failed to fetch submission stats');
       }
 
-      console.log('✅ SubmissionService.getProjectSubmissionStats - Stats retrieved');
       return data[0] || {
         total_submissions: 0,
         submitted_count: 0,
@@ -362,7 +353,6 @@ class SubmissionService {
   }> {
     try {
       const supabaseClient = await this.getClientForRole(clientType);
-      console.log('🔍 SubmissionService.canCompleteLesson - Lesson:', lessonId, 'User:', userId);
 
       const { data, error } = await supabaseClient
         .rpc('can_complete_lesson', { p_lesson_id: lessonId, p_user_id: userId });
@@ -372,7 +362,6 @@ class SubmissionService {
         throw new Error('Failed to check lesson completion status');
       }
 
-      console.log('✅ SubmissionService.canCompleteLesson - Result:', data[0]);
       return data[0] || { can_complete: false, reason: 'Unknown error' };
     } catch (error) {
       console.error('❌ SubmissionService.canCompleteLesson - Error:', error);

@@ -58,12 +58,10 @@ class ArticleService {
     const serverClient = await createServerClient();
     
     if (clientType === 'admin') {
-      console.log('🔧 ArticleService - Using admin client type');
       // For admin, we could potentially use service role, but for now use same client
       // The difference will be made at the API level where we check permissions
       return serverClient;
     } else {
-      console.log('🔧 ArticleService - Using regular client type (will respect RLS)');
       // For instructors, the server client should respect RLS because user session is maintained
       return serverClient;
     }
@@ -72,7 +70,6 @@ class ArticleService {
   async getArticleStats(clientType?: 'admin' | 'regular'): Promise<ArticleStats> {
     try {
       const supabaseClient = await this.getClientForRole(clientType);
-      console.log('📊 ArticleService.getArticleStats - Using client type:', clientType || 'default');
 
       // Get all articles data
       const { data: articlesData, error: articlesError } = await supabaseClient
@@ -97,7 +94,6 @@ class ArticleService {
         return acc;
       }, {} as Record<string, number>) || {};
 
-      console.log('✅ ArticleService.getArticleStats - Retrieved stats for', totalArticles, 'articles');
       return {
         total_articles: totalArticles,
         total_reading_time_hours: totalReadingTimeHours,
@@ -114,7 +110,6 @@ class ArticleService {
   async getAllArticles(clientType?: 'admin' | 'regular'): Promise<Article[]> {
     try {
       const supabaseClient = await this.getClientForRole(clientType);
-      console.log('📚 ArticleService.getAllArticles - Using client type:', clientType || 'default');
 
       // Get articles with simple query to avoid RLS issues
       const { data: articles, error } = await supabaseClient
@@ -128,11 +123,9 @@ class ArticleService {
       }
 
       if (!articles || articles.length === 0) {
-        console.log('📚 ArticleService.getAllArticles - No articles found');
         return [];
       }
 
-      console.log('📚 ArticleService.getAllArticles - Found', articles.length, 'articles');
 
       // Get related data separately
       const lessonIds = [...new Set(articles.map((a: any) => a.lesson_id))];
@@ -173,7 +166,6 @@ class ArticleService {
         };
       });
 
-      console.log('✅ ArticleService.getAllArticles - Successfully transformed articles with related data');
       return transformedArticles;
     } catch (error) {
       console.error('❌ ArticleService.getAllArticles - Error:', error);
@@ -184,7 +176,6 @@ class ArticleService {
   async getArticleById(id: string, clientType?: 'admin' | 'regular'): Promise<Article | null> {
     try {
       const supabaseClient = await this.getClientForRole(clientType);
-      console.log('🔍 ArticleService.getArticleById - Using client type:', clientType || 'default', 'for article:', id);
 
       const { data, error } = await supabaseClient
         .from('articles')
@@ -207,11 +198,9 @@ class ArticleService {
       }
 
       if (!data) {
-        console.log('❌ ArticleService.getArticleById - Article not found:', id);
         return null;
       }
 
-      console.log('✅ ArticleService.getArticleById - Article found:', data.title);
       return {
         ...data,
         lesson_title: data.lessons?.title,
@@ -227,8 +216,6 @@ class ArticleService {
   async createArticle(articleData: CreateArticleData, clientType?: 'admin' | 'regular'): Promise<Article> {
     try {
       const supabaseClient = await this.getClientForRole(clientType);
-      console.log('➕ ArticleService.createArticle - Using client type:', clientType || 'default');
-      console.log('➕ ArticleService.createArticle - Creating article:', { lesson_id: articleData.lesson_id, title: articleData.title });
 
       const { data, error } = await supabaseClient
         .from('articles')
@@ -241,7 +228,6 @@ class ArticleService {
         throw error;
       }
       
-      console.log('✅ ArticleService.createArticle - Article created successfully:', data.id);
       return data;
     } catch (error) {
       console.error('❌ ArticleService.createArticle - Error:', error);
@@ -252,7 +238,6 @@ class ArticleService {
   async updateArticle(id: string, articleData: UpdateArticleData, clientType?: 'admin' | 'regular'): Promise<Article> {
     try {
       const supabaseClient = await this.getClientForRole(clientType);
-      console.log('✏️ ArticleService.updateArticle - Using client type:', clientType || 'default', 'for article:', id);
 
       const { data, error } = await supabaseClient
         .from('articles')
@@ -266,7 +251,6 @@ class ArticleService {
         throw error;
       }
       
-      console.log('✅ ArticleService.updateArticle - Article updated successfully:', data.id);
       return data;
     } catch (error) {
       console.error('❌ ArticleService.updateArticle - Error:', error);
@@ -277,7 +261,6 @@ class ArticleService {
   async deleteArticle(id: string, clientType?: 'admin' | 'regular'): Promise<void> {
     try {
       const supabaseClient = await this.getClientForRole(clientType);
-      console.log('🗑️ ArticleService.deleteArticle - Using client type:', clientType || 'default', 'for article:', id);
 
       const { error } = await supabaseClient
         .from('articles')
@@ -289,7 +272,6 @@ class ArticleService {
         throw error;
       }
       
-      console.log('✅ ArticleService.deleteArticle - Article deleted successfully:', id);
     } catch (error) {
       console.error('❌ ArticleService.deleteArticle - Error:', error);
       throw error;
@@ -299,7 +281,6 @@ class ArticleService {
   async getAvailableLessons(clientType?: 'admin' | 'regular'): Promise<Lesson[]> {
     try {
       const supabaseClient = await this.getClientForRole(clientType);
-      console.log('📋 ArticleService.getAvailableLessons - Using client type:', clientType || 'default');
 
       // First, get all article-type lessons
       const { data: lessonsData, error: lessonsError } = await supabaseClient
@@ -338,7 +319,6 @@ class ArticleService {
 
       // Create a Set of lesson IDs that already have articles
       const usedLessonIds = new Set(articlesData?.map((article: { lesson_id: string }) => article.lesson_id) || []);
-      console.log('📋 ArticleService.getAvailableLessons - Lessons with existing articles:', usedLessonIds.size);
 
       // Filter out lessons that already have articles
       const availableLessons = lessonsData?.filter((lesson: any) => !usedLessonIds.has(lesson.id)) || [];
@@ -352,8 +332,6 @@ class ArticleService {
         course_id: lesson.modules?.course_id
       }));
 
-      console.log('✅ ArticleService.getAvailableLessons - Found', lessons.length, 'available lessons (filtered from', lessonsData?.length || 0, 'total)');
-      console.log('📋 ArticleService.getAvailableLessons - Sample lessons:', lessons.slice(0, 3));
       
       return lessons;
     } catch (error) {
@@ -365,7 +343,6 @@ class ArticleService {
   async getArticlesByLessonId(lessonId: string, clientType?: 'admin' | 'regular'): Promise<Article[]> {
     try {
       const supabaseClient = await this.getClientForRole(clientType);
-      console.log('📚 ArticleService.getArticlesByLessonId - Using client type:', clientType || 'default', 'for lesson:', lessonId);
 
       const { data, error } = await supabaseClient
         .from('articles')
@@ -394,7 +371,6 @@ class ArticleService {
         course_title: article.lessons?.modules?.courses?.title
       })) || [];
 
-      console.log('✅ ArticleService.getArticlesByLessonId - Found', articles.length, 'articles for lesson:', lessonId);
       return articles;
     } catch (error) {
       console.error('❌ ArticleService.getArticlesByLessonId - Error:', error);
@@ -405,7 +381,6 @@ class ArticleService {
   async getLessonsForSelect(clientType?: 'admin' | 'regular'): Promise<Lesson[]> {
     try {
       const supabaseClient = await this.getClientForRole(clientType);
-      console.log('📋 ArticleService.getLessonsForSelect - Using client type:', clientType || 'default');
 
       const { data, error } = await supabaseClient
         .from('lessons')
@@ -439,7 +414,6 @@ class ArticleService {
         course_title: lesson.modules[0]?.courses[0]?.title
       })) || [];
 
-      console.log('✅ ArticleService.getLessonsForSelect - Found', lessons.length, 'article lessons');
       return lessons;
     } catch (error) {
       console.error('❌ ArticleService.getLessonsForSelect - Error:', error);

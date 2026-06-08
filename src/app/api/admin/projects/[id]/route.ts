@@ -12,7 +12,6 @@ export async function GET(
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
-      console.log('❌ GET /api/admin/projects/[id] - Auth error:', authError);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -23,7 +22,6 @@ export async function GET(
       .eq('id', user.id)
       .single();
 
-    console.log('🔍 GET /api/admin/projects/[id] - User role:', profile?.role, 'for project:', id);
 
     if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -31,16 +29,13 @@ export async function GET(
 
     // Role-based client selection
     const clientToUse = profile?.role === 'admin' ? 'admin' : 'regular';
-    console.log('🎯 GET /api/admin/projects/[id] - Using client type:', clientToUse);
 
     const project = await projectService.getProjectById(id, clientToUse);
     
     if (!project) {
-      console.log('❌ GET /api/admin/projects/[id] - Project not found:', id);
       return NextResponse.json({ error: 'Project not found' }, { status: 404 });
     }
 
-    console.log('✅ GET /api/admin/projects/[id] - Project found:', project.title);
     return NextResponse.json(project);
   } catch (error) {
     console.error('❌ GET /api/admin/projects/[id] - Error:', error);
@@ -61,7 +56,6 @@ export async function PUT(
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
-      console.log('❌ PUT /api/admin/projects/[id] - Auth error:', authError);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -72,7 +66,6 @@ export async function PUT(
       .eq('id', user.id)
       .single();
 
-    console.log('🔍 PUT /api/admin/projects/[id] - User role:', profile?.role, 'for project:', id);
 
     if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -80,7 +73,6 @@ export async function PUT(
 
     const body = await request.json();
     const { lesson_id, title, description, submission_instructions, submission_platform } = body;
-    console.log('✏️ PUT /api/admin/projects/[id] - Updating project:', id);
 
     const updateData: any = {};
     if (lesson_id !== undefined) updateData.lesson_id = lesson_id;
@@ -91,10 +83,8 @@ export async function PUT(
 
     // Role-based client selection
     const clientToUse = profile?.role === 'admin' ? 'admin' : 'regular';
-    console.log('🎯 PUT /api/admin/projects/[id] - Using client type:', clientToUse);
     
     const project = await projectService.updateProject(id, updateData, clientToUse);
-    console.log('✅ PUT /api/admin/projects/[id] - Project updated successfully:', project.title);
     return NextResponse.json(project);
   } catch (error) {
     console.error('❌ PUT /api/admin/projects/[id] - Error:', error);
@@ -115,7 +105,6 @@ export async function DELETE(
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
-      console.log('❌ DELETE /api/admin/projects/[id] - Auth error:', authError);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -126,7 +115,6 @@ export async function DELETE(
       .eq('id', user.id)
       .single();
 
-    console.log('🔍 DELETE /api/admin/projects/[id] - User role:', profile?.role, 'for project:', id);
 
     if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -134,12 +122,9 @@ export async function DELETE(
 
     // Role-based client selection
     const clientToUse = profile?.role === 'admin' ? 'admin' : 'regular';
-    console.log('🎯 DELETE /api/admin/projects/[id] - Using client type:', clientToUse);
 
-    console.log('🗑️ DELETE /api/admin/projects/[id] - Deleting project:', id);
     await projectService.deleteProject(id, clientToUse);
     
-    console.log('✅ DELETE /api/admin/projects/[id] - Project deleted successfully:', id);
     return NextResponse.json({ message: 'Project deleted successfully' });
   } catch (error) {
     console.error('❌ DELETE /api/admin/projects/[id] - Error:', error);

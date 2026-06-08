@@ -8,11 +8,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log('[MODULES API GET BY ID] Request received');
-    
     const permissionError = await checkAdminOrInstructorPermission();
     if (permissionError) {
-      console.log('[MODULES API GET BY ID] Permission denied');
       return permissionError;
     }
 
@@ -30,8 +27,6 @@ export async function GET(
 
     // Use admin client for admins, regular client for instructors (to respect RLS)
     const client = profile?.role === 'admin' ? adminClient : supabase;
-
-    console.log('[MODULES API GET BY ID] Fetching module:', id, 'userRole:', profile?.role);
 
     const { data: module, error } = await client
       .from('modules')
@@ -66,7 +61,6 @@ export async function GET(
       lessons_count: lessonsCount || 0
     };
 
-    console.log('[MODULES API GET BY ID] Success:', result.id);
     return NextResponse.json(result);
   } catch (error) {
     console.error('Error fetching module:', error);
@@ -82,11 +76,8 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log('[MODULES API PUT] Request received');
-    
     const permissionError = await checkAdminOrInstructorPermission();
     if (permissionError) {
-      console.log('[MODULES API PUT] Permission denied');
       return permissionError;
     }
 
@@ -95,8 +86,6 @@ export async function PUT(
 
     const body = await request.json();
     const { course_id, title, description, position, metadata } = body;
-
-    console.log('[MODULES API PUT] Body received:', { course_id, title, description, position });
 
     const updateData = {
       ...(course_id && { course_id }),
@@ -130,8 +119,6 @@ export async function PUT(
       throw new Error(`Failed to update module: ${error.message}`);
     }
 
-    console.log('[MODULES API PUT] Module updated successfully:', updatedModule.id);
-    
     // Log the action
     await activityLogService.logActivity({
       action: 'UPDATE',
@@ -167,11 +154,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log('[MODULES API DELETE] Request received');
-    
     const permissionError = await checkAdminOrInstructorPermission();
     if (permissionError) {
-      console.log('[MODULES API DELETE] Permission denied');
       return permissionError;
     }
 
@@ -179,7 +163,6 @@ export async function DELETE(
     const { id } = await params;
 
     // Get module details before deletion for logging
-    console.log('[MODULES API DELETE] Deleting module:', id);
 
     // First get the module to log its title
     const { data: module, error: fetchError } = await adminClient
@@ -204,8 +187,6 @@ export async function DELETE(
       throw new Error(`Failed to delete module: ${deleteError.message}`);
     }
 
-    console.log('[MODULES API DELETE] Module deleted successfully:', id);
-    
     // Log the action
     await activityLogService.logActivity({
       action: 'DELETE',

@@ -106,7 +106,6 @@ export const courseInstructorService = {
       }
 
       const result = await response.json();
-      console.log("✅ Instructor assigned successfully via API:", result);
 
       // Fetch the created assignment with joined data
       const assignment = await this.getCourseInstructor(result.id);
@@ -126,12 +125,6 @@ export const courseInstructorService = {
     instructor_id: string,
     removed_by: string
   ): Promise<boolean> {
-    console.log("🔥 REMOVE INSTRUCTOR START:", {
-      course_id,
-      instructor_id,
-      removed_by,
-    });
-
     try {
       // Use the API endpoint which handles authentication via server actions
       const url = new URL(
@@ -155,32 +148,22 @@ export const courseInstructorService = {
       }
 
       const result = await response.json();
-      console.log("✅ Instructor removed successfully via API:", result);
       return true;
     } catch (error) {
       console.error("❌ API removal failed, error:", error);
       throw error;
     }
 
-    console.log("✅ REMOVE INSTRUCTOR SUCCESS");
     return true;
   },
 
   // Get all instructors for a course
   async getCourseInstructors(course_id: string): Promise<CourseInstructor[]> {
-    console.log("📚 GET COURSE INSTRUCTORS for course:", course_id);
 
     try {
       const apiUrl = `/api/admin/course-instructors?type=course&courseId=${course_id}`;
-      console.log("📚 Fetching from:", apiUrl);
 
       const response = await fetch(apiUrl);
-
-      console.log("📚 Response status:", response.status, response.statusText);
-      console.log(
-        "📚 Response headers:",
-        Object.fromEntries(response.headers.entries())
-      );
 
       if (!response.ok) {
         // Try to get the response text to see what we're actually receiving
@@ -209,7 +192,6 @@ export const courseInstructorService = {
       }
 
       const responseText = await response.text();
-      console.log("📚 Success response text:", responseText.substring(0, 500));
 
       let data;
       try {
@@ -225,12 +207,6 @@ export const courseInstructorService = {
       }
 
       const { instructors } = data;
-      console.log(
-        `📚 Found ${
-          instructors?.length || 0
-        } instructors for course ${course_id}:`,
-        instructors
-      );
       return instructors || [];
     } catch (error) {
       console.error("❌ Get course instructors error:", error);
@@ -324,11 +300,12 @@ export const courseInstructorService = {
   async getUnassignedInstructors(
     course_id: string
   ): Promise<InstructorProfile[]> {
-    // Get all instructors
-    const allInstructors = await this.getAvailableInstructors();
+    // Fetch both in parallel — independent reads
+    const [allInstructors, assignedInstructors] = await Promise.all([
+      this.getAvailableInstructors(),
+      this.getCourseInstructors(course_id),
+    ]);
 
-    // Get currently assigned instructors for this course
-    const assignedInstructors = await this.getCourseInstructors(course_id);
     const assignedIds = assignedInstructors.map((ci) => ci.instructor_id);
 
     // Filter out assigned instructors

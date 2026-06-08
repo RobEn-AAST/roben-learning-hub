@@ -33,24 +33,19 @@ export const coursesService = {
   // Get all courses with pagination (uses admin API to bypass RLS)
   async getCourses(page = 1, limit = 10) {
     try {
-      console.log('🔍 getCourses: Fetching courses from API...');
       const apiUrl = `/api/admin/courses?page=${page}&limit=${limit}`;
-      console.log('🔍 getCourses: URL:', apiUrl);
 
       const response = await fetch(apiUrl, {
         method: 'GET',
         credentials: 'same-origin',
       });
 
-      console.log('🔍 getCourses: Response status:', response.status, response.statusText);
 
       if (!response.ok) {
-        console.log('🔍 getCourses: Response not OK, trying to parse error...');
         
         let errorData;
         try {
           const responseText = await response.text();
-          console.log('🔍 getCourses: Raw error response:', responseText.substring(0, 500));
           errorData = JSON.parse(responseText);
         } catch (parseError) {
           console.error('🔍 getCourses: Failed to parse error response:', parseError);
@@ -61,7 +56,6 @@ export const coursesService = {
       }
 
       const data = await response.json();
-      console.log('🔍 getCourses: Success, received data:', data);
       return data;
     } catch (error) {
       console.error('🔍 getCourses error details:', {
@@ -107,12 +101,8 @@ export const coursesService = {
 
   async createCourse(courseData: CourseCreateData) {
     try {
-      console.log('Creating course with data:', courseData);
       
-      // Require proper authentication
-      if (!courseData.created_by) {
-        throw new Error('Authentication required: No user ID provided');
-      }
+      // created_by is optional — the API route sets it from the session if empty
 
       const response = await fetch('/api/admin/courses', {
         method: 'POST',
@@ -129,7 +119,6 @@ export const coursesService = {
       }
 
       const result = await response.json();
-      console.log('Create success:', result);
       return result;
     } catch (error) {
       console.error('createCourse error:', error);
@@ -140,9 +129,7 @@ export const coursesService = {
   // Update a course (uses admin API to bypass RLS)
   async updateCourse(id: string, courseData: Partial<Course>) {
     try {
-      console.log('Updating course with ID:', id, 'Data:', courseData);
       const apiUrl = `/api/admin/courses/${id}`;
-      console.log('Making PUT request to:', apiUrl);
 
       const response = await fetch(apiUrl, {
         method: 'PUT',
@@ -151,12 +138,6 @@ export const coursesService = {
         },
         credentials: 'same-origin',
         body: JSON.stringify(courseData),
-      });
-      
-      console.log('Response received:', {
-        ok: response.ok,
-        status: response.status,
-        statusText: response.statusText
       });
 
       if (!response.ok) {
@@ -199,7 +180,6 @@ export const coursesService = {
       }
 
       const result = await response.json();
-      console.log('Update success:', result);
       return result;
     } catch (error) {
       console.error('updateCourse error:', error);

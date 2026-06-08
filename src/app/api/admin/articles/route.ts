@@ -3,13 +3,12 @@ import { articleService, ArticleService } from '@/services/articleService';
 import { createClient } from '@/lib/supabase/server';
 import { activityLogService } from '@/services/activityLogService';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
+
     if (authError || !user) {
-      console.log('❌ GET /api/admin/articles - Auth error:', authError);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -20,18 +19,24 @@ export async function GET() {
       .eq('id', user.id)
       .single();
 
-    console.log('🔍 GET /api/admin/articles - User role:', profile?.role);
-
     if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Role-based client selection
     const clientToUse = profile?.role === 'admin' ? 'admin' : 'regular';
-    console.log('🎯 GET /api/admin/articles - Using client type:', clientToUse);
+
+    // Support filtering by lessonId query param (returns single article or null)
+    const { searchParams } = new URL(request.url);
+    const lessonId = searchParams.get('lessonId');
+
+    if (lessonId) {
+      const articles = await articleService.getArticlesByLessonId(lessonId, clientToUse);
+      // 1:1 relationship -- return first match or null
+      return NextResponse.json(articles.length > 0 ? articles[0] : null);
+    }
 
     const articles = await articleService.getAllArticles(clientToUse);
-    console.log('✅ GET /api/admin/articles - Successfully fetched', articles?.length || 0, 'articles');
     return NextResponse.json(articles);
   } catch (error) {
     console.error('❌ GET /api/admin/articles - Error:', error);
@@ -48,8 +53,7 @@ export async function POST(request: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
-      console.log('❌ POST /api/admin/articles - Auth error:', authError);
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Unauthorized',
         message: 'You must be logged in to create articles'
       }, { status: 401 });
@@ -62,8 +66,6 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .single();
 
-    console.log('🔍 POST /api/admin/articles - User role:', profile?.role);
-
     if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
       return NextResponse.json({ 
         error: 'Forbidden',
@@ -72,8 +74,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    console.log('📝 POST /api/admin/articles - Request body:', JSON.stringify(body, null, 2));
-    
+
     const { lesson_id, title, content, summary, reading_time_minutes, metadata } = body;
 
     // Validate required fields with detailed error messages
@@ -83,7 +84,6 @@ export async function POST(request: NextRequest) {
     if (!content) missingFields.push('content');
 
     if (missingFields.length > 0) {
-      console.log('❌ POST /api/admin/articles - Missing required fields:', missingFields);
       return NextResponse.json(
         { 
           error: `Missing required fields: ${missingFields.join(', ')}`,
@@ -109,14 +109,8 @@ export async function POST(request: NextRequest) {
       metadata: metadata || {}
     };
 
-    console.log('📝 POST /api/admin/articles - Article data:', { 
-      ...articleData, 
-      content: articleData.content.substring(0, 100) + '...' 
-    });
-
     // Role-based client selection
     const clientToUse = profile?.role === 'admin' ? 'admin' : 'regular';
-    console.log('🎯 POST /api/admin/articles - Using client type:', clientToUse);
 
     const newArticle = await articleService.createArticle(articleData, clientToUse);
     
@@ -134,7 +128,6 @@ export async function POST(request: NextRequest) {
       // Don't fail the request if logging fails
     }
 
-    console.log('✅ POST /api/admin/articles - Article created successfully:', newArticle.id);
     return NextResponse.json(newArticle, { status: 201 });
   } catch (error) {
     console.error('❌ POST /api/admin/articles - Error:', error);

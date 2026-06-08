@@ -4,13 +4,11 @@ import { createAdminClient } from '@/lib/adminHelpers';
 
 export async function GET() {
   try {
-    console.log('[MODULES STATS API] Request received');
     
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
-      console.log('[MODULES STATS API] Unauthorized');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -22,11 +20,9 @@ export async function GET() {
       .single();
 
     if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
-      console.log('[MODULES STATS API] Forbidden - not admin/instructor');
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    console.log('[MODULES STATS API] User role:', profile.role);
 
     // Calculate stats based on user role
     let stats;
@@ -101,7 +97,6 @@ export async function GET() {
       };
     }
 
-    console.log('[MODULES STATS API] Success:', stats);
     return NextResponse.json(stats);
   } catch (error) {
     console.error('Error fetching module stats:', error);

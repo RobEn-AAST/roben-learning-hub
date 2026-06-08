@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { toast } from 'sonner';
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -111,7 +111,6 @@ export default function CourseLearnPage() {
 
   useEffect(() => {
     if (courseId) {
-      console.log('📚 Loading course:', courseId);
       fetchCourseData();
     } else {
       console.error('❌ No course ID provided');
@@ -124,12 +123,10 @@ export default function CourseLearnPage() {
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible' && courseData) {
-        console.log('👁️ Tab became visible - refreshing course data (single reuest)...');
         // Re-fetch the full course payload which now includes completedLessonIds
         const latestCompletedSet = await fetchCourseData();
         // If current lesson is now complete, update the state
         if (latestCompletedSet && currentLesson && latestCompletedSet.has(currentLesson.id) && !completedLessons.has(currentLesson.id)) {
-          console.log('🎉 Current lesson is now complete!');
         }
       }
     };
@@ -138,10 +135,28 @@ export default function CourseLearnPage() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [courseData, currentLesson, completedLessons]);
 
-  const fetchCourseData = async () => {
+  // Periodic refresh (every 30s) to pick up admin structural changes
+  // (new/deleted lessons, reordered modules) without requiring tab switch.
+  // Uses a ref to avoid stale closure — fetchCourseData may change between renders.
+  const fetchRef = useRef<(bypassCache?: boolean) => Promise<Set<string> | undefined>>(() => Promise.resolve(undefined));
+  useEffect(() => {
+    if (!courseId) return;
+    const POLL_INTERVAL = 30_000;
+    const id = setInterval(() => {
+      // Skip if tab is hidden — visibility handler covers that
+      if (document.visibilityState !== 'visible') return;
+      fetchRef.current(true);
+    }, POLL_INTERVAL);
+    return () => clearInterval(id);
+  }, [courseId]);
+
+  const fetchCourseData = async (bypassCache = false) => {
     try {
   // Fetch course and modules from the public course endpoint (client-side)
-  const response = await fetch(`/api/courses/${courseId}`, { cache: 'no-store' });
+  // Adding _nocache param tells the API to skip its in-memory cache so
+  // admin structural changes (add/delete lessons) are visible quickly.
+  const cacheBust = bypassCache ? '?_nocache=1' : '';
+  const response = await fetch(`/api/courses/${courseId}${cacheBust}`, { cache: 'no-store' });
       if (response.status === 401) {
         router.push('/auth/login?redirect=/courses/' + courseId + '/learn');
         return;
@@ -199,7 +214,6 @@ export default function CourseLearnPage() {
         if (modules && modules.length > 0) {
           const firstIncompleteLesson = findFirstIncompleteLesson(modules, completedSet);
           if (firstIncompleteLesson) {
-            console.log('🎯 Starting at lesson:', firstIncompleteLesson.lesson.title, 'in module:', firstIncompleteLesson.module.title);
             setCurrentLesson(firstIncompleteLesson.lesson);
             setCurrentModule(firstIncompleteLesson.module);
           } else {
@@ -238,6 +252,9 @@ export default function CourseLearnPage() {
     }
   };
 
+  // Keep ref in sync so the polling interval always calls the latest version
+  fetchRef.current = fetchCourseData;
+
   const fetchCompletedLessons = async (modules: Module[]) => {
     // We removed the client-side per-lesson progress fetch fallback.
     // The server now provides `completedLessonIds` in the course payload
@@ -272,7 +289,6 @@ export default function CourseLearnPage() {
     
     // Check if lesson is already completed to prevent duplicate API calls
     if (completedLessons.has(currentLesson.id)) {
-      console.log('ℹ️ Lesson already marked complete, skipping duplicate progress record');
       return;
     }
     
@@ -295,21 +311,13 @@ export default function CourseLearnPage() {
         // Add lesson to completed set
         const newCompletedLessons = new Set([...completedLessons, currentLesson.id]);
         setCompletedLessons(newCompletedLessons);
-        
-        console.log('✅ Lesson marked as complete:', currentLesson.title);
-        
+
         // Update progress percentage using the new count
         if (courseData) {
           const totalLessons = courseData.modules.reduce((acc, m) => acc + m.lessons.length, 0);
           const newCompletedCount = newCompletedLessons.size; // Use the new set size
           const newPercentage = Math.round((newCompletedCount / totalLessons) * 100);
-          
-          console.log('📊 Progress updated:', {
-            completed: newCompletedCount,
-            total: totalLessons,
-            percentage: newPercentage
-          });
-          
+
           setCourseData({
             ...courseData,
             progress: {
@@ -439,13 +447,6 @@ export default function CourseLearnPage() {
     };
 
   const renderVideoContent = () => {
-      console.log('🎥 Rendering video content:', {
-        lesson_type: currentLesson.lesson_type,
-        content_url: currentLesson.content_url,
-        hasUrl: !!currentLesson.content_url,
-        urlLength: currentLesson.content_url?.length
-      });
-
       if (currentLesson.lesson_type === 'video' && currentLesson.content_url) {
         // Use modern YouTube embed (or passthrough) with native controls
         const embedUrl = convertToEmbedUrl(currentLesson.content_url);

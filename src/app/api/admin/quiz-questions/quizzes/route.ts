@@ -8,7 +8,6 @@ export async function GET() {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
-      console.log('❌ GET /api/admin/quiz-questions/quizzes - Auth error:', authError);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -18,9 +17,6 @@ export async function GET() {
       .select('role')
       .eq('id', user.id)
       .single();
-
-    console.log('🔍 GET /api/admin/quiz-questions/quizzes - User ID:', user.id);
-    console.log('🔍 GET /api/admin/quiz-questions/quizzes - User role:', profile?.role);
 
     if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -110,7 +106,6 @@ export async function GET() {
       course_title: quiz.lessons?.modules?.courses?.title
     })) || [];
 
-    console.log('✅ GET /api/admin/quiz-questions/quizzes - Found', mappedQuizzes.length, 'quizzes');
     return NextResponse.json(mappedQuizzes);
   } catch (error) {
     console.error('❌ GET /api/admin/quiz-questions/quizzes - Error:', error);

@@ -281,13 +281,11 @@ class ActivityLogService {
   // Since you don't want "Admin dashboard accessed" logs
   async logSystemAction(action: string, details: string): Promise<void> {
     // Do nothing - you said you don't want these generic system logs
-    console.log(`Ignoring system log: ${action} - ${details}`);
   }
 
   // Keep this method for compatibility but make it do nothing
   async logTableAccess(tableName: string): Promise<void> {
     // Do nothing - you said you don't want generic table access logs
-    console.log(`Ignoring table access log: ${tableName}`);
   }
 
 

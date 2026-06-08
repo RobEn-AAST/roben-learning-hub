@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@/lib/supabase/server';
 import { createAdminClient, checkAdminPermission } from '@/lib/adminHelpers';
 
 // GET - Get all courses with admin privileges
@@ -45,6 +46,11 @@ export async function GET(request: NextRequest) {
 // POST - Create new course
 export async function POST(request: NextRequest) {
   try {
+    // Authenticate and get user
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
     const permissionError = await checkAdminPermission();
     if (permissionError) return permissionError;
 
@@ -89,6 +95,7 @@ export async function POST(request: NextRequest) {
       .insert([{
         ...courseData,
         slug,
+        created_by: user.id,
         metadata: courseData.metadata || {}
       }])
       .select()

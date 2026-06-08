@@ -8,7 +8,6 @@ export async function GET() {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
-      console.log('❌ GET /api/admin/projects - Auth error:', authError);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -19,19 +18,14 @@ export async function GET() {
       .eq('id', user.id)
       .single();
 
-    console.log('🔍 GET /api/admin/projects - User ID:', user.id);
-    console.log('🔍 GET /api/admin/projects - User role:', profile?.role);
-
     if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Role-based client selection
     const clientToUse = profile?.role === 'admin' ? 'admin' : 'regular';
-    console.log('🎯 GET /api/admin/projects - Using client type:', clientToUse);
 
     const projects = await projectService.getAllProjects(clientToUse);
-    console.log('✅ GET /api/admin/projects - Successfully fetched', projects?.length || 0, 'projects');
     return NextResponse.json(projects);
   } catch (error) {
     console.error('❌ GET /api/admin/projects - Error:', error);
@@ -48,8 +42,7 @@ export async function POST(request: NextRequest) {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
-      console.log('❌ POST /api/admin/projects - Auth error:', authError);
-      return NextResponse.json({ 
+      return NextResponse.json({
         error: 'Unauthorized',
         message: 'You must be logged in to create projects'
       }, { status: 401 });
@@ -62,8 +55,6 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .single();
 
-    console.log('🔍 POST /api/admin/projects - User role:', profile?.role);
-
     if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
       return NextResponse.json({ 
         error: 'Forbidden',
@@ -72,8 +63,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    console.log('📝 POST /api/admin/projects - Request body:', JSON.stringify(body, null, 2));
-    
+
     const { lesson_id, title, description, submission_instructions, submission_platform } = body;
 
     // Validate required fields with detailed error messages
@@ -83,7 +73,6 @@ export async function POST(request: NextRequest) {
     if (!description) missingFields.push('description');
 
     if (missingFields.length > 0) {
-      console.log('❌ POST /api/admin/projects - Missing required fields:', missingFields);
       return NextResponse.json(
         { 
           error: `Missing required fields: ${missingFields.join(', ')}`,
@@ -96,7 +85,6 @@ export async function POST(request: NextRequest) {
 
     // Role-based client selection
     const clientToUse = profile?.role === 'admin' ? 'admin' : 'regular';
-    console.log('🎯 POST /api/admin/projects - Using client type:', clientToUse);
 
     const project = await projectService.createProject({
       lesson_id,
@@ -106,7 +94,6 @@ export async function POST(request: NextRequest) {
       submission_platform: submission_platform || null
     }, clientToUse);
 
-    console.log('✅ POST /api/admin/projects - Project created successfully:', project.id);
     return NextResponse.json(project, { status: 201 });
   } catch (error) {
     console.error('❌ POST /api/admin/projects - Error:', error);

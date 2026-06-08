@@ -28,7 +28,6 @@ export async function removeInstructorServerAction(
   course_id: string, 
   instructor_id: string
 ): Promise<boolean> {
-  console.log('🔥 REMOVE INSTRUCTOR SERVER ACTION START:', { course_id, instructor_id });
   
   // Get current user from session
   const supabase = await createClient();
@@ -41,7 +40,6 @@ export async function removeInstructorServerAction(
   // Check admin permissions using admin client to bypass RLS
   const supabaseAdmin = createAdminClient();
   
-  console.log('🔍 Checking admin permissions for user:', user.id);
   const { data: userData, error: profileError } = await supabaseAdmin
   .from('profiles')
   .select('id, role, first_name, last_name, email')
@@ -53,14 +51,12 @@ export async function removeInstructorServerAction(
     throw new Error('User profile not found or unauthorized');
   }
 
-  console.log('👤 User performing removal:', userData);
   
   if (userData.role !== 'admin') {
     throw new Error('Only admins can remove instructors from courses');
   }
 
   // Verify the instructor assignment exists
-  console.log('🔍 Checking if instructor assignment exists...');
   const { data: existingAssignment, error: checkError } = await supabaseAdmin
     .from('course_instructors')
     .select('*')
@@ -73,10 +69,8 @@ export async function removeInstructorServerAction(
     throw new Error('Instructor assignment not found');
   }
 
-  console.log('✅ Found assignment to remove:', existingAssignment);
 
   // Remove the instructor assignment
-  console.log('🗑️ Removing instructor assignment...');
   const { error: removeError } = await supabaseAdmin
     .from('course_instructors')
     .delete()
@@ -87,7 +81,6 @@ export async function removeInstructorServerAction(
     throw new Error(`Failed to remove instructor: ${removeError.message}`);
   }
 
-  console.log('✅ Instructor removed successfully');
   return true;
 }
 
@@ -101,7 +94,6 @@ export async function getAvailableInstructorsServerAction(): Promise<Array<{
   email: string;
   avatar_url: string | null;
 }>> {
-  console.log('📋 GET AVAILABLE INSTRUCTORS SERVER ACTION START');
   
   // Get current user from session
   const supabase = await createClient();
@@ -120,8 +112,8 @@ export async function getAvailableInstructorsServerAction(): Promise<Array<{
     .eq('id', user.id)
     .single();
 
-  if (profileError || !userData || userData.role !== 'admin') {
-    throw new Error('Admin access required');
+  if (profileError || !userData || (userData.role !== 'admin' && userData.role !== 'instructor')) {
+    throw new Error('Admin or instructor access required');
   }
 
   // Get all instructors using admin client to bypass RLS
@@ -137,7 +129,6 @@ export async function getAvailableInstructorsServerAction(): Promise<Array<{
     throw new Error(`Failed to get available instructors: ${instructorsError.message}`);
   }
 
-  console.log('✅ Found instructors:', instructors?.length || 0);
   return instructors || [];
 }
 
@@ -159,7 +150,6 @@ export async function getCourseInstructorsServerAction(course_id: string): Promi
       avatar_url: string | null;
     };
 }>> {
-  console.log('📋 GET COURSE INSTRUCTORS SERVER ACTION START for course:', course_id);
   
   // Get current user from session
   const supabase = await createClient();
@@ -201,7 +191,6 @@ export async function getCourseInstructorsServerAction(course_id: string): Promi
     }
   }
 
-  console.log('✅ Found course instructors:', result.length);
   return result;
 }
 
@@ -212,7 +201,6 @@ export async function addInstructorServerAction(
   course_id: string, 
   instructor_id: string
 ): Promise<{ id: string }> {
-  console.log('➕ ADD INSTRUCTOR SERVER ACTION START:', { course_id, instructor_id });
   
   // Get current user from session
   const supabase = await createClient();
@@ -272,6 +260,5 @@ export async function addInstructorServerAction(
     throw new Error(`Failed to add instructor: ${insertError.message}`);
   }
 
-  console.log('✅ Instructor added successfully:', newAssignment);
   return { id: newAssignment.id };
 }

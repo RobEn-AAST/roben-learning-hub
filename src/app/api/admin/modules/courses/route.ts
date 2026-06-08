@@ -4,13 +4,10 @@ import { createAdminClient } from '@/lib/adminHelpers';
 
 export async function GET() {
   try {
-    console.log('[MODULES COURSES API] Request received');
-    
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
-      console.log('[MODULES COURSES API] Unauthorized');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -22,11 +19,8 @@ export async function GET() {
       .single();
 
     if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
-      console.log('[MODULES COURSES API] Forbidden - not admin/instructor');
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
-
-    console.log('[MODULES COURSES API] User role:', profile.role);
 
     // For instructors, get only their assigned courses
     // For admins, get all courses
@@ -61,7 +55,6 @@ export async function GET() {
       courses = data;
     }
 
-    console.log('[MODULES COURSES API] Success:', { coursesCount: courses?.length });
     return NextResponse.json(courses || []);
   } catch (error) {
     console.error('Error fetching courses:', error);

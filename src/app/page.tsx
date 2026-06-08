@@ -2,7 +2,7 @@ import Link from "next/link";
 import dynamic from 'next/dynamic';
 import { EnhancedHero } from "@/components/enhanced-hero";
 import { Navigation } from "@/components/navigation";
-import { ThreeDBackground } from "@/components/3d-elements";
+import { ThreeDBackgroundWrapper } from "@/components/three-d-background-wrapper";
 
 // Defer below-the-fold sections to reduce initial JS and speed up first paint
 const WhatWeProvideSection = dynamic(() => import('@/components/what-we-provide-section').then(m => m.WhatWeProvideSection), {
@@ -23,7 +23,7 @@ export default function Home() {
   return (
     <main className="min-h-screen flex flex-col items-center relative overflow-x-hidden bg-white">
       {/* 3D Background */}
-      <ThreeDBackground />
+      <ThreeDBackgroundWrapper />
       
       <div className="flex-1 w-full flex flex-col items-center relative z-10">
         {/* Unified Navigation */}

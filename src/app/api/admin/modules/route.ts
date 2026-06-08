@@ -7,11 +7,8 @@ import { activityLogService } from '@/services/activityLogService';
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('[MODULES API GET] Request received');
-    
     const permissionError = await checkAdminOrInstructorPermission();
     if (permissionError) {
-      console.log('[MODULES API GET] Permission denied');
       return permissionError;
     }
 
@@ -35,7 +32,6 @@ export async function GET(request: NextRequest) {
     const courseId = searchParams.get('course_id');
     const search = searchParams.get('search');
 
-    console.log('[MODULES API GET] Query params:', { page, limit, courseId, search, userRole: profile?.role });
 
     const filters = {
       ...(courseId && { course_id: courseId }),
@@ -72,7 +68,6 @@ export async function GET(request: NextRequest) {
       throw new Error(`Failed to fetch modules: ${error.message}`);
     }
 
-    console.log('[MODULES API GET] Success:', { modulesCount: modules?.length, totalCount: count });
 
     // Get lesson counts for each module
     const modulesWithCounts = await Promise.all((modules || []).map(async (module) => {
@@ -103,11 +98,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('[MODULES API POST] Request received');
     
     const permissionError = await checkAdminOrInstructorPermission();
     if (permissionError) {
-      console.log('[MODULES API POST] Permission denied');
       return permissionError;
     }
 
@@ -125,11 +118,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { course_id, title, description, position, metadata } = body;
 
-    console.log('[MODULES API POST] Body received:', { course_id, title, description, position });
 
     // Validate required fields
     if (!course_id || !title || !description) {
-      console.log('[MODULES API POST] Missing required fields');
       return NextResponse.json(
         { error: 'Missing required fields: course_id, title, description' },
         { status: 400 }
@@ -146,7 +137,6 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (!assignment) {
-        console.log('[MODULES API POST] Instructor not assigned to course');
         return NextResponse.json(
           { error: 'You can only create modules for courses you are assigned to teach' },
           { status: 403 }
@@ -173,7 +163,6 @@ export async function POST(request: NextRequest) {
       metadata: metadata || {}
     };
 
-    console.log('[MODULES API POST] Creating module:', moduleData);
 
     // Create module using admin client
     const { data: newModule, error } = await adminClient
@@ -194,7 +183,6 @@ export async function POST(request: NextRequest) {
       throw new Error(`Failed to create module: ${error.message}`);
     }
 
-    console.log('[MODULES API POST] Module created successfully:', newModule.id);
     
     // Log the action
     await activityLogService.logActivity({

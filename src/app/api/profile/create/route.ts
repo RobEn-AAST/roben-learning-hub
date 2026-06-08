@@ -4,8 +4,6 @@ import { createAdminClient } from '@/lib/adminHelpers';
 
 export async function POST(request: NextRequest) {
   try {
-    console.log('=== CREATE PROFILE API CALLED ===');
-    
     // Get the authenticated user
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -14,8 +12,6 @@ export async function POST(request: NextRequest) {
       console.error('Authentication failed:', authError);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-    
-    console.log('Creating profile for user:', user.id, user.email);
     
     // Use admin client to create profile (bypasses RLS)
     const adminClient = createAdminClient();
@@ -28,7 +24,6 @@ export async function POST(request: NextRequest) {
       .single();
     
     if (existingProfile) {
-      console.log('Profile already exists for user:', user.id);
       return NextResponse.json({ profile: existingProfile });
     }
     
@@ -56,7 +51,6 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    console.log('Profile created successfully:', profile);
     return NextResponse.json({ profile });
     
   } catch (error) {

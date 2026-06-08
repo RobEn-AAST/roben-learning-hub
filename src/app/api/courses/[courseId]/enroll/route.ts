@@ -33,8 +33,6 @@ export async function POST(
       );
     }
 
-    console.log('User enrolling:', user.id, 'in course:', courseId);
-
     // Check if course exists and is published (use service role to bypass RLS)
     const { data: course, error: courseError } = await supabaseAdmin
       .from('courses')
@@ -51,8 +49,6 @@ export async function POST(
       );
     }
 
-    console.log('Course found:', course.title);
-
     // Check if already enrolled
     const { data: existingEnrollment } = await supabase
       .from('course_enrollments')
@@ -62,14 +58,11 @@ export async function POST(
       .single();
 
     if (existingEnrollment) {
-      console.log('User already enrolled in course');
       return NextResponse.json(
         { error: 'Already enrolled in this course' },
         { status: 400 }
       );
     }
-
-    console.log('Creating enrollment...');
 
     // Create enrollment
     const { data: enrollment, error: enrollmentError } = await supabase
@@ -89,8 +82,6 @@ export async function POST(
         { status: 500 }
       );
     }
-
-    console.log('Enrollment successful:', enrollment.id);
 
     return NextResponse.json({
       success: true,

@@ -1,134 +1,35 @@
 import { createClient } from '@/lib/supabase/server';
-import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 
-// Create service role client to bypass RLS for public data
-const supabaseAdmin = createServiceClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  }
-);
+// Short-lived cache — landing data rarely changes, 30s TTL
+// 100 visitors in 30s = 1 DB call instead of 600
+let landingCache: { data: any; expiresAt: number } | null = null;
+const CACHE_TTL = 30_000; // 30 seconds
 
 export async function GET() {
   try {
     const supabase = await createClient();
-
-    // Check if user is authenticated
     const { data: { user } } = await supabase.auth.getUser();
-    const isAuthenticated = !!user;
 
-    let courses: any[] = [];
-    let enrolledCourses: any[] = [];
-
-    if (isAuthenticated) {
-      // Fetch courses the user is enrolled in
-      const { data: enrollments, error: enrollmentsError } = await supabase
-        .from('course_enrollments')
-        .select(`
-          course_id,
-          enrolled_at,
-          courses (
-            id,
-            title,
-            description,
-            cover_image,
-            created_at
-          )
-        `)
-        .eq('user_id', user.id)
-        .order('enrolled_at', { ascending: false })
-        .limit(6);
-
-      if (enrollmentsError) {
-        console.error('Error fetching enrolled courses:', enrollmentsError);
-      } else {
-        enrolledCourses = enrollments?.map((e: any) => e.courses).filter(Boolean) || [];
-      }
-
-      // Also fetch all published courses for browsing
-      // Use admin client to bypass RLS for public course data
-      const { data: allCourses, error: coursesError } = await supabaseAdmin
-        .from('courses')
-        .select('id, title, description, cover_image, created_at')
-        .eq('status', 'published')
-        .order('created_at', { ascending: false });
-
-      if (coursesError) {
-        console.error('Error fetching all courses:', coursesError);
-      } else {
-        courses = allCourses || [];
-      }
-    } else {
-      // Guest user - fetch published courses
-      const { data: publishedCourses, error: coursesError } = await supabase
-        .from('courses')
-        .select('id, title, description, cover_image, created_at')
-        .eq('status', 'published')
-        .order('created_at', { ascending: false })
-        .limit(6);
-
-      if (coursesError) {
-        console.error('Error fetching courses:', coursesError);
-      } else {
-        courses = publishedCourses || [];
-      }
+    // Authenticated users always get fresh data (includes their enrollments)
+    if (user) {
+      const { data, error } = await supabase.rpc('get_landing_data', { p_user_id: user.id });
+      if (error) throw error;
+      return NextResponse.json(data);
     }
 
-    // Fetch instructors (users with instructor role) - use admin client to bypass RLS
-    const { data: instructors, error: instructorsError } = await supabaseAdmin
-      .from('profiles')
-      .select('id, first_name, last_name, email, avatar_url, bio')
-      .eq('role', 'instructor')
-      .limit(6);
-
-    if (instructorsError) {
-      console.error('Error fetching instructors:', instructorsError);
+    // Guest users — use cache to avoid hitting DB on every visit
+    const now = Date.now();
+    if (landingCache && landingCache.expiresAt > now) {
+      return NextResponse.json(landingCache.data);
     }
 
-    // Fetch admins - use admin client to bypass RLS
-    const { data: admins, error: adminsError } = await supabaseAdmin
-      .from('profiles')
-      .select('id, first_name, last_name, email, avatar_url, bio')
-      .eq('role', 'admin')
-      .limit(3);
+    const { data, error } = await supabase.rpc('get_landing_data', { p_user_id: null });
+    if (error) throw error;
 
-    if (adminsError) {
-      console.error('Error fetching admins:', adminsError);
-    }
-
-    // Get statistics
-    const { count: coursesCount } = await supabase
-      .from('courses')
-      .select('*', { count: 'exact', head: true })
-      .eq('status', 'published');
-
-    const { count: enrollmentsCount } = await supabase
-      .from('course_enrollments')
-      .select('*', { count: 'exact', head: true });
-
-    const { count: lessonsCount } = await supabase
-      .from('lessons')
-      .select('*', { count: 'exact', head: true });
-
-    return NextResponse.json({
-      isAuthenticated,
-      courses: courses || [],
-      enrolledCourses: enrolledCourses || [],
-      instructors: instructors || [],
-      admins: admins || [],
-      stats: {
-        totalCourses: coursesCount || 0,
-        totalEnrollments: enrollmentsCount || 0,
-        totalLessons: lessonsCount || 0,
-      },
-    });
+    landingCache = { data, expiresAt: now + CACHE_TTL };
+    return NextResponse.json(data);
   } catch (error) {
-    console.error('Landing page data fetch error:', error);
     return NextResponse.json(
       { error: 'Failed to fetch landing page data' },
       { status: 500 }

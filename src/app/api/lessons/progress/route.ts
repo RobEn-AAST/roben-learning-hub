@@ -15,8 +15,6 @@ export async function POST(request: NextRequest) {
       error: authError,
     } = await supabase.auth.getUser();
 
-    console.log(`[LESSON-PROGRESS-BATCH] ${new Date().toISOString()} - Request received`);
-
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
@@ -25,7 +23,6 @@ export async function POST(request: NextRequest) {
     const lessonIds: string[] = Array.isArray(body?.lessonIds) ? body.lessonIds : [];
 
     if (!lessonIds || lessonIds.length === 0) {
-      console.log('[LESSON-PROGRESS-BATCH] No lessonIds provided - returning empty progress');
       return NextResponse.json({ progress: [] });
     }
 
@@ -53,7 +50,6 @@ export async function POST(request: NextRequest) {
       };
     });
 
-    console.log(`[LESSON-PROGRESS-BATCH] ${new Date().toISOString()} - Returning progress for ${Object.keys(progressMap).length} lessons for user=${user.id}`);
     return NextResponse.json({ progress: progressMap });
   } catch (error) {
     console.error('Unexpected error in POST /api/lessons/progress:', error);

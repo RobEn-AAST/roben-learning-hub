@@ -9,7 +9,6 @@ export async function GET() {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
-      console.log('❌ GET /api/admin/quizzes/lessons - Auth error:', authError);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -19,9 +18,6 @@ export async function GET() {
       .select('role')
       .eq('id', user.id)
       .single();
-
-    console.log('🔍 GET /api/admin/quizzes/lessons - User ID:', user.id);
-    console.log('🔍 GET /api/admin/quizzes/lessons - User role:', profile?.role);
 
     if (profile?.role !== 'admin' && profile?.role !== 'instructor') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -79,13 +75,11 @@ export async function GET() {
         course_id: lesson.modules?.course_id
       }));
 
-      console.log('✅ GET /api/admin/quizzes/lessons - Found', mapped.length, 'available quiz lessons');
       return NextResponse.json(mapped);
     }
 
     // Admin: default behavior (no instructor scoping)
     const lessons = await quizService.getLessons();
-    console.log('✅ GET /api/admin/quizzes/lessons - Found', lessons?.length || 0, 'available quiz lessons');
     return NextResponse.json(lessons);
   } catch (error) {
     console.error('❌ GET /api/admin/quizzes/lessons - Error:', error);

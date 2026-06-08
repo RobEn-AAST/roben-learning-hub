@@ -8,12 +8,12 @@ export async function GET(
   request: NextRequest,
   { params }: any
 ) {
+  const { id } = await params;
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
-      console.log('❌ GET /api/submissions/[id] - Auth error:', authError);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -35,7 +35,7 @@ export async function GET(
       const { data: subWithProject } = await adminClient
         .from('project_submissions')
         .select('project:projects(lesson_id)')
-        .eq('id', params.id)
+        .eq('id', id)
         .single();
 
       // @ts-ignore
@@ -69,13 +69,12 @@ export async function GET(
       }
     }
 
-    const submission = await submissionService.getSubmissionById(params.id, clientToUse);
+    const submission = await submissionService.getSubmissionById(id, clientToUse);
 
     if (!submission) {
       return NextResponse.json({ error: 'Submission not found' }, { status: 404 });
     }
 
-    console.log('✅ GET /api/submissions/[id] - Submission fetched:', params.id);
     return NextResponse.json(submission);
   } catch (error) {
     console.error('❌ GET /api/submissions/[id] - Error:', error);
@@ -90,12 +89,12 @@ export async function PUT(
   request: NextRequest,
   { params }: any
 ) {
+  const { id } = await params;
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
-      console.log('❌ PUT /api/submissions/[id] - Auth error:', authError);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -108,8 +107,6 @@ export async function PUT(
 
     const body = await request.json();
     const { submission_link, submission_platform, status, feedback, grade } = body;
-
-    console.log('📝 PUT /api/submissions/[id] - Updating submission:', params.id);
 
     const updateData: any = {};
     if (submission_link !== undefined) updateData.submission_link = submission_link;
@@ -137,7 +134,7 @@ export async function PUT(
       const { data: subWithProject } = await adminClient
         .from('project_submissions')
         .select('project:projects(lesson_id)')
-        .eq('id', params.id)
+        .eq('id', id)
         .single();
       // @ts-ignore
       const lessonId = subWithProject?.project?.lesson_id as string | undefined;
@@ -164,12 +161,10 @@ export async function PUT(
       }
     }
 
-    const submission = await submissionService.updateSubmission(params.id, updateData, clientToUse);
+    const submission = await submissionService.updateSubmission(id, updateData, clientToUse);
 
     // If status is approved, automatically complete the lesson for the student
     if (status === 'approved') {
-      console.log('🎉 Submission approved - marking lesson as complete');
-      
       // Use admin client to bypass RLS for updating student's progress
       const adminClient = createAdminClient();
       
@@ -177,7 +172,7 @@ export async function PUT(
       const { data: submissionWithProject } = await adminClient
         .from('project_submissions')
         .select('user_id, project:projects(lesson_id)')
-        .eq('id', params.id)
+        .eq('id', id)
         .single();
       
       if (submissionWithProject) {
@@ -207,8 +202,6 @@ export async function PUT(
               
               if (updateError) {
                 console.error('❌ Error updating lesson progress:', updateError);
-              } else {
-                console.log('✅ Lesson marked as complete for student');
               }
             }
           } else {
@@ -224,8 +217,6 @@ export async function PUT(
             
             if (insertError) {
               console.error('❌ Error creating lesson progress:', insertError);
-            } else {
-              console.log('✅ Created lesson progress and marked as complete');
             }
           }
         }
@@ -240,7 +231,6 @@ export async function PUT(
       description: `Updated submission status: ${status || 'changed'}`
     });
 
-    console.log('✅ PUT /api/submissions/[id] - Submission updated:', params.id);
     return NextResponse.json(submission);
   } catch (error: any) {
     console.error('❌ PUT /api/submissions/[id] - Error:', error);
@@ -255,12 +245,12 @@ export async function DELETE(
   request: NextRequest,
   { params }: any
 ) {
+  const { id } = await params;
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     
     if (authError || !user) {
-      console.log('❌ DELETE /api/submissions/[id] - Auth error:', authError);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -270,8 +260,6 @@ export async function DELETE(
       .select('role')
       .eq('id', user.id)
       .single();
-
-    console.log('🗑️ DELETE /api/submissions/[id] - Deleting submission:', params.id);
 
     let clientToUse: 'admin' | 'regular' = 'regular';
     if (profile?.role === 'admin') {
@@ -283,7 +271,7 @@ export async function DELETE(
       const { data: subWithProject } = await adminClient
         .from('project_submissions')
         .select('project:projects(lesson_id)')
-        .eq('id', params.id)
+        .eq('id', id)
         .single();
       // @ts-ignore
       const lessonId = subWithProject?.project?.lesson_id as string | undefined;
@@ -310,17 +298,16 @@ export async function DELETE(
       }
     }
 
-    await submissionService.deleteSubmission(params.id, clientToUse);
+    await submissionService.deleteSubmission(id, clientToUse);
 
     // Log the submission deletion
     await activityLogService.logActivity({
       action: 'DELETE',
       table_name: 'project_submissions',
-      record_id: params.id,
+      record_id: id,
       description: 'Deleted project submission'
     });
 
-    console.log('✅ DELETE /api/submissions/[id] - Submission deleted:', params.id);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error('❌ DELETE /api/submissions/[id] - Error:', error);

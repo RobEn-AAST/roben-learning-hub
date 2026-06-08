@@ -88,7 +88,6 @@ class QuizService {
 
       // Create a Set of lesson IDs that already have quizzes
       const usedLessonIds = new Set(quizzesData?.map((quiz: { lesson_id: string }) => quiz.lesson_id) || []);
-      console.log('📋 QuizService.getLessons - Lessons with existing quizzes:', usedLessonIds.size);
 
       // Filter out lessons that already have quizzes
       const availableLessons = lessonsData?.filter((lesson: any) => !usedLessonIds.has(lesson.id)) || [];
@@ -101,7 +100,6 @@ class QuizService {
         course_id: lesson.modules?.course_id
       }));
 
-      console.log('✅ QuizService.getLessons - Found', lessons.length, 'available lessons (filtered from', lessonsData?.length || 0, 'total)');
       return lessons;
     } catch (error) {
       console.error('❌ QuizService.getLessons - Error:', error);

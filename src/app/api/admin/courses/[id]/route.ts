@@ -58,14 +58,9 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log('=== COURSE PUT API CALLED ===');
-    console.log('Request method:', request.method);
-    console.log('Request URL:', request.url);
-    console.log('Request headers:', Object.fromEntries(request.headers.entries()));
     
     const permissionError = await checkAdminPermission();
     if (permissionError) {
-      console.log('Permission check failed, returning error response');
       return permissionError;
     }
 
@@ -73,7 +68,6 @@ export async function PUT(
     const body = await request.json();
     const { id } = await params;
     
-    console.log('Updating course:', { id, body });
 
     // Extract instructor_ids before updating the course
     const { instructor_ids, ...courseUpdateData } = body;
@@ -89,8 +83,6 @@ export async function PUT(
       }
     });
     
-    console.log('Processed update data (without instructor_ids):', updateData);
-    console.log('Instructor IDs to handle separately:', instructor_ids);
 
     // Update course with admin client
     const { data, error } = await adminClient
@@ -111,11 +103,9 @@ export async function PUT(
       throw error;
     }
 
-    console.log('Course updated successfully:', data);
 
     // Handle instructor assignments if provided
     if (instructor_ids !== undefined && Array.isArray(instructor_ids)) {
-      console.log('Processing instructor assignments:', instructor_ids);
       
       try {
         // Get current user for assignment tracking
@@ -132,7 +122,6 @@ export async function PUT(
           console.error('Error removing existing instructors:', removeError);
           // Don't fail the whole update for this, just log it
         } else {
-          console.log('Removed existing instructor assignments');
         }
 
         // Add new instructor assignments if any instructors are selected
@@ -152,17 +141,14 @@ export async function PUT(
             console.error('Error creating instructor assignments:', assignmentError);
             // Don't fail the whole update, just log the error
           } else {
-            console.log(`Successfully assigned ${instructor_ids.length} instructors to course`);
           }
         } else {
-          console.log('No instructors to assign (empty array provided)');
         }
       } catch (instructorError) {
         console.error('Error handling instructor assignments:', instructorError);
         // Don't fail the whole course update for instructor assignment errors
       }
     } else {
-      console.log('No instructor_ids provided, skipping instructor assignment updates');
     }
 
     return NextResponse.json(data);

@@ -3,18 +3,13 @@ import { createClient } from '@/lib/supabase/server';
 import { createAdminClient, getAllowedInstructorCourseIds } from '@/lib/adminHelpers';
 
 export async function GET(request: NextRequest) {
-  console.log('🔍 GET /api/admin/quizzes - Fetching all quizzes');
-  
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      console.log('❌ Authentication failed:', authError?.message);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    console.log(`👤 User authenticated: ${user.email} (${user.id})`);
 
     // Get user role to determine client type
     const { data: profile } = await supabase
@@ -25,8 +20,6 @@ export async function GET(request: NextRequest) {
 
     const userRole = profile?.role || 'student';
     const clientType = userRole === 'admin' ? 'admin' : 'regular';
-    
-    console.log(`🔑 User role: ${userRole}, using client type: ${clientType}`);
 
     // Role-based scoping: admins see all, instructors see only their lessons' quizzes
     let quizzes: any[] | null = null;
@@ -35,7 +28,7 @@ export async function GET(request: NextRequest) {
     if (userRole === 'admin') {
       const resp = await supabase
         .from('quizzes')
-        .select('id, lesson_id, title, description, time_limit_minutes, created_at');
+        .select('id, lesson_id, title, description, time_limit_minutes, passing_score, created_at');
       quizzes = resp.data;
       error = resp.error;
     } else if (userRole === 'instructor') {
@@ -55,7 +48,7 @@ export async function GET(request: NextRequest) {
         } else {
           const resp = await admin
             .from('quizzes')
-            .select('id, lesson_id, title, description, time_limit_minutes, created_at')
+            .select('id, lesson_id, title, description, time_limit_minutes, passing_score, created_at')
             .in('lesson_id', lessonIds);
           quizzes = resp.data;
           error = resp.error;
@@ -69,9 +62,7 @@ export async function GET(request: NextRequest) {
       console.error('❌ Database error:', error);
       return NextResponse.json({ error: 'Failed to fetch quizzes' }, { status: 500 });
     }
-    
-    console.log(`✅ Successfully fetched ${quizzes?.length || 0} quizzes`);
-    
+
     // Map lesson_id -> lessonId, created_at -> createdAt for frontend consistency
     const mappedQuizzes = (quizzes || []).map((q: any) => ({
       ...q,
@@ -88,18 +79,13 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  console.log('🔍 POST /api/admin/quizzes - Creating new quiz');
-  
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      console.log('❌ Authentication failed:', authError?.message);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    console.log(`👤 User authenticated: ${user.email} (${user.id})`);
 
     // Get user role to determine client type
     const { data: profile } = await supabase
@@ -110,21 +96,16 @@ export async function POST(request: NextRequest) {
 
     const userRole = profile?.role || 'student';
     const clientType = userRole === 'admin' ? 'admin' : 'regular';
-    
-    console.log(`🔑 User role: ${userRole}, using client type: ${clientType}`);
 
     if (!['admin', 'instructor'].includes(userRole)) {
-      console.log('❌ Insufficient permissions for user role:', userRole);
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
     const body = await request.json();
-    const { lessonId, title, description, timeLimitMinutes } = body;
+    const { lessonId, title, description, timeLimitMinutes, passingScore } = body;
 
-    console.log('📝 Creating quiz:', { lessonId, title, description, timeLimitMinutes });
-
-    if (!lessonId || !title) {
-      return NextResponse.json({ error: 'Missing required fields: lessonId, title' }, { status: 400 });
+    if (!lessonId) {
+      return NextResponse.json({ error: 'Missing required field: lessonId' }, { status: 400 });
     }
 
     // Check if quiz already exists for this lesson
@@ -142,11 +123,12 @@ export async function POST(request: NextRequest) {
       .from('quizzes')
       .insert([{
         lesson_id: lessonId,
-        title,
+        title: title || null,
         description: description || null,
-        time_limit_minutes: timeLimitMinutes || null
+        time_limit_minutes: timeLimitMinutes || null,
+        passing_score: passingScore ?? 0
       }])
-      .select('id, lesson_id, title, description, time_limit_minutes, created_at')
+      .select('id, lesson_id, title, description, time_limit_minutes, passing_score, created_at')
       .single();
 
     if (error) {
@@ -156,8 +138,6 @@ export async function POST(request: NextRequest) {
       }
       return NextResponse.json({ error: 'Failed to create quiz' }, { status: 500 });
     }
-
-    console.log(`✅ Successfully created quiz: ${quiz.id}`);
 
     // Map lesson_id -> lessonId, created_at -> createdAt for frontend consistency
     const mappedQuiz = {

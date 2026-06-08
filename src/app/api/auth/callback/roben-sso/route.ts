@@ -23,16 +23,11 @@ export async function GET(request: NextRequest) {
     const sso = new RobenSSO();
 
     // Step 2: Exchange code for access token
-    console.log('Exchanging code for token...');
     const tokenResponse = await sso.exchangeCodeForToken(code);
 
     // Step 3: Get user info from Roben.club
-    console.log('Fetching user info...');
     const userInfo = await sso.getUserInfo(tokenResponse.access_token);
-    
-    // Debug: Log the user info we received
-    console.log('User info received from Roben.club:', JSON.stringify(userInfo, null, 2));
-    
+
     // Validate user info
     if (!userInfo.email) {
       console.error('No email in user info:', userInfo);
@@ -55,8 +50,7 @@ export async function GET(request: NextRequest) {
     if (existingAuthUser) {
       // User exists in auth, just update their profile
       userId = existingAuthUser.id;
-      console.log('Found existing user:', userId);
-      
+
       // Update or create profile data (in case profile doesn't exist)
       const { error: upsertError } = await adminClient
         .from('profiles')
@@ -81,15 +75,11 @@ export async function GET(request: NextRequest) {
 
       if (upsertError) {
         console.warn('Failed to update profile:', upsertError);
-      } else {
-        console.log('Updated existing user profile:', userId);
       }
 
       // Phone is persisted to profiles.phone_number only; do not update auth.users.phone
     } else {
       // Create new user in Supabase Auth using admin client
-      console.log('Creating new user with email:', userInfo.email);
-      
       const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
         email: userInfo.email,
         email_confirm: true, // Auto-confirm email from Roben.club
@@ -106,7 +96,6 @@ export async function GET(request: NextRequest) {
       }
 
       userId = authData.user.id;
-      console.log('Successfully created auth user:', userId);
 
       // Create profile in public.profiles using admin client
       const { error: profileError } = await adminClient
@@ -132,8 +121,6 @@ export async function GET(request: NextRequest) {
         console.error('Failed to create profile:', profileError);
         throw new Error(`Failed to create user profile: ${profileError.message}`);
       }
-
-      console.log('Created new user:', userId);
     }
 
     // Store Roben access token in user metadata
@@ -161,8 +148,6 @@ export async function GET(request: NextRequest) {
       password: randomPassword,
     });
 
-    console.log('Set temporary password for user:', userId);
-
     // Now sign in the user with the password to get a session
     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
       email: userInfo.email,
@@ -173,8 +158,6 @@ export async function GET(request: NextRequest) {
       console.error('Failed to sign in user:', signInError);
       throw new Error('Failed to sign in user');
     }
-
-    console.log('User signed in successfully:', userId);
 
     // Get user's role for redirect
     const { data: profile } = await supabase

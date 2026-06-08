@@ -170,6 +170,7 @@ interface ExtendedSubmission extends ProjectSubmission {
   student_email?: string;
   lesson_title?: string;
   course_title?: string;
+  course_id?: string;
 }
 
 interface FormData {
@@ -182,6 +183,7 @@ export default function ProjectSubmissionsAdminDashboard() {
   const [submissions, setSubmissions] = useState<ExtendedSubmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [expandedCourses, setExpandedCourses] = useState<Set<string>>(new Set());
   const [selectedSubmission, setSelectedSubmission] =
     useState<ExtendedSubmission | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
@@ -209,6 +211,15 @@ export default function ProjectSubmissionsAdminDashboard() {
 
       const data = await response.json();
       setSubmissions(data);
+
+      // Auto-expand courses with pending submissions
+      const coursesWithPending = new Set<string>();
+      for (const sub of data) {
+        if (sub.status === 'submitted' || sub.status === 'pending_review') {
+          coursesWithPending.add(sub.course_title || 'Unknown Course');
+        }
+      }
+      setExpandedCourses(coursesWithPending);
     } catch (error) {
       console.error("Error loading submissions:", error);
     } finally {
@@ -400,6 +411,31 @@ export default function ProjectSubmissionsAdminDashboard() {
 
     return matchesSearch && matchesStatus;
   });
+
+  // Group submissions by course
+  const groupedByCourse = filteredSubmissions.reduce((acc, sub) => {
+    const key = sub.course_title || 'Unknown Course';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(sub);
+    return acc;
+  }, {} as Record<string, ExtendedSubmission[]>);
+
+  // Sort courses: those with pending submissions first
+  const sortedCourseNames = Object.keys(groupedByCourse).sort((a, b) => {
+    const pendingA = groupedByCourse[a].filter(s => s.status === 'submitted' || s.status === 'pending_review').length;
+    const pendingB = groupedByCourse[b].filter(s => s.status === 'submitted' || s.status === 'pending_review').length;
+    if (pendingB !== pendingA) return pendingB - pendingA;
+    return a.localeCompare(b);
+  });
+
+  const toggleCourseExpand = (courseName: string) => {
+    setExpandedCourses(prev => {
+      const next = new Set(prev);
+      if (next.has(courseName)) next.delete(courseName);
+      else next.add(courseName);
+      return next;
+    });
+  };
 
   const stats = {
     total: submissions.length,
@@ -742,139 +778,173 @@ export default function ProjectSubmissionsAdminDashboard() {
         </CardContent>
       </Card>
 
-      {/* Submissions Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Submissions ({filteredSubmissions.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left p-3 font-semibold">Project</th>
-                  <th className="text-left p-3 font-semibold">Student</th>
-                  <th className="text-left p-3 font-semibold">Platform</th>
-                  <th className="text-left p-3 font-semibold">Status</th>
-                  <th className="text-left p-3 font-semibold">Grade</th>
-                  <th className="text-left p-3 font-semibold">Submitted</th>
-                  <th className="text-right p-3 font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredSubmissions.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="text-center p-8 text-gray-500">
-                      No submissions found
-                    </td>
-                  </tr>
-                ) : (
-                  filteredSubmissions.map((submission) => (
-                    <tr
-                      key={submission.id}
-                      className="border-b hover:bg-gray-50"
-                    >
-                      <td className="p-3">
-                        <div className="font-medium">
-                          {submission.project_title}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {submission.lesson_title}
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <div className="font-medium">
-                          {submission.student_name}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {submission.student_email}
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <Badge variant="outline">
-                          {PLATFORM_NAMES[submission.submission_platform]}
-                        </Badge>
-                      </td>
-                      <td className="p-3">
-                        {getStatusBadge(submission.status)}
-                      </td>
-                      <td className="p-3">
-                        {submission.grade !== null ? (
-                          <span className="font-semibold">
-                            {submission.grade}/100
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">No grade</span>
-                        )}
-                      </td>
-                      <td className="p-3 text-sm text-gray-600">
-                        {new Date(submission.submitted_at).toLocaleDateString()}
-                      </td>
-                      <td className="p-3">
-                        <div className="flex justify-end gap-2">
-                          {/* Quick Actions for pending submissions */}
-                          {(submission.status === "submitted" ||
-                            submission.status === "pending_review") && (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleQuickApprove(submission)}
-                                className="text-green-600 hover:bg-green-50 border-green-300"
-                                title="Quick Approve (100%)"
-                              >
-                                <Icons.Check />
-                                <span className="ml-1">Approve</span>
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleQuickReject(submission)}
-                                className="text-orange-600 hover:bg-orange-50 border-orange-300"
-                                title="Request Resubmission"
-                              >
-                                <Icons.X />
-                                <span className="ml-1">Reject</span>
-                              </Button>
-                            </>
-                          )}
+      {/* Submissions grouped by course */}
+      <div className="space-y-4">
+        {filteredSubmissions.length === 0 ? (
+          <Card>
+            <CardContent className="text-center p-8 text-gray-500">
+              No submissions found
+            </CardContent>
+          </Card>
+        ) : (
+          sortedCourseNames.map((courseName) => {
+            const courseSubs = groupedByCourse[courseName];
+            const pendingCount = courseSubs.filter(
+              s => s.status === 'submitted' || s.status === 'pending_review'
+            ).length;
+            const isExpanded = expandedCourses.has(courseName);
 
-                          {/* Standard Actions */}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleView(submission)}
-                            title="View Details"
-                          >
-                            <Icons.View />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleEdit(submission)}
-                            title="Edit Submission"
-                          >
-                            <Icons.Edit />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleDelete(submission)}
-                            className="text-red-600 hover:bg-red-50"
-                            title="Delete Submission"
-                          >
-                            <Icons.Delete />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+            return (
+              <Card key={courseName}>
+                {/* Course header — clickable to expand/collapse */}
+                <button
+                  type="button"
+                  onClick={() => toggleCourseExpand(courseName)}
+                  className="w-full text-left"
+                >
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 py-4">
+                    <div className="flex items-center gap-3">
+                      <svg
+                        className={`h-5 w-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                      <CardTitle className="text-lg">{courseName}</CardTitle>
+                      <Badge variant="secondary">{courseSubs.length}</Badge>
+                      {pendingCount > 0 && (
+                        <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">
+                          {pendingCount} pending
+                        </Badge>
+                      )}
+                    </div>
+                  </CardHeader>
+                </button>
+
+                {/* Submissions table for this course */}
+                {isExpanded && (
+                  <CardContent className="pt-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="text-left p-3 font-semibold">Project</th>
+                            <th className="text-left p-3 font-semibold">Student</th>
+                            <th className="text-left p-3 font-semibold">Platform</th>
+                            <th className="text-left p-3 font-semibold">Status</th>
+                            <th className="text-left p-3 font-semibold">Grade</th>
+                            <th className="text-left p-3 font-semibold">Submitted</th>
+                            <th className="text-right p-3 font-semibold">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {courseSubs.map((submission) => (
+                            <tr
+                              key={submission.id}
+                              className="border-b hover:bg-gray-50"
+                            >
+                              <td className="p-3">
+                                <div className="font-medium">
+                                  {submission.project_title}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  {submission.lesson_title}
+                                </div>
+                              </td>
+                              <td className="p-3">
+                                <div className="font-medium">
+                                  {submission.student_name}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  {submission.student_email}
+                                </div>
+                              </td>
+                              <td className="p-3">
+                                <Badge variant="outline">
+                                  {PLATFORM_NAMES[submission.submission_platform]}
+                                </Badge>
+                              </td>
+                              <td className="p-3">
+                                {getStatusBadge(submission.status)}
+                              </td>
+                              <td className="p-3">
+                                {submission.grade !== null ? (
+                                  <span className="font-semibold">
+                                    {submission.grade}/100
+                                  </span>
+                                ) : (
+                                  <span className="text-gray-400">No grade</span>
+                                )}
+                              </td>
+                              <td className="p-3 text-sm text-gray-600">
+                                {new Date(submission.submitted_at).toLocaleDateString()}
+                              </td>
+                              <td className="p-3">
+                                <div className="flex justify-end gap-2">
+                                  {(submission.status === "submitted" ||
+                                    submission.status === "pending_review") && (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleQuickApprove(submission)}
+                                        className="text-green-600 hover:bg-green-50 border-green-300"
+                                        title="Quick Approve (100%)"
+                                      >
+                                        <Icons.Check />
+                                        <span className="ml-1">Approve</span>
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleQuickReject(submission)}
+                                        className="text-orange-600 hover:bg-orange-50 border-orange-300"
+                                        title="Request Resubmission"
+                                      >
+                                        <Icons.X />
+                                        <span className="ml-1">Reject</span>
+                                      </Button>
+                                    </>
+                                  )}
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleView(submission)}
+                                    title="View Details"
+                                  >
+                                    <Icons.View />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleEdit(submission)}
+                                    title="Edit Submission"
+                                  >
+                                    <Icons.Edit />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleDelete(submission)}
+                                    className="text-red-600 hover:bg-red-50"
+                                    title="Delete Submission"
+                                  >
+                                    <Icons.Delete />
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
                 )}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+              </Card>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }

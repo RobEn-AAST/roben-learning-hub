@@ -1,21 +1,17 @@
-import React from "react";
-import Link from "next/link";
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
-import { Button } from "@/components/ui/button";
-import { LogoutButton } from "@/components/logout-button";
-import { isUserInstructor } from "@/utils/auth";
+import React from 'react';
+import { redirect } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
+import { isUserInstructor } from '@/utils/auth';
+import { InstructorSidebar } from '@/components/instructor/InstructorSidebar';
+import { InstructorMobileNav } from '@/components/instructor/InstructorMobileNav';
 
-// Export dynamic rendering configuration for instructor authentication
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 interface InstructorLayoutProps {
   children: React.ReactNode;
 }
 
-export default async function InstructorLayout({
-  children,
-}: InstructorLayoutProps) {
+export default async function InstructorLayout({ children }: InstructorLayoutProps) {
   const supabase = await createClient();
 
   const {
@@ -23,24 +19,30 @@ export default async function InstructorLayout({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/auth/login");
+    redirect('/auth/login');
   }
 
-  // Check if user has instructor or admin role
   const hasInstructorAccess = await isUserInstructor(user.id);
 
   if (!hasInstructorAccess) {
-    redirect(
-      "/auth/error?message=Access denied. Instructor privileges required."
-    );
+    redirect('/auth/error?message=Access denied. Instructor privileges required.');
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Instructor Content */}
-      <main className="">
-        <div className="">{children}</div>
-      </main>
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Sidebar (desktop) */}
+      <InstructorSidebar />
+
+      {/* Main area */}
+      <div className="flex-1 flex flex-col min-h-screen">
+        {/* Mobile nav */}
+        <InstructorMobileNav />
+
+        {/* Content */}
+        <main className="flex-1 p-6">
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

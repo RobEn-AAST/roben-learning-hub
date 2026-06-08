@@ -11,8 +11,6 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log('PUT /api/admin/users/[id] - Starting request');
-
     const adminCheck = await checkAdminPermission();
     if (adminCheck) {
       console.error('Admin check failed');
@@ -103,7 +101,6 @@ export async function PUT(
       updated_at: profile.updated_at || authUser.user.created_at
     };
 
-    console.log('Successfully updated user:', id);
     return NextResponse.json({ user: updatedUser });
 
   } catch (error) {
@@ -121,8 +118,6 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log('DELETE /api/admin/users/[id] - Starting request');
-
     const adminCheck = await checkAdminPermission();
     if (adminCheck) {
       console.error('Admin check failed');
@@ -156,7 +151,6 @@ export async function DELETE(
       );
     }
 
-    console.log('Successfully deleted user:', id);
     return NextResponse.json({ success: true });
 
   } catch (error) {
@@ -174,8 +168,6 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    console.log('POST /api/admin/users/[id]/reset-password - Starting request');
-
     const adminCheck = await checkAdminPermission();
     if (adminCheck) {
       console.error('Admin check failed');
@@ -207,7 +199,6 @@ export async function POST(
       );
     }
 
-    console.log('Successfully reset password for user:', id);
     return NextResponse.json({ success: true });
 
   } catch (error) {

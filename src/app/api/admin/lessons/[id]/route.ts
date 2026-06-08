@@ -189,9 +189,6 @@ export async function DELETE(
     }
 
     // Delete the lesson using the appropriate client
-    console.log(`[DELETE LESSON] Attempting to delete lesson with ID: ${id}`);
-    console.log(`[DELETE LESSON] User role: ${profile?.role}, Using client: ${isAdmin ? 'admin' : 'regular'}`);
-    
     const { error: deleteError, count } = await clientToUse
       .from('lessons')
       .delete()
@@ -207,10 +204,6 @@ export async function DELETE(
       throw new Error(`Failed to delete lesson: ${deleteError.message}`);
     }
 
-    console.log(`[DELETE LESSON] Delete operation completed. Affected rows: ${count}`);
-
-    console.log(`[DELETE LESSON] Successfully deleted lesson: ${lesson.title} (${id})`);
-    
     // Verify deletion by trying to fetch the lesson again
     const { data: verifyLesson } = await clientToUse
       .from('lessons')
@@ -221,10 +214,8 @@ export async function DELETE(
     if (verifyLesson) {
       console.error('[DELETE LESSON] ERROR: Lesson still exists after deletion attempt!');
       return NextResponse.json({ error: 'Failed to delete lesson - lesson still exists' }, { status: 500 });
-    } else {
-      console.log('[DELETE LESSON] VERIFIED: Lesson successfully removed from database');
     }
-    
+
     // Log the action (use CreateActivityLogData shape)
     await activityLogService.logActivity({
       action: 'DELETE',

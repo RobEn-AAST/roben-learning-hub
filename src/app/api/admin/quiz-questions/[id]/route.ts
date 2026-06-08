@@ -2,18 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 
 export async function PUT(request: NextRequest, { params }: any) {
-  console.log(`🔍 PUT /api/admin/quiz-questions/${params.id} - Updating quiz question`);
+  const { id } = await params;
   
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      console.log('❌ Authentication failed:', authError?.message);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    console.log(`👤 User authenticated: ${user.email} (${user.id})`);
 
     // Get user role to determine permissions
     const { data: profile } = await supabase
@@ -24,10 +22,8 @@ export async function PUT(request: NextRequest, { params }: any) {
 
     const userRole = profile?.role || 'student';
     
-    console.log(`🔑 User role: ${userRole}`);
 
     if (!['admin', 'instructor'].includes(userRole)) {
-      console.log('❌ Insufficient permissions for user role:', userRole);
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
@@ -36,7 +32,7 @@ export async function PUT(request: NextRequest, { params }: any) {
       const { data: questionRef } = await supabase
         .from('questions')
         .select('quiz_id')
-        .eq('id', params.id)
+        .eq('id', id)
         .single();
 
       if (!questionRef) {
@@ -65,9 +61,8 @@ export async function PUT(request: NextRequest, { params }: any) {
     }
 
     const body = await request.json();
-    const { text, type } = body;
+    const { text, type, points, position } = body;
 
-    console.log('📝 Updating quiz question:', { id: params.id, text: text?.substring(0, 50) + '...', type });
 
     if (!text || !type) {
       return NextResponse.json({ error: 'Missing required fields: text, type' }, { status: 400 });
@@ -79,14 +74,23 @@ export async function PUT(request: NextRequest, { params }: any) {
       return NextResponse.json({ error: 'Invalid question type' }, { status: 400 });
     }
 
+    // Build update object
+    const updateData: Record<string, any> = {
+      content: text,
+      type: type,
+    };
+    if (points !== undefined) {
+      updateData.points = points;
+    }
+    if (position !== undefined) {
+      updateData.position = position;
+    }
+
     // Update the question
     const { data: question, error } = await supabase
       .from('questions')
-      .update({
-        content: text,
-        type: type
-      })
-      .eq('id', params.id)
+      .update(updateData)
+      .eq('id', id)
       .select('id, quiz_id, content, type')
       .single();
 
@@ -99,7 +103,6 @@ export async function PUT(request: NextRequest, { params }: any) {
       return NextResponse.json({ error: 'Quiz question not found' }, { status: 404 });
     }
 
-    console.log(`✅ Successfully updated quiz question: ${question.id}`);
 
     // Map quiz_id -> quizId, content -> text for frontend consistency
     const mappedQuestion = {
@@ -116,18 +119,16 @@ export async function PUT(request: NextRequest, { params }: any) {
 }
 
 export async function DELETE(request: NextRequest, { params }: any) {
-  console.log(`🔍 DELETE /api/admin/quiz-questions/${params.id} - Deleting quiz question`);
+  const { id } = await params;
   
   try {
     const supabase = await createClient();
     const { data: { user }, error: authError } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      console.log('❌ Authentication failed:', authError?.message);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    console.log(`👤 User authenticated: ${user.email} (${user.id})`);
 
     // Get user role to determine permissions
     const { data: profile } = await supabase
@@ -138,10 +139,8 @@ export async function DELETE(request: NextRequest, { params }: any) {
 
     const userRole = profile?.role || 'student';
     
-    console.log(`🔑 User role: ${userRole}`);
 
     if (!['admin', 'instructor'].includes(userRole)) {
-      console.log('❌ Insufficient permissions for user role:', userRole);
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 });
     }
 
@@ -150,7 +149,7 @@ export async function DELETE(request: NextRequest, { params }: any) {
       const { data: questionRef } = await supabase
         .from('questions')
         .select('quiz_id')
-        .eq('id', params.id)
+        .eq('id', id)
         .single();
 
       if (!questionRef) {
@@ -178,13 +177,12 @@ export async function DELETE(request: NextRequest, { params }: any) {
       }
     }
 
-    console.log('🗑️ Deleting quiz question:', params.id);
 
     // First, delete all question options for this question
     const { error: optionsError } = await supabase
       .from('question_options')
       .delete()
-      .eq('question_id', params.id);
+      .eq('question_id', id);
 
     if (optionsError) {
       console.warn('⚠️ Error deleting question options:', optionsError);
@@ -195,7 +193,7 @@ export async function DELETE(request: NextRequest, { params }: any) {
     const { data: question, error } = await supabase
       .from('questions')
       .delete()
-      .eq('id', params.id)
+      .eq('id', id)
       .select('id')
       .single();
 
@@ -208,7 +206,6 @@ export async function DELETE(request: NextRequest, { params }: any) {
       return NextResponse.json({ error: 'Quiz question not found' }, { status: 404 });
     }
 
-    console.log(`✅ Successfully deleted quiz question: ${question.id}`);
 
     return NextResponse.json({ message: 'Quiz question deleted successfully', id: question.id });
   } catch (error) {

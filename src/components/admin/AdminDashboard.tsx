@@ -1,414 +1,362 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  BookOpen,
+  Layers,
+  FileText,
+  Clock,
+  Plus,
+  ExternalLink,
+  Activity,
+  Eye,
+  BarChart3,
+} from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { coursesService, CourseStats } from '@/services/coursesService';
-import { activityLogService, ActivityLog } from '@/services/activityLogService';
-import { CoursesAdminDashboard } from './CoursesAdminDashboard';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
+import { useCreateCourse } from '@/hooks/useQueryCache';
 
-// Icons (using simple SVG for now - you can replace with your preferred icon library)
-const Icons = {
-  Users: () => (
-    <svg className="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-    </svg>
-  ),
-  Activity: () => (
-    <svg className="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-    </svg>
-  ),
-  Database: () => (
-    <svg className="h-6 w-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
-    </svg>
-  ),
-  Server: () => (
-    <svg className="h-6 w-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
-    </svg>
-  ),
-  Settings: () => (
-    <svg className="h-6 w-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-  ),
-  Logs: () => (
-    <svg className="h-6 w-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-    </svg>
-  ),
-  Book: () => (
-    <svg className="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.746 0 3.332.477 4.5 1.253v13C19.832 18.477 18.246 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-    </svg>
-  ),
-};
-
-interface DashboardStatsProps {
-  title: string;
-  value: string | number;
-  change?: string;
-  changeType?: 'positive' | 'negative' | 'neutral';
-  icon?: React.ReactNode;
-}
-
-function DashboardStats({ title, value, change, changeType = 'neutral', icon }: DashboardStatsProps) {
-  const changeColor = {
-    positive: 'text-green-600',
-    negative: 'text-red-600',
-    neutral: 'text-gray-600'
-  }[changeType];
-
-  return (
-    <Card className="bg-white">
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            {icon && <div className="flex-shrink-0">{icon}</div>}
-            <div>
-              <p className="text-sm font-medium text-gray-600">{title}</p>
-              <p className="text-2xl font-bold text-black">{value}</p>
-              {change && (
-                <p className={`text-xs ${changeColor}`}>
-                  {change}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-interface QuickAction {
+interface CourseWithCounts {
+  id: string;
   title: string;
   description: string;
-  icon: React.ReactNode;
-  href: string;
-  onClick?: () => void;
+  status: string;
+  cover_image: string | null;
+  slug: string;
+  created_at: string;
+  module_count: number;
+  lesson_count: number;
 }
 
-interface RecentActivity {
-  id: string;
-  type: 'course' | 'system' | 'user' | 'table';
-  message: string;
-  timestamp: string;
-  status: 'success' | 'warning' | 'info';
-  action?: string;
-  table_name?: string;
+interface AdminDashboardProps {
+  courses: CourseWithCounts[];
 }
 
-export function AdminDashboard() {
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const [stats, setStats] = useState<CourseStats | null>(null);
-  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [currentView, setCurrentView] = useState<'dashboard' | 'courses'>('dashboard');
+const statusColors: Record<string, string> = {
+  draft: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+  published: 'bg-green-100 text-green-800 border-green-200',
+  archived: 'bg-gray-100 text-gray-600 border-gray-200',
+};
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
+const statusDotColors: Record<string, string> = {
+  draft: 'bg-yellow-400',
+  published: 'bg-green-500',
+  archived: 'bg-gray-400',
+};
 
-    return () => clearInterval(timer);
-  }, []);
+const gradients = [
+  'from-blue-500 to-purple-600',
+  'from-emerald-500 to-teal-600',
+  'from-orange-500 to-red-600',
+  'from-pink-500 to-rose-600',
+  'from-indigo-500 to-blue-600',
+  'from-cyan-500 to-blue-600',
+];
 
-  useEffect(() => {
-    loadDashboardData();
-    // Note: No logging for dashboard access as requested
-  }, []);
+function getGradient(title: string): string {
+  let hash = 0;
+  for (let i = 0; i < title.length; i++) {
+    hash = title.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return gradients[Math.abs(hash) % gradients.length];
+}
 
-  const loadDashboardData = async () => {
+const supabaseStudioUrl =
+  process.env.NEXT_PUBLIC_SUPABASE_URL?.includes('supabase.co')
+    ? `https://supabase.com/dashboard/project/${process.env.NEXT_PUBLIC_SUPABASE_URL.split('.')[0].replace('https://', '')}`
+    : 'http://127.0.0.1:55423';
+
+export function AdminDashboard({ courses }: AdminDashboardProps) {
+  const router = useRouter();
+  const createCourseMutation = useCreateCourse();
+
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newDescription, setNewDescription] = useState('');
+  const [creating, setCreating] = useState(false);
+
+  // Compute stats from courses array (no extra API call)
+  const stats = {
+    total: courses.length,
+    published: courses.filter((c) => c.status === 'published').length,
+    draft: courses.filter((c) => c.status === 'draft').length,
+    modules: courses.reduce((s, c) => s + c.module_count, 0),
+    lessons: courses.reduce((s, c) => s + c.lesson_count, 0),
+  };
+
+  const handleCreateCourse = async () => {
+    if (!newTitle.trim()) {
+      toast.error('Title is required');
+      return;
+    }
+    setCreating(true);
     try {
-      setLoading(true);
-      
-      // Load only stats for now - recent activity disabled
-      const statsData = await coursesService.getCourseStats();
-      setStats(statsData);
-      
-      // Disable recent activity for now
-      setRecentActivity([]);
-    } catch (error) {
-      console.error('Failed to load dashboard data:', error);
+      const result = await createCourseMutation.mutateAsync({
+        title: newTitle.trim(),
+        description: newDescription.trim(),
+        status: 'draft',
+        cover_image: null,
+        created_by: '',
+        metadata: {},
+      });
+      toast.success('Course created!');
+      setShowCreateDialog(false);
+      setNewTitle('');
+      setNewDescription('');
+      router.push(`/admin/courses/${result.id}/builder`);
+    } catch (err) {
+      toast.error(
+        `Failed to create course: ${err instanceof Error ? err.message : 'Unknown error'}`
+      );
     } finally {
-      setLoading(false);
+      setCreating(false);
     }
   };
 
-  const getActivityType = (resourceType: string): RecentActivity['type'] => {
-    switch (resourceType) {
-      case 'courses': return 'course';
-      case 'modules': 
-      case 'lessons': return 'table';
-      case 'users':
-      case 'profiles': return 'user';
-      default: return 'system';
-    }
-  };
-
-  const getActivityStatus = (action: string): RecentActivity['status'] => {
-    switch (action) {
-      case 'CREATE':
-      case 'PUBLISH':
-      case 'REGISTER': return 'success';
-      case 'DELETE': return 'warning';
-      default: return 'info';
-    }
-  };
-
-  const formatTimeAgo = (dateString: string) => {
-    const now = new Date();
-    const date = new Date(dateString);
-    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
-
-    if (diffInMinutes < 1) return 'Just now';
-    if (diffInMinutes < 60) return `${diffInMinutes} minutes ago`;
-    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hours ago`;
-    return `${Math.floor(diffInMinutes / 1440)} days ago`;
-  };
-
-  const quickActions: QuickAction[] = [
-    {
-      title: 'Table Management',
-      description: 'Access all database tables and CRUD operations',
-      icon: <Icons.Database />,
-      href: '/admin/tables'
-    },
-    {
-      title: 'Manage Courses',
-      description: 'View, edit, and manage all courses',
-      icon: <Icons.Book />,
-      href: '/admin/courses',
-      onClick: () => setCurrentView('courses')
-    },
-    {
-      title: 'User Management',
-      description: 'View and manage user accounts',
-      icon: <Icons.Users />,
-      href: '/admin/users'
-    },
-    {
-      title: 'System Logs',
-      description: 'View system logs and error reports',
-      icon: <Icons.Logs />,
-      href: '/admin/logs'
-    },
-    {
-      title: 'Analytics',
-      description: 'View detailed analytics and reports',
-      icon: <Icons.Activity />,
-      href: '/admin/analytics'
-    },
-    {
-      title: 'Settings',
-      description: 'Configure system settings',
-      icon: <Icons.Settings />,
-      href: '/admin/settings'
-    }
+  const statCards = [
+    { label: 'Courses', value: stats.total, icon: BookOpen, color: 'text-blue-600 bg-blue-50' },
+    { label: 'Published', value: stats.published, icon: Eye, color: 'text-green-600 bg-green-50' },
+    { label: 'Modules', value: stats.modules, icon: Layers, color: 'text-purple-600 bg-purple-50' },
+    { label: 'Lessons', value: stats.lessons, icon: FileText, color: 'text-orange-600 bg-orange-50' },
   ];
-
-  const getStatusBadge = (status: RecentActivity['status']) => {
-    const variants = {
-      success: 'bg-green-100 text-green-800 border-green-300',
-      warning: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-      info: 'bg-blue-100 text-blue-800 border-blue-300'
-    } as const;
-    
-    return <Badge variant="outline" className={variants[status]}>{status}</Badge>;
-  };
-
-  if (currentView === 'courses') {
-    return (
-      <div>
-        <div className="mb-6">
-          <Button 
-            variant="outline" 
-            onClick={() => setCurrentView('dashboard')}
-            className="mb-4"
-          >
-            ← Back to Dashboard
-          </Button>
-        </div>
-        <CoursesAdminDashboard />
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-96">
-        <div className="text-lg text-black">Loading dashboard...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-start">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-black">Admin Dashboard</h1>
-          <p className="text-gray-600">
-            Welcome back! Here's what's happening with your learning platform.
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-sm text-gray-500 mt-1">Manage your learning platform</p>
         </div>
-        <div className="text-right">
-          <p className="text-sm text-gray-600">Current Time</p>
-          <p className="text-lg font-mono text-black">
-            {currentTime.toLocaleTimeString()}
-          </p>
-          <p className="text-sm text-gray-600">
-            {currentTime.toLocaleDateString()}
-          </p>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => window.open(supabaseStudioUrl, '_blank')}
+            className="flex items-center gap-2"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Supabase Studio
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => setShowCreateDialog(true)}
+            className="flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            Create Course
+          </Button>
         </div>
       </div>
 
-      {/* Stats Grid */}
-      {stats && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <DashboardStats
-            title="Total Courses"
-            value={stats.totalCourses}
-            change={`${stats.publishedCourses} published`}
-            changeType="positive"
-            icon={<Icons.Book />}
-          />
-          <DashboardStats
-            title="Total Enrollments"
-            value={stats.totalEnrollments}
-            change="Active learners"
-            changeType="neutral"
-            icon={<Icons.Users />}
-          />
-          <DashboardStats
-            title="Total Modules"
-            value={stats.totalModules}
-            change="Course modules"
-            changeType="neutral"
-            icon={<Icons.Database />}
-          />
-          <DashboardStats
-            title="Total Lessons"
-            value={stats.totalLessons}
-            change="Learning content"
-            changeType="positive"
-            icon={<Icons.Activity />}
-          />
-        </div>
-      )}
-
-      {/* Main Content Grid */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Quick Actions */}
-        <Card className="bg-white">
-          <CardHeader>
-            <CardTitle className="text-black">Quick Actions</CardTitle>
-            <CardDescription className="text-gray-600">Common administrative tasks</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {quickActions.map((action, index) => (
-              <button
-                key={index}
-                onClick={action.onClick || (() => window.location.href = action.href)}
-                className="w-full flex items-center space-x-3 p-3 rounded-lg border hover:bg-gray-50 transition-colors text-left"
-              >
-                {action.icon}
+      {/* Stat Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {statCards.map((stat) => (
+          <Card key={stat.label} className="border border-gray-200">
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-black">{action.title}</p>
-                  <p className="text-sm text-gray-600">{action.description}</p>
+                  <p className="text-sm text-gray-500">{stat.label}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-1">{stat.value}</p>
                 </div>
-              </button>
-            ))}
-          </CardContent>
-        </Card>
-
-        {/* Recent Activity - Disabled for now */}
-        <Card className="lg:col-span-2 bg-white">
-          <CardHeader>
-            <CardTitle className="text-black">Recent Activity</CardTitle>
-            <CardDescription className="text-gray-600">Feature temporarily disabled - check System Logs instead</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="text-center py-8">
-                <p className="text-gray-500">Recent activity is disabled.</p>
-                <p className="text-sm text-gray-400 mt-2">
-                  Go to <span className="font-medium">System Logs</span> to view all activity.
-                </p>
-                <Button 
-                  variant="outline" 
-                  className="mt-4"
-                  onClick={() => window.location.href = '/admin/logs'}
-                >
-                  View System Logs
-                </Button>
+                <div className={`p-2.5 rounded-xl ${stat.color}`}>
+                  <stat.icon className="h-5 w-5" />
+                </div>
               </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card
+          className="border border-gray-200 hover:shadow-md transition-all cursor-pointer group"
+          onClick={() => router.push('/admin/analytics')}
+        >
+          <CardContent className="p-5 flex items-center gap-4">
+            <div className="p-2.5 rounded-xl text-emerald-600 bg-emerald-50 flex-shrink-0">
+              <BarChart3 className="h-5 w-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-gray-900">Analytics</p>
+              <p className="text-sm text-gray-500">Platform metrics and engagement</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card
+          className="border border-gray-200 hover:shadow-md transition-all cursor-pointer group"
+          onClick={() => router.push('/admin/logs')}
+        >
+          <CardContent className="p-5 flex items-center gap-4">
+            <div className="p-2.5 rounded-xl text-indigo-600 bg-indigo-50 flex-shrink-0">
+              <Activity className="h-5 w-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-gray-900">System Logs</p>
+              <p className="text-sm text-gray-500">View activity and error reports</p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* System Information */}
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card className="bg-white">
-          <CardHeader>
-            <CardTitle className="text-black">Learning Platform Stats</CardTitle>
-            <CardDescription className="text-gray-600">Content and engagement metrics</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {stats && (
-              <>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-black">Published Courses</span>
-                  <Badge variant="default">{stats.publishedCourses}</Badge>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-black">Draft Courses</span>
-                  <Badge variant="secondary">{stats.draftCourses}</Badge>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-black">Total Modules</span>
-                  <Badge variant="outline">{stats.totalModules}</Badge>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-black">Total Lessons</span>
-                  <Badge variant="outline">{stats.totalLessons}</Badge>
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+      {/* Courses */}
+      <div>
+        <h2 className="text-lg font-semibold text-gray-900 mb-3">Courses</h2>
+        {courses.length === 0 ? (
+          <Card className="border border-dashed border-gray-300">
+            <CardContent className="py-12 flex flex-col items-center justify-center text-center">
+              <BookOpen className="h-10 w-10 text-gray-300 mb-3" />
+              <p className="text-gray-600 font-medium">No courses yet</p>
+              <p className="text-sm text-gray-400 mt-1">Create your first course to get started</p>
+              <Button
+                onClick={() => setShowCreateDialog(true)}
+                variant="outline"
+                className="mt-4"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Create Course
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <AnimatePresence mode="popLayout">
+              {courses.map((course) => (
+                <motion.div
+                  key={course.id}
+                  layout
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                  onClick={() => router.push(`/admin/courses/${course.id}`)}
+                  className="group cursor-pointer bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg hover:border-gray-300 transition-all duration-200"
+                >
+                  {/* Cover */}
+                  <div className="h-32 relative overflow-hidden">
+                    {course.cover_image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={course.cover_image}
+                        alt={course.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    ) : (
+                      <div
+                        className={`w-full h-full bg-gradient-to-br ${getGradient(
+                          course.title
+                        )} flex items-center justify-center`}
+                      >
+                        <BookOpen className="h-8 w-8 text-white/60" />
+                      </div>
+                    )}
+                    <div className="absolute top-2.5 right-2.5">
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${statusColors[course.status] || statusColors.draft}`}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${statusDotColors[course.status] || statusDotColors.draft}`}
+                        />
+                        {course.status.charAt(0).toUpperCase() + course.status.slice(1)}
+                      </span>
+                    </div>
+                  </div>
 
-        <Card className="bg-white">
-          <CardHeader>
-            <CardTitle className="text-black">System Health</CardTitle>
-            <CardDescription className="text-gray-600">Platform status and performance</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium text-black">Database Status</span>
-              <Badge variant="default">Healthy</Badge>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium text-black">API Status</span>
-              <Badge variant="default">Online</Badge>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium text-black">Cache Status</span>
-              <Badge variant="default">Active</Badge>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm font-medium text-black">Uptime</span>
-              <span className="font-mono text-sm text-black">99.9%</span>
-            </div>
-          </CardContent>
-        </Card>
+                  {/* Content */}
+                  <div className="p-4 space-y-2.5">
+                    <h3 className="font-semibold text-gray-900 line-clamp-1 group-hover:text-blue-600 transition-colors">
+                      {course.title}
+                    </h3>
+                    <p className="text-sm text-gray-500 line-clamp-2 min-h-[2.5rem]">
+                      {course.description || 'No description'}
+                    </p>
+                    <div className="flex items-center gap-3 text-xs text-gray-400 pt-1">
+                      <span className="flex items-center gap-1">
+                        <Layers className="h-3.5 w-3.5" />
+                        {course.module_count} mod
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <FileText className="h-3.5 w-3.5" />
+                        {course.lesson_count} lesson{course.lesson_count !== 1 ? 's' : ''}
+                      </span>
+                      <span className="flex items-center gap-1 ml-auto">
+                        <Clock className="h-3.5 w-3.5" />
+                        {new Date(course.created_at).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
       </div>
+
+      {/* Create Course Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Course</DialogTitle>
+            <DialogDescription>
+              Create a new course. You&apos;ll be taken to the builder to add content.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="course-title">Title</Label>
+              <Input
+                id="course-title"
+                placeholder="e.g., Introduction to Robotics"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !creating) handleCreateCourse();
+                }}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="course-desc">Description</Label>
+              <textarea
+                id="course-desc"
+                placeholder="A brief description..."
+                value={newDescription}
+                onChange={(e) => setNewDescription(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder:text-gray-400 resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowCreateDialog(false)}
+              disabled={creating}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleCreateCourse} disabled={creating}>
+              {creating ? 'Creating...' : 'Create & Build'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
